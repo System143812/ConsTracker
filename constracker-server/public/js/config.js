@@ -1,0 +1,1 @@
+export const urlBase = document.querySelector('meta[name="api_base_url"]').content;
