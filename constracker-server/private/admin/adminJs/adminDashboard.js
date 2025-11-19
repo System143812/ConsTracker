@@ -1,12 +1,10 @@
     const loadingOverlay = document.getElementById("loadingOverlay");
     loadingOverlay.classList.add("show");
 
+    import { urlBase } from "/js/apiURL.js";
     import { createTab, sidebarInitEvents } from "https://constracker.share.zrok.io/admin/adminSidebar.js";
     import { alertPopup } from "https://constracker.share.zrok.io/js/popups.js";
     import { displayContents } from "https://constracker.share.zrok.io/admin/adminContent.js";
-
-    const urlBase = "https://constracker.share.zrok.io";
-    const urlBase2 = "http://192.168.8.142:3000"; //Pang local development lang to, change it relative to your current ip
 
     const dateTime = new Date();
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];

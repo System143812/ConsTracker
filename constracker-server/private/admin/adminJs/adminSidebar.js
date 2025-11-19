@@ -1,7 +1,5 @@
+import { urlBase } from "/js/apiURL.js";
 import { formatString } from "https://constracker.share.zrok.io/js/string.js";
-
-const urlBase = "https://constracker.share.zrok.io";
-const urlBase2 = "http://192.168.8.142:3000"; //Pang local development lang to, change it relative to your current ip
 
 const loadingOverlay = document.getElementById('loadingOverlay');
 async function showLoader() { 

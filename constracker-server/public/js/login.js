@@ -1,7 +1,6 @@
+import { urlBase } from "/js/apiURL.js";
 import { alertPopup, expiredTokenPopup } from "./popups.js";
 import { emptyFieldExists, redAllFields } from "./validateFields.js";
-const urlBase = "https://constracker.share.zrok.io";
-const urlBase2 = "http://192.168.8.142:3000"; //Pang local development lang to, change it relative to your current ip;
 
 const loadingOverlay = document.getElementById("loadingOverlay");
 const loginContainer = document.getElementById("loginFormContainer");

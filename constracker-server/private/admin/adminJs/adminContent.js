@@ -1,9 +1,6 @@
-import { urlBase } from "/js/config";
-import { formatString, dateFormatting } from `${urlBase}/js/string.js`;
-import { alertPopup, warnType } from `${urlBase}/js/popups.js`;
-
-// const urlBase = "https://constracker.share.zrok.io";
-// const urlBase2 = "http://192.168.8.142:3000"; //Pang local development lang to, change it relative to your current ip
+import { urlBase } from "/js/apiURL.js";
+import { formatString, dateFormatting } from "https://constracker.share.zrok.io/js/string.js";
+import { alertPopup, warnType } from "https://constracker.share.zrok.io/js/popups.js";
 
 const tabContents = {
     dashboard: {

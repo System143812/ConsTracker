@@ -1,5 +1,4 @@
-const urlBase = "https://constracker.share.zrok.io";
-const urlBase2 = "http://192.168.8.142:3000"; //Pang local development lang to, change it relative to your current ip
+import { urlBase } from "/js/apiURL.js";
 
 const errorImg = new Image();
 errorImg.src = `${urlBase}/assets/icons/remove.png`;
