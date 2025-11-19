@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="styles/general.css">
+    <link rel="stylesheet" href="styles/login.css">
+    <link rel="icon" href="assets/pictures/constracker-logo-colored.png">
+    <title>ConsTracker</title>
+</head>
+<body>
+    <div id="loadingOverlay"></div>
+    <div id="loginImageContainer">
+        <div id="brandLogo"></div>
+        <p id="brandInfo">Building Smarter, Tracking Faster.</p>
+    </div>
+    <div id="loginFormContainer">
+        <form class="login-form" id="loginForm" autocomplete="on">
+            <div id="formHeaderContainer">
+                <h1 id="formHeader">Welcome Back!</h1>
+                <h5 id="formSubheader">Log in to continue to your account</h5>
+            </div>
+            <div id="emailContainer" class="input-containers">
+                <label class="labels" for="emailBox">Email</label>
+                <input type="email" id="emailBox" name="email" placeholder="Enter your email" autocomplete="email">
+                <p id="emailError" class="error-message">Email Required</p>
+            </div>
+            
+            <div id="passwordContainer" class="input-containers">
+                <label class="labels" for="passwordBox">Password</label>
+                <input type="password" id="passwordBox" name="password", placeholder="Enter your password">
+                <p id="passwordError" class="error-message">Password Required</p>
+            </div>
+            <div id="formFooterContainer">
+                <button type="submit" id="loginBtn">Login</button>
+                <div id="infoCard">
+                    <div id="warningIcon"></div>
+                    <div id="infoCardText">
+                        <p id="infoCardTextHeader">Need Access?</p>
+                        <p id="infoCardTextBody">Accounts are created by system administrators only. Contact your admin if you need access to the system.</p>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>   
+</body>
+</html>
+
+<script type="module" src="js/login.js"></script>

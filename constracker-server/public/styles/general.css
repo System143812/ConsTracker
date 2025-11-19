@@ -1,0 +1,240 @@
+:root {
+    --green-border: rgb(22, 163, 74); 
+    --green-background: rgba(22, 163, 74, 0.1);
+    --green-text: rgb(22, 163, 74);
+    --red-border: rgb(220, 38, 38); 
+    --red-background: rgba(220, 38, 38, 0.1);
+    --red-text: rgb(220, 38, 38);
+    --yellow-border: rgba(217, 119, 6, 0.5);
+    --yellow-background: rgba(217, 119, 6, 0.1);
+    --yellow-bg-light: rgba(217, 119, 6, 0.05);
+    --yellow-text: rgb(217, 119, 6);
+    --grayed-text: rgb(102, 102, 102);
+    --gray-low-opacity: rgba(102, 102, 102, 0.1);
+    --default-black: #1e1e1e;
+    --gray--no-opacity: rgba(102, 102, 102, 0);
+    --overlay-background:  rgba(30, 30, 30, 0.7);
+    --light-border: rgba(204, 204, 204, 0.75);
+    --content-border: rgb(204, 204, 204, 1);
+    --flexible-color: rgba(30, 30, 30, 0.6);
+    --white-ishy-text: rgba(253, 253, 253, 1);
+    --white-background: rgba(240, 240, 240, 1);
+    --light-blue-background: rgba(219, 223, 227, 0.75);
+}
+
+.icons, .icons-with-bg, .tab-icons, .light-icons {
+    background-position: center;
+    background-size: cover;
+    background-repeat: no-repeat;
+}
+
+.tab-icons{
+    display: flex;
+    width: 15px;
+    height: 15px;
+}
+
+.icons-with-bg {
+    background-size: 15px 15px;
+}
+
+.light-icons {
+    opacity: 0.5;
+}
+
+@font-face {
+    font-family: 'Inter';
+    src: url("../assets/fonts/static/Inter_18pt-Regular.ttf") format('truetype');
+    font-weight: 400;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'Inter';
+    src: url("../assets/fonts/static/Inter_18pt-Medium.ttf") format('truetype');
+    font-weight: 500;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'Inter';
+    src: url("../assets/fonts/static/Inter_18pt-SemiBold.ttf") format('truetype');
+    font-weight: 600;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'Inter';
+    src: url("../assets/fonts/static/Inter_18pt-Bold.ttf") format('truetype');
+    font-weight: 700;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'Inter';
+    src: url("../assets/fonts/static/Inter_18pt-Italic.ttf") format('truetype');
+    font-weight: 400;
+    font-style: italic;
+}
+
+@font-face {
+    font-family: 'Inter';
+    src: url("../assets/fonts/static/Inter_18pt-MediumItalic.ttf") format('truetype');
+    font-weight: 500;
+    font-style: italic;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    font-family: 'Inter', sans-serif;
+    font-weight: 400;
+    color: var(--default-black);
+    box-sizing: border-box;
+    word-wrap: break-word;
+}
+
+#alertPopupContainer {
+    display: flex;
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+    padding: 0.5rem 1rem;
+    gap: 1rem;
+    bottom: 1rem;
+    right: 1rem;
+    background-color: var(--green-background);
+    backdrop-filter: blur(50px);
+    border: solid var(--green-border) 0.1px;
+    border-radius: 5px;
+    box-shadow: 0px 3px 9px  rgba(0, 0, 0, 0.25);
+    animation: slightUpwardPush 0.3s ease;
+    transition: all 1s ease;
+}
+
+#alertPopupContainer.error {
+    background-color: var(--red-background);
+    border: solid var(--red-border) 0.1px;
+}
+
+#alertPopupcontainer::before {
+    display: flex;
+    position: absolute;
+    height: 100%;
+    width: 100%;
+    background-color: rgba(250, 250, 250, 0.25);
+}
+
+#alertPopupIcon {
+    display: flex;
+    height: 30px;
+    width: 30px;
+    border-radius: 10px;
+    background-color: var(--green-background);
+    background-size: 20px 20px;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+#alertPopupIcon.error {
+    background-color: var(--red-background);
+}
+
+#alertPopupMessage {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    font-size: 12px;
+    color: var(--green-text);
+}
+
+#alertPopupMessage.error {
+    color: var(--red-text);
+}
+
+#expTokenContainer {
+    display: flex;
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    padding: 2rem;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.25s ease;
+    background-color: var(--overlay-background);
+    z-index: 10;
+    font-size: 16px;
+}
+
+#expTokenContainer.show {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+#expTokenContent {
+    display: flex;
+    flex-direction: column;
+    padding: 1.5rem;
+    gap: 2rem;
+    border-radius: 5px;
+    background-color: #f0f0f0;
+}
+
+#expTokenHeader {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#expTokenFooter {
+    display: flex;
+    width: 100%;
+    justify-content: end;
+}
+
+#expTokenNavigate {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    justify-content: center;
+    padding: 0.5rem;
+    background-color: var(--gray--no-opacity);
+    border-radius: 5px;
+    transition: all 0.25s ease;
+}
+
+#expTokenNavigate:hover {
+    background-color: var(--gray-low-opacity);
+}
+
+#loadingOverlay {
+    display: flex;
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 10;
+    width: 100%;
+    height: 100%;
+    max-width: 100vw;
+    max-height: 100vh;
+    background-color: var(--overlay-background);
+    background-image: url('../assets/pictures/fade-dots.svg');
+    background-size: 50px 50px;
+    background-position: center;
+    background-repeat: no-repeat;
+    transition: opacity 0.5s ease;
+}
+
+#loadingOverlay.show {
+    opacity: 1;
+    pointer-events: auto;
+    z-index: 10;
+}
+@keyframes slightUpwardPush {
+    0% {transform: translateY(10px);}
+    100% {transform: translateY(0px);}
+}
