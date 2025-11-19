@@ -1,5 +1,5 @@
 .warn-solid {
-    background-color: var(--default-black);
+    background-color: var(--default-black-color);
     color: var(--white-ishy-text);
 }
 
@@ -17,8 +17,8 @@
 
 .warn-glass {
     background-color: var(--gray-no-opacity);
-    border: solid var(--default-black) 1px;
-    color: var(--default-black);
+    border: solid var(--) 1px;
+    color: var(--default-black-color);
     font-weight: 600;
 }
 
@@ -90,7 +90,7 @@ body {
     position: relative;;
     background-color: #f0f0f0;
     font-size: 12px;
-    color: var(--default-black);
+    color: var(--default-black-color);
 }
 
 #outerContainer {

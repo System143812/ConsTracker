@@ -11,7 +11,7 @@
     --yellow-text: rgb(217, 119, 6);
     --grayed-text: rgb(102, 102, 102);
     --gray-low-opacity: rgba(102, 102, 102, 0.1);
-    --default-black: #1e1e1e;
+    --default-black-color: rgba(50, 50, 50, 1);
     --gray--no-opacity: rgba(102, 102, 102, 0);
     --overlay-background:  rgba(30, 30, 30, 0.7);
     --light-border: rgba(204, 204, 204, 0.75);
@@ -89,7 +89,7 @@
     padding: 0;
     font-family: 'Inter', sans-serif;
     font-weight: 400;
-    color: var(--default-black);
+    color: var(--default-black-color);
     box-sizing: border-box;
     word-wrap: break-word;
 }
