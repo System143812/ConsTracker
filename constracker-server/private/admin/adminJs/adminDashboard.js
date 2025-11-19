@@ -2,7 +2,7 @@
     loadingOverlay.classList.add("show");
 
     import { urlBase } from "/js/apiURL.js";
-    import { createTab, sidebarInitEvents } from "https://constracker.share.zrok.io/admin/adminSidebar.js";
+    import { createTab, sidebarInitEvents } from "https://constracker.share.zrok.io/mainJs/sidebar.js";
     import { alertPopup } from "https://constracker.share.zrok.io/js/popups.js";
     import { displayContents } from "https://constracker.share.zrok.io/admin/adminContent.js";
 
