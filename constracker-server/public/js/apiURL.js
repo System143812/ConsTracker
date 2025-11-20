@@ -1,3 +1,5 @@
+import { alertPopup } from "./popups.js";
+
 export const urlBase = 'https://constracker.share.zrok.io';
 
 export async function fetchData(url) {

@@ -54,7 +54,7 @@
     }
     
     async function logout() {
-        const data = await fetchData('logout');
+        const data = await fetchData('/logout');
         if(data === 'error') return;
         if(data.status === "success") window.location.href = urlBase;
         return alertPopup("success", `Logged out successfully`);
