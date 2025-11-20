@@ -1,7 +1,7 @@
     const loadingOverlay = document.getElementById("loadingOverlay");
     loadingOverlay.classList.add("show");
 
-    import { urlBase } from "/js/apiURL.js";
+    import { urlBase, fetchData } from "/js/apiURL.js";
     import { createTab, sidebarInitEvents } from "https://constracker.share.zrok.io/mainJs/sidebar.js";
     import { alertPopup } from "https://constracker.share.zrok.io/js/popups.js";
     import { displayContents } from "https://constracker.share.zrok.io/admin/adminContent.js";
@@ -54,73 +54,28 @@
     }
     
     async function logout() {
-        try {
-            const response = await fetch(`${urlBase}/logout`, { 
-                headers: {
-                    "Accept":"application/json"
-                },
-                credentials: "include" 
-            });
-            const data = await response.json();
-            if(!data) return alertPopup("error", "Server Error");
-            if(data.status === 'invalid token' || data.status === 'missing token' || data.status === 'expired token') {
-                window.location.href = urlBase;
-                return alertPopup('error', 'Invalid/Expired Token');
-            }
-            if(data.status === "success") window.location.href = urlBase;
-            return alertPopup("success", `Logged out successfully`);
-        } catch (error) {
-            console.error(`Error Occured: ${error}`);
-            alertPopup("error", "Network Connection Error");
-        }
+        const data = await fetchData('logout');
+        if(data === 'error') return;
+        if(data.status === "success") window.location.href = urlBase;
+        return alertPopup("success", `Logged out successfully`);
     }
 
     async function getProfileData() {
-        try {
-            const response = await fetch(`${urlBase}/profile`, {
-                headers: {
-                    "Accept":"application/json"
-                },
-                credentials: "include"
-            });
-            const data = await response.json();
-            if(!data) return alertPopup('error', 'Server Error');
-            if(data.status === 'invalid token' || data.status === 'missing token' || data.status === 'expired token') {
-                window.location.href = urlBase;
-                return alertPopup('error', 'Invalid/Expired Token');
-            }
-            const profileIconAcronym = ((data.full_name.match(/\b\w/g).slice(0, 2)).join(""));
-            profileIcon.innerText = profileIconAcronym;
-            profileName.innerText = data.full_name;
-        } catch (error) {
-            console.error(`Error Occured: ${error}`);
-            alertPopup('error', 'Network Connection Error');
-        }
+        const data = await fetchData('/profile');
+        if(data === 'error') return;
+        const profileIconAcronym = ((data.full_name.match(/\b\w/g).slice(0, 2)).join(""));
+        profileIcon.innerText = profileIconAcronym;
+        profileName.innerText = data.full_name;
     }
 
     async function getAccessLevel() {
-        try {
-            const response = await fetch(`${urlBase}/access`, {
-                headers: {
-                    "Accept":"application/json"
-                },
-                credentials: "include"
-            });
-            const data = await response.json();
-            if(!data) return alertPopup('error', 'Server Error');
-            if(data.status === 'invalid token' || data.status === 'missing token' || data.status === 'expired token') {
-                window.location.href = urlBase;
-                return alertPopup('error', 'Invalid/Expired Token');
-            }
-            for await(const element of data) {
-                createTab(element);
-            }
-            await displayContents(currentTab);
-            sidebarInitEvents(displayContents);
-        } catch (error) {
-            console.error(`Error Occured: ${error}`);
-            alertPopup('error', 'Network Connection Error');
+        const data = await fetchData('/access');
+        if(data === 'error') return;
+        for await(const element of data) {
+            createTab(element);
         }
+        await displayContents(currentTab);
+        sidebarInitEvents(displayContents);
     }
 
 window.onload =  async() => {

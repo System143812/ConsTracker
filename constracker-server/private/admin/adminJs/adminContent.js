@@ -1,6 +1,7 @@
-import { urlBase } from "/js/apiURL.js";
+import { fetchData } from "/js/apiURL.js";
 import { formatString, dateFormatting } from "https://constracker.share.zrok.io/js/string.js";
 import { alertPopup, warnType } from "https://constracker.share.zrok.io/js/popups.js";
+
 
 const tabContents = {
     dashboard: {
@@ -29,31 +30,7 @@ const tabContents = {
     }
 }
 
-async function fetchData(url) {
-    try {
-        const response = await fetch(`${urlBase}${url}`, {
-            headers: {
-                "Accept":"application/json"
-            },
-            credentials: "include"
-        });
-        const data = await response.json();
-        if(!data){
-            alertPopup('error', 'Server Error');
-            return 'error';
-        } 
-        if(data.status === 'invalid token' || data.status === 'missing token' || data.status === 'expired token') {
-            window.location.href = urlBase;
-            alertPopup('error', 'Invalid/Expired Token');
-            return 'error';
-        }
-        return data;
-    } catch (error) {
-        console.log(`Error occured: ${error}`);
-        alertPopup('error', 'Network Connection Error');
-        return 'error';
-    }
-}
+
 
 export async function displayContents(tabName) {
     hideContents();
