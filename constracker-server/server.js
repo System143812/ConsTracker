@@ -8,6 +8,7 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt'
 import rateLimit from 'express-rate-limit';
 import cookieParser from 'cookie-parser';
+import { fail } from 'assert';
 
 dotenv.config();
 const PORT = process.env.PORT;
@@ -136,7 +137,7 @@ function failed(res, status, message) {
 function dashboardRoleAccess(req, res) {
     const roles = [
         {role: 'admin', access: ['dashboard', 'projects', 'inventory', 'materialsRequest', 'personnel']},
-        {role: 'engineer', access: ['dashboard', 'projects', 'inventory', 'materialsRequest']},
+        {role: 'engineer', access: ['dashboard']},
         {role: 'foreman', access: ['dashboard', 'projects', 'inventory', 'materialsRequest', 'personnel']}
     ];
     const userRole = roles.find(obj => obj.role === req.user.role);
@@ -150,9 +151,19 @@ async function getUser(uid) {
 }
 
 async function isUserExist(email) {
-    const [result] = await pool.execute('SELECT * FROM users WHERE email = ?', [email]);
+    const [result] = await pool.execute('SELECT * FROM users WHERE email = ?;', [email]);
     return result.length > 0 ? true : false;
 }
+
+async function getAssignedProject(res, user_id, user_role) {
+    let adminQuery = 'SELECT project_id, project_name FROM projects';
+    try {
+        const [projects] = user_role === 'admin' ?  await pool.execute(adminQuery) : await pool.execute('SELECT ap.project_id, p.project_name FROM assigned_projects ap JOIN projects p ON ap.project_id = p.project_id WHERE ap.user_id = ?;', [user_id]);
+        return projects;
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+} 
 
 async function getSummaryCards(res, tabName) {
     const tabSqlQueries = {
@@ -173,6 +184,7 @@ async function getSummaryCards(res, tabName) {
 
 async function getProjectStatus(res) {
     try {
+        
         const [result] = await pool.execute(
             "SELECT (SELECT COUNT(p.project_id) FROM projects p WHERE p.status = 'in progress') AS in_progress, COUNT(p.project_id) AS planning FROM projects p WHERE status = 'planning';"
         );
@@ -289,6 +301,10 @@ app.get('/profile', authMiddleware(['all']), async(req, res) => {
     } catch (error) {
         failed(res, 500, "Database error");
     }
+});
+
+app.get('/api/projects',  authMiddleware, (res, req) => {
+    getAssignedProject(res, req.user.id, req.user.role);
 });
 
 app.get('/api/adminSummaryCards/:tabName', authMiddleware(['admin']), async(req, res) => { 
