@@ -262,6 +262,11 @@ app.get('/user/:jsFile', authMiddleware(['engineer', 'foreman']), (req, res) => 
     res.sendFile(path.join(privDir, 'user', 'userJs', file));
 });
 
+app.get('/image/:imageName', authMiddleware(['all']), (req, res) => {
+    const image = req.params.imageName;
+    res.sendFile(path.join(privDir, 'privateAssets', 'pictures', image));
+});
+
 app.get('/mainJs/:jsFile', authMiddleware(['all']), (req, res) => {
     const file = req.params.jsFile;
     res.sendFile(path.join(privDir, 'privateJs', file));
