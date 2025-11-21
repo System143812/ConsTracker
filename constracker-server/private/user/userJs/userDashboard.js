@@ -22,11 +22,24 @@ const hamburgerBtn = document.getElementById('hamburgerButton');
 const outerContainer = document.getElementById('outerContainer');
 const sidebarContainer =  document.getElementById('sidebarContainer');
 const contentContainer = document.getElementById('contentContainer');
+const dashboardBodyContent = document.getElementById('dashboardBodyContent');
 const sidebarHeaderContainer = document.getElementById('sidebarHeaderContainer');
 const sidebarOverlay = document.getElementById('sidebarOverlay');
 const brandLogo = document.getElementById('brandLogo');
 const logoutBtn = document.getElementById('logoutTab');
 let currentTab = 'dashboard';
+
+function noProjectBodyPlaceholder() {
+    const noProjectBodyContainer = document.createElement('div');
+    noProjectBodyContainer.id = 'noProjectBodyContainer';
+    const noProjectBodyImage = document.createElement('div');
+    noProjectBodyImage.id = 'noProjectBodyImage';
+    const noProjectBodyText = document.createElement('div');
+    noProjectBodyText.id = 'noProjectBodyText';
+    noProjectBodyText.innerText = 'You are not assigned to any projects yet';
+    noProjectBodyContainer.append(noProjectBodyImage, noProjectBodyText);
+    return noProjectBodyContainer;
+}   
 
 async function initListeners() {
     sidebarHeaderContainer.addEventListener("click", () => {
@@ -80,14 +93,25 @@ async function getAccessLevel(role) {
     if(projects === 'error') return;
     if(projects.length === 0) {
         noProjectTabPlaceholder();
+        dashboardBodyContent.append(noProjectBodyPlaceholder());
+        document.getElementById('dashboardTab').classList.add('selected');
+        await displayUserContents(currentTab, 'upperTabs', role);
+        sidebarInitEvents(displayUserContents, role);
+        const sideTabs = document.querySelectorAll('.sidebar-tabs');
+        for (const sideTab of sideTabs) {
+            if(sideTab.id !== 'logoutTab') sideTab.addEventListener("click", () => {
+                dashboardBodyContent.append(noProjectBodyPlaceholder());
+            });
+        }
+
     } else {
         for (const project of projects) {
             createProjectsTab(project);
         }
+        document.getElementById('dashboardTab').classList.add('selected');
+        await displayUserContents(currentTab, 'upperTabs', role);
+        sidebarInitEvents(displayUserContents, role);
     }
-    document.getElementById('dashboardTab').classList.add('selected');
-    await displayUserContents(currentTab, 'upperTabs', role);
-    sidebarInitEvents(displayUserContents, role);
 }
 
 window.onload = async() => {
