@@ -66,16 +66,17 @@ async function getProfileData() {
     const profileIconAcronym = ((data.full_name.match(/\b\w/g).slice(0, 2)).join(""));
     profileIcon.innerText = profileIconAcronym;
     profileName.innerText = data.full_name;
+
+    await getAccessLevel(data.role);
 }
 
-async function getAccessLevel() {
+async function getAccessLevel(role) {
     const data = await fetchData('/access');
     if(data === 'error') return;
     for await(const element of data) {
         createTab(element);
     }
-    const projects = await fetchData('/api/projects');
-    console.log(projects);
+    const projects = await fetchData('/api/myProjects');
     if(projects === 'error') return;
     if(projects.length === 0) {
         noProjectTabPlaceholder();
@@ -84,15 +85,15 @@ async function getAccessLevel() {
             createProjectsTab(project);
         }
     }
-    await displayUserContents(currentTab, 'upperTabs');
-    sidebarInitEvents(displayUserContents);
+    document.getElementById('dashboardTab').classList.add('selected');
+    await displayUserContents(currentTab, 'upperTabs', role);
+    sidebarInitEvents(displayUserContents, role);
 }
 
 window.onload = async() => {
     try {
         await initListeners();
         await getProfileData();
-        await getAccessLevel();
     } catch (error) {
         console.error(`Error Occured: ${error}`);
         alertPopup('error', 'Network Connection Error');

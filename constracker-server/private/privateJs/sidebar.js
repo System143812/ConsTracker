@@ -97,7 +97,7 @@ export function hideContents() {
     }
 }
 
-export function sidebarInitEvents(eventFunction) {
+export function sidebarInitEvents(eventFunction, role) {
     const tabs = document.querySelectorAll('.sidebar-tabs');
     const projectTabs = document.querySelectorAll('.sidebar-project-tabs');
     for (const tab of tabs) {
@@ -107,7 +107,7 @@ export function sidebarInitEvents(eventFunction) {
                 tab.classList.add('selected');
                 await showLoader();
                 const currentTab = `${(tab.id).replace(/Tab/g, "")}`;
-                await eventFunction(currentTab, 'upperTabs');
+                await eventFunction(currentTab, 'upperTabs', role);
                 await hideLoader();
             });
         }
@@ -118,7 +118,7 @@ export function sidebarInitEvents(eventFunction) {
                 projectTab.classList.add('selected');
                 await showLoader();
                 const projectTabId = `${(projectTab.id).replace(/TabNum/g, "")}`;
-                await eventFunction(projectTabId); //displayContent ang i-pass here
+                await eventFunction(projectTabId, 'lowerTabs', role); //displayContent ang i-pass here
                 await hideLoader();
             });
     }

@@ -1,6 +1,6 @@
 import { alertPopup } from "./popups.js";
 
-export async function fetchData(url) {
+export async function fetchData(url) { //baka malimutan!!!!! this won't handle empty arrays!!!!
     try {
         const response = await fetch(url, {
             headers: {
@@ -14,7 +14,7 @@ export async function fetchData(url) {
             return 'error';
         } 
         if(data.status === 'invalid token' || data.status === 'missing token' || data.status === 'expired token') {
-            window.location.href = urlBase;
+            window.location.href = '/';
             alertPopup('error', 'Invalid/Expired Token');
             return 'error';
         }

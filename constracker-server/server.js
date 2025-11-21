@@ -155,6 +155,15 @@ async function isUserExist(email) {
     return result.length > 0 ? true : false;
 }
 
+async function getProjectCardData(res, project_id) {
+    try {
+        const [result] = await pool.execute('SELECT * FROM projects WHERE project_id = ?', [project_id]);
+        return result[0];
+    } catch (error) {
+        failed(res, 500, `Database Error ${error}`);
+    }
+}
+
 async function getAssignedProject(res, user_id, user_role) {
     let adminQuery = 'SELECT project_id, project_name FROM projects';
     try {
@@ -310,7 +319,11 @@ app.get('/profile', authMiddleware(['all']), async(req, res) => {
     }
 });
 
-app.get('/api/projects', authMiddleware(['all']), async(req, res) => {
+app.get('/api/getProjectCard/:projectId', authMiddleware(['all']), async(req, res) => {
+    res.status(200).json(await getProjectCardData(res, req.params.projectId));
+});
+
+app.get('/api/myProjects', authMiddleware(['all']), async(req, res) => {
     res.status(200).json(await getAssignedProject(res, req.user.id, req.user.role));
 });
 
