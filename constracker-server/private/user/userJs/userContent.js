@@ -45,7 +45,7 @@ async function generateDashboardContent(role) {
     } 
     if(role === 'engineer'){
         dashboardBodyContent.append(
-        
+            
         );
     } else {
         dashboardBodyContent.append(
@@ -57,21 +57,21 @@ async function generateDashboardContent(role) {
 async function generateProjectContent(projectTabName, role) { //project1
     const projectId = projectTabName.replace(/project/g, '');
     const projectsBodyContent = document.getElementById('projectsBodyContent');
-    
+    await createProjectCard(projectId);
     if(!requiredRoles.includes(role)){
         alertPopup('error', 'Unauthorized Role');
         return window.location.href = '/'
     } 
     if(role === 'engineer'){
         projectsBodyContent.append(
-            await createProjectCard(projectId)
+            
         );
     } else {
         projectsBodyContent.append(
-            await createProjectCard(projectId)
+            
 
         );
-    }
+    }   
 }
 
 async function createProjectCard(projectId) {
@@ -92,8 +92,11 @@ async function createProjectCard(projectId) {
     if(data.status === 'planning') warnType(projectsHeaderStatus, 'solid', 'white');
     if(data.status === 'completed') warnType(projectsHeaderStatus, 'solid', 'green');
     projectsHeaderStatus.innerText = data.status;
+}
 
-    return 'pogi';
+async function createSectionTabs() {
+    const selectionTabContainer = document.createElement('div');
+    selectionTabContainer.id = 'selectionTabContainer';
 }
 
 function div(id, className) {
