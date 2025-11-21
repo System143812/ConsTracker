@@ -108,12 +108,13 @@ function hideSelectionContents(div) {
     
 }
 
-function createSectionTabs(role) {as
+function createSectionTabs(role) {
     const tabs = [
         {id: "selectionTabMilestones", label: "Milestones", render: renderMilestones},
         {id: "selectionTabInventory", label: "Inventory", render: renderInventory},
         {id: "selectionTabWorkers", label: "Personnel & Workers", render: renderMilestones},
-        {id: "selectionTabAnalytics", label: "Analytics", render: renderMilestones},       
+        {id: "selectionTabAnalytics", label: "Analytics", render: renderMilestones},  
+        // {id: "selectionTabEwan", label: "Ewan", render: renderMilestones} test lang    
     ]
 
     const selectionTabContent = div('selectionTabContent');
@@ -132,7 +133,7 @@ function createSectionTabs(role) {as
     return selectionTabContainer;
 }
 
-async function selectionTabRenderEvent(content, selectionTab, tab) {a
+async function selectionTabRenderEvent(content, selectionTab, tab) {
     hideSelectionContents(content);
     selectionTab.classList.add('selected');
     content.append(await tab.render());
