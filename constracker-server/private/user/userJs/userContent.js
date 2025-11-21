@@ -58,7 +58,6 @@ async function generateProjectContent(projectTabName, role) { //project1
     const projectId = projectTabName.replace(/project/g, '');
     const projectsBodyContent = document.getElementById('projectsBodyContent');
     
-
     if(!requiredRoles.includes(role)){
         alertPopup('error', 'Unauthorized Role');
         return window.location.href = '/'
@@ -69,6 +68,7 @@ async function generateProjectContent(projectTabName, role) { //project1
         );
     } else {
         projectsBodyContent.append(
+            await createProjectCard(projectId)
 
         );
     }
@@ -77,11 +77,21 @@ async function generateProjectContent(projectTabName, role) { //project1
 async function createProjectCard(projectId) {
     const data = await fetchData(`/api/getProjectCard/${projectId}`);
     if(data === 'error') return alertPopup('error', 'Network Connection Error');
-
+    const projectsBodyHeader = document.getElementById('projectsBodyHeader');
+    projectsBodyHeader.style.backgroundImage = `url(/image/${data.image})`;
     const projectsHeaderTitle = document.getElementById('projectsHeaderTitle');
     projectsHeaderTitle.innerText = data.project_name;
+    projectsHeaderTitle.style.color = 'var(--white-ishy-text)';
+    const projectsHeaderIcon = document.getElementById('projectsHeaderIcon');
+    projectsHeaderIcon.style.backgroundImage = 'url(/assets/icons/locationWhite.png)';
     const projectsHeaderSubtitle = document.getElementById('projectsHeaderSubtitle');
     projectsHeaderSubtitle.innerText = data.project_location;
+    projectsHeaderSubtitle.style.color = `#cccccc`;
+    const projectsHeaderStatus = document.getElementById('projectsHeaderStatus'); 
+    if(data.status === 'in progress') warnType(projectsHeaderStatus, 'solid', 'yellow');
+    if(data.status === 'planning') warnType(projectsHeaderStatus, 'solid', 'white');
+    if(data.status === 'completed') warnType(projectsHeaderStatus, 'solid', 'green');
+    projectsHeaderStatus.innerText = data.status;
 
     return 'pogi';
 }

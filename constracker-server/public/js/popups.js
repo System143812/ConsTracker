@@ -67,6 +67,7 @@ export function warnType(div, type, color, divIcon, divText) {
                 curr_div.classList.remove('yellow');
                 curr_div.classList.remove('green');
                 curr_div.classList.add('red');
+                curr_div.classList.remove('white');
             }
         },
         yellow: {
@@ -74,6 +75,7 @@ export function warnType(div, type, color, divIcon, divText) {
                 curr_div.classList.remove('green');
                 curr_div.classList.remove('red');
                 curr_div.classList.add('yellow');
+                curr_div.classList.remove('white');
             }
         },
         green: {
@@ -81,6 +83,15 @@ export function warnType(div, type, color, divIcon, divText) {
                 curr_div.classList.remove('red');
                 curr_div.classList.remove('yellow');
                 curr_div.classList.add('green');
+                curr_div.classList.remove('white');
+            }
+        },
+        white: {
+            color: (curr_div) => { 
+                curr_div.classList.add('white');
+                curr_div.classList.remove('red');
+                curr_div.classList.remove('yellow');
+                curr_div.classList.remove('green');
             }
         }
     };
