@@ -64,6 +64,7 @@ async function generateProjectContent(projectTabName, role) { //project1
     } 
     if(role === 'engineer'){
         projectsBodyContent.append(
+            createSectionTabs(role)
             
         );
     } else {
@@ -71,7 +72,11 @@ async function generateProjectContent(projectTabName, role) { //project1
             
 
         );
-    }   
+    }
+    const selectionTabContent = document.getElementById('selectionTabContent'); //nitial tab dat u will see on selectionTabs
+    const milestoneTab = document.getElementById('selectionTabMilestones');
+    const render = {label: "Milestones", render: renderMilestones};
+    selectionTabRenderEvent(selectionTabContent, milestoneTab, render);
 }
 
 async function createProjectCard(projectId) {
@@ -94,10 +99,58 @@ async function createProjectCard(projectId) {
     projectsHeaderStatus.innerText = data.status;
 }
 
-async function createSectionTabs() {
-    const selectionTabContainer = document.createElement('div');
-    selectionTabContainer.id = 'selectionTabContainer';
+function hideSelectionContents(div) {
+    const selectionTabs = document.querySelectorAll('.selection-tabs');
+    for (const tab of selectionTabs) {
+        tab.classList.remove('selected');
+    }
+    div.innerHTML = "";
+    
 }
+
+function createSectionTabs(role) {as
+    const tabs = [
+        {id: "selectionTabMilestones", label: "Milestones", render: renderMilestones},
+        {id: "selectionTabInventory", label: "Inventory", render: renderInventory},
+        {id: "selectionTabWorkers", label: "Personnel & Workers", render: renderMilestones},
+        {id: "selectionTabAnalytics", label: "Analytics", render: renderMilestones},       
+    ]
+
+    const selectionTabContent = div('selectionTabContent');
+    const selectionTabContainer = div('selectionTabContainer');
+    const selectionTabHeader = div('selectionTabHeader');
+
+    for (const tab of tabs) {
+        const elem = div(`${tab.id}`, 'selection-tabs');
+        elem.innerText = tab.label;
+        elem.addEventListener("click", async() => {
+            await selectionTabRenderEvent(selectionTabContent, elem, tab)
+        });
+        selectionTabHeader.append(elem);
+    }
+    selectionTabContainer.append(selectionTabHeader, selectionTabContent);
+    return selectionTabContainer;
+}
+
+async function selectionTabRenderEvent(content, selectionTab, tab) {a
+    hideSelectionContents(content);
+    selectionTab.classList.add('selected');
+    content.append(await tab.render());
+}
+
+
+async function renderMilestones() {
+    const milestoneSectionContainer = div('milestoneSectionContainer');
+    milestoneSectionContainer.innerText = 'Milestone';
+    return milestoneSectionContainer;
+}
+
+async function renderInventory() {
+    const inventorySectionContainer = div('inventoryText');
+    inventorySectionContainer.innerText = 'Inventory';
+    return inventorySectionContainer;
+}
+
 
 function div(id, className) {
     const el = document.createElement('div');

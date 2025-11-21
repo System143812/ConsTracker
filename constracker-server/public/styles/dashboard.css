@@ -3,7 +3,8 @@
     width: fit-content;
     padding: 0.5rem 0.5rem;
     font-size: 10px;
-    font-weight: 700;
+    border-radius: 3px;
+    font-weight: 600;
 }
 
 .warn-solid {
@@ -206,7 +207,7 @@ body {
 #sidebarContentContainer, #sidebarProjectContainer {
     display: flex;
     flex-direction: column;
-    padding: 1rem 0;
+    padding: 0.5rem 0;
     gap: 0.25rem;
     width: 225px;
     border-bottom: solid var(--light-border) 0.1px;
@@ -232,7 +233,7 @@ body {
 }
 
 .sidebar-tabs.selected, .sidebar-project-tabs.selected {
-    background-color: var(--gray-low-opacity);
+    background-color: var(--light-blue-background);
 }
 
 #settingsIcon {
@@ -270,7 +271,6 @@ body {
     padding-top: 0;
     color: var(--grayed-text);
     font-weight: 600;
-    border-bottom: solid var(--light-border) 1px;
 }
 
 #noProjectContainer {
@@ -425,6 +425,7 @@ body {
 
 #projectsHeaderStatus {
     margin-top: 0.5rem;
+    font-size: 11px;
     opacity: 0.95;
 }
 
@@ -482,9 +483,52 @@ body {
 #noProjectBodyText {
     display: flex;
     align-items: center;
-    font-size: 16px;
+    font-size: 14px;
     color: var(--grayed-text);
 }
+
+#selectionTabContainer {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    padding-top: 0.5rem;
+    gap: 0.5rem;
+    overflow: hidden;
+}
+
+#selectionTabHeader {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    overflow-x: auto;
+}
+
+.selection-tabs {
+    display: flex;
+    white-space: nowrap;
+    padding: 0.75rem 1.35rem;
+    font-weight: 500;
+    color: var(--grayed-text);
+    background-color: var(--gray-no-opacity);
+    transition: all 0.5s ease;
+}
+
+.selection-tabs:hover {
+    background-color: rgba(204, 204, 204, 0.2);
+}
+
+.selection-tabs.selected {
+    box-shadow: inset 0 -3px 0 0 var(--blue-border);
+}
+
+#selectionTabContent {
+    display: flex;
+    border-top: solid var(--light-border) 1px;
+    flex: 1;
+    width: 100%;
+    padding: 1rem;
+}
+
 
 .summary-cards {
     display: flex;
