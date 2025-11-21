@@ -53,7 +53,6 @@ form.addEventListener("submit", async(e) => {
                 alertPopup('error', 'Login failed');
                 return console.log(error);
             } 
-            console.log(data);
         } catch (error) {
             loadingOverlay.classList.remove("show");
             alertPopup('error', 'Network connection error');

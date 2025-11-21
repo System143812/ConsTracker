@@ -17,7 +17,7 @@
 
 .warn-glass {
     background-color: var(--gray-no-opacity);
-    border: solid var(--) 1px;
+    border: solid var(--default-black-color) 1px;
     color: var(--default-black-color);
     font-weight: 600;
 }

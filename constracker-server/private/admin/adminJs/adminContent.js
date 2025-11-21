@@ -30,31 +30,14 @@ const tabContents = {
     }
 }
 
-export async function displayContents(tabName, tabType) {
+export async function displayContents(tabName, tabType, role) {
+    if(role !== 'admin') return alertPopup('error', 'Unauthorized Role');
     const pageName = document.getElementById('pageName');
     if(tabType === 'upperTabs'){
         pageName.innerText = formatString(tabName);
-        // const tabDiv = document.getElementById(`${tabName}Tab`);
-        // tabDiv.classList.add('selected');
         await generateContent(tabName);
     } else {
         pageName.innerText = 'Projects'
-    }
-}
-
-function hideContents() {
-    const tabs = document.querySelectorAll('.sidebar-tabs');
-    for (const tab of tabs) {
-        tab.classList.remove('selected');
-    }
-    const bodyContainers = document.querySelectorAll('.body-container');
-    for (const bodyContainer of bodyContainers) {
-        bodyContainer.style.opacity = 0;
-        bodyContainer.style.display = 'none';
-    }
-    const bodyContents = document.querySelectorAll('.body-content');
-    for (const bodyContent of bodyContents) {
-        bodyContent.innerHTML = "";
     }
 }
 
