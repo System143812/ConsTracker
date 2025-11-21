@@ -22,7 +22,7 @@
     --light-blue-background: rgba(219, 223, 227, 0.75);
 }
 
-.icons, .icons-with-bg, .tab-icons, .light-icons {
+.icons, .icons-with-bg, .tab-icons, .light-icons, .sidebar-big-icon {
     background-position: center;
     background-size: cover;
     background-repeat: no-repeat;
@@ -32,6 +32,12 @@
     display: flex;
     width: 15px;
     height: 15px;
+}
+
+.sidebar-big-icon {
+    display: flex;
+    width: 70px;
+    height: 70px;
 }
 
 .icons-with-bg {

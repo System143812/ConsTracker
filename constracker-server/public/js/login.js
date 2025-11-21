@@ -1,4 +1,3 @@
-import { urlBase } from "/js/apiURL.js";
 import { alertPopup, expiredTokenPopup } from "./popups.js";
 import { emptyFieldExists, redAllFields } from "./validateFields.js";
 
@@ -13,15 +12,14 @@ const inputs = form.querySelectorAll("input");
 
 async function navigateDashboard(role) {
     if(role === "admin"){
-        window.location.href = `${urlBase}/admin/dashboard`;
+        window.location.href = `/admin/dashboard`;
     } else {
-        window.location.href = `${urlBase}/user/dashboard`;
+        window.location.href = `/user/dashboard`;
     }
 }
 
 form.addEventListener("submit", async(e) => {
     e.preventDefault();
-    //If may emptyField display errors else do a POST request :)
     if(await emptyFieldExists(inputs, form)){
         return;
     } else {
@@ -29,7 +27,7 @@ form.addEventListener("submit", async(e) => {
         const jsonData = Object.fromEntries(formData.entries())
         try {
             loadingOverlay.classList.add('show');
-            const response = await fetch(`${urlBase}/login`, {
+            const response = await fetch(`/login`, {
                 method: "POST",
                 headers: {
                     "Content-Type":"application/json"
@@ -78,7 +76,7 @@ async function checkToken(url) {
 }
 
 window.onload = async() => {
-    await checkToken(`${urlBase}/checkToken`);
+    await checkToken(`/checkToken`);
     Array.from(loginContainer.children).forEach((child) => {
         child.style.opacity = 1;
     });
