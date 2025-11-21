@@ -187,7 +187,7 @@ body {
     background-image: url('../assets/pictures/constrackerWhite.svg');
 }
 
-#sidebarContentContainer {
+#sidebarContentContainer, #sidebarProjectContainer {
     display: flex;
     flex-direction: column;
     padding: 1rem 0;
@@ -200,9 +200,10 @@ body {
 
 }
 
-.sidebar-tabs {
+.sidebar-tabs, .sidebar-project-tabs {
     display: flex;
     gap: 0.5rem;
+    align-items: center;
     padding: 0.75rem 1.5rem;
     padding-right: 2rem;
     cursor: pointer;
@@ -210,11 +211,11 @@ body {
     transition: all 0.25s ease;
 }
 
-.sidebar-tabs:hover {
+.sidebar-tabs:hover,.sidebar-project-tabs:hover {
     background-color: var(--gray-low-opacity);
 }
 
-.sidebar-tabs.selected {
+.sidebar-tabs.selected, .sidebar-project-tabs.selected {
     background-color: var(--gray-low-opacity);
 }
 
@@ -227,11 +228,43 @@ body {
 }
 
 .tab-names {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    flex: 1; 
+}   
+
+.tab-text {
+    flex: 1;
+    min-width: 0;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 #logoutName {
     color: var(--red-text);
+}
+
+#sidebarProjectHeader {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 1rem;
+    padding-top: 0;
+    color: var(--grayed-text);
+    font-weight: 600;
+    border-bottom: solid var(--light-border) 1px;
+}
+
+#noProjectContainer {
+    display: flex;
+    width: 100%;
+    flex-direction: column;
+    padding: 2rem 1rem;
+    gap: 1rem;
+    align-items: center;
+    justify-content: center;
 }
 
 #sidebarFooterContainer {

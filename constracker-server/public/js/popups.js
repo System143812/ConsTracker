@@ -1,4 +1,4 @@
-import { urlBase } from "/js/apiURL.js";
+const urlBase = 'https://constracker.share.zrok.io';
 
 const errorImg = new Image();
 errorImg.src = `${urlBase}/assets/icons/remove.png`;

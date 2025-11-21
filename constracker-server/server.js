@@ -138,7 +138,7 @@ function dashboardRoleAccess(req, res) {
     const roles = [
         {role: 'admin', access: ['dashboard', 'projects', 'inventory', 'materialsRequest', 'personnel']},
         {role: 'engineer', access: ['dashboard']},
-        {role: 'foreman', access: ['dashboard', 'projects', 'inventory', 'materialsRequest', 'personnel']}
+        {role: 'foreman', access: ['dashboard']}
     ];
     const userRole = roles.find(obj => obj.role === req.user.role);
     if(userRole) return res.status(200).json(userRole.access);
@@ -158,7 +158,14 @@ async function isUserExist(email) {
 async function getAssignedProject(res, user_id, user_role) {
     let adminQuery = 'SELECT project_id, project_name FROM projects';
     try {
-        const [projects] = user_role === 'admin' ?  await pool.execute(adminQuery) : await pool.execute('SELECT ap.project_id, p.project_name FROM assigned_projects ap JOIN projects p ON ap.project_id = p.project_id WHERE ap.user_id = ?;', [user_id]);
+        let projects;
+        if(user_role === 'admin'){
+            const [rows] = await pool.execute(adminQuery);
+            projects = rows;
+        } else {
+            const [rows] = await pool.execute('SELECT ap.project_id, p.project_name FROM assigned_projects ap JOIN projects p ON ap.project_id = p.project_id WHERE ap.user_id = ?;', [user_id]);
+            projects = rows;
+        }
         return projects;
     } catch (error) {
         failed(res, 500, `Database Error: ${error}`);
@@ -303,8 +310,8 @@ app.get('/profile', authMiddleware(['all']), async(req, res) => {
     }
 });
 
-app.get('/api/projects',  authMiddleware, (res, req) => {
-    getAssignedProject(res, req.user.id, req.user.role);
+app.get('/api/projects', authMiddleware(['all']), async(req, res) => {
+    res.status(200).json(await getAssignedProject(res, req.user.id, req.user.role));
 });
 
 app.get('/api/adminSummaryCards/:tabName', authMiddleware(['admin']), async(req, res) => { 

@@ -1,10 +1,10 @@
 const loadingOverlay = document.getElementById("loadingOverlay");
 loadingOverlay.classList.add("show");
 
-import { urlBase, fetchData } from "/js/apiURL.js";
-import { createTab, sidebarInitEvents } from "https://constracker.share.zrok.io/mainJs/sidebar.js";
-import { alertPopup } from "https://constracker.share.zrok.io/js/popups.js";
-// import { displayContents } from "https://constracker.share.zrok.io/admin/adminContent.js";
+import { fetchData } from "/js/apiURL.js";
+import { createTab, sidebarInitEvents, createProjectsTab, noProjectTabPlaceholder } from "/mainJs/sidebar.js";
+import { alertPopup } from "/js/popups.js";
+import { displayUserContents } from "/user/userContent.js";
 
 const dateTime = new Date();
 const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -56,7 +56,7 @@ async function initListeners() {
 async function logout() {
     const data = await fetchData('/logout');
     if(data === 'error') return;
-    if(data.status === "success") window.location.href = urlBase;
+    if(data.status === "success") window.location.href = '/';
         return alertPopup("success", `Logged out successfully`);
 }
 
@@ -74,8 +74,18 @@ async function getAccessLevel() {
     for await(const element of data) {
         createTab(element);
     }
-    // await displayContents(currentTab);
-    // sidebarInitEvents(displayContents);
+    const projects = await fetchData('/api/projects');
+    console.log(projects);
+    if(projects === 'error') return;
+    if(projects.length === 0) {
+        noProjectTabPlaceholder();
+    } else {
+        for (const project of projects) {
+            createProjectsTab(project);
+        }
+    }
+    await displayUserContents(currentTab, 'upperTabs');
+    sidebarInitEvents(displayUserContents);
 }
 
 window.onload = async() => {

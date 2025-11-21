@@ -1,6 +1,6 @@
 import { fetchData } from "/js/apiURL.js";
-import { formatString, dateFormatting } from "https://constracker.share.zrok.io/js/string.js";
-import { alertPopup, warnType } from "https://constracker.share.zrok.io/js/popups.js";
+import { formatString, dateFormatting } from "/js/string.js";
+import { alertPopup, warnType } from "/js/popups.js";
 
 
 const tabContents = {
@@ -30,15 +30,16 @@ const tabContents = {
     }
 }
 
-
-
-export async function displayContents(tabName) {
-    hideContents();
+export async function displayContents(tabName, tabType) {
     const pageName = document.getElementById('pageName');
-    pageName.innerText = formatString(tabName);
-    const tabDiv = document.getElementById(`${tabName}Tab`);
-    tabDiv.classList.add('selected');
-    await generateContent(tabName);
+    if(tabType === 'upperTabs'){
+        pageName.innerText = formatString(tabName);
+        // const tabDiv = document.getElementById(`${tabName}Tab`);
+        // tabDiv.classList.add('selected');
+        await generateContent(tabName);
+    } else {
+        pageName.innerText = 'Projects'
+    }
 }
 
 function hideContents() {

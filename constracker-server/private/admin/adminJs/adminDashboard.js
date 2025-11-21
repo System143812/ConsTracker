@@ -1,10 +1,10 @@
     const loadingOverlay = document.getElementById("loadingOverlay");
     loadingOverlay.classList.add("show");
 
-    import { urlBase, fetchData } from "/js/apiURL.js";
-    import { createTab, sidebarInitEvents } from "https://constracker.share.zrok.io/mainJs/sidebar.js";
-    import { alertPopup } from "https://constracker.share.zrok.io/js/popups.js";
-    import { displayContents } from "https://constracker.share.zrok.io/admin/adminContent.js";
+    import { fetchData } from "/js/apiURL.js";
+    import { createTab, sidebarInitEvents } from "/mainJs/sidebar.js";
+    import { alertPopup } from "/js/popups.js";
+    import { displayContents } from "/admin/adminContent.js";
 
     const dateTime = new Date();
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -54,9 +54,9 @@
     }
     
     async function logout() {
-        const data = await fetchData('logout');
+        const data = await fetchData('/logout');
         if(data === 'error') return;
-        if(data.status === "success") window.location.href = urlBase;
+        if(data.status === "success") window.location.href = '/';
         return alertPopup("success", `Logged out successfully`);
     }
 
@@ -74,7 +74,7 @@
         for await(const element of data) {
             createTab(element);
         }
-        await displayContents(currentTab);
+        await displayContents(currentTab, 'upperTabs');
         sidebarInitEvents(displayContents);
     }
 

@@ -1,8 +1,8 @@
-export const urlBase = 'https://constracker.share.zrok.io';
+import { alertPopup } from "./popups.js";
 
 export async function fetchData(url) {
     try {
-        const response = await fetch(`${urlBase}${url}`, {
+        const response = await fetch(url, {
             headers: {
                 "Accept":"application/json"
             },
