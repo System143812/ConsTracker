@@ -3,7 +3,7 @@ import { formatString, dateFormatting } from "/js/string.js";
 import { alertPopup, warnType } from "/js/popups.js";
 import { hideContents } from "/mainJs/sidebar.js";
 
-const requiredRoles = ['engineer', 'foreman'];
+const requiredRoles = ['engineer', 'foreman', 'project manager'];
 
 const tabContents = {
     dashboard: {
@@ -99,7 +99,7 @@ async function createProjectCard(projectId) {
     projectsHeaderStatus.innerText = data.status;
 }
 
-function hideSelectionContents(div) {
+function hideSelectionContents(div) { //re-refactor pa ito para pwede na gamitin sa lahat ng modules and flexible na
     const selectionTabs = document.querySelectorAll('.selection-tabs');
     for (const tab of selectionTabs) {
         tab.classList.remove('selected');

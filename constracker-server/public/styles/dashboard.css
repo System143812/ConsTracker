@@ -133,10 +133,12 @@ body {
 #sidebarContainer {
     display: flex;
     flex-direction: column;
+    align-items: center;
     opacity: 0;
     height: 100%;
     width: 225px;
     gap: 0rem;
+    background-color: #f0f0f0;
     border-right: solid var(--light-border) 0.1px;
     transition: all 0.5s ease;
     overflow: hidden;
@@ -204,6 +206,65 @@ body {
     background-image: url('../assets/pictures/constrackerWhite.svg');
 }
 
+#sidebarRoleContainer {
+    display: flex;
+    align-items: center;
+    width: 190px;
+    padding: 1rem 1rem;
+    margin: 1rem;
+    gap: 1rem;
+    background-color: rgba(23, 63, 112, 0.15);
+    border-radius: 5px;
+}
+
+#sidebarRoleIcon {
+    display: flex;
+    align-self: center;
+    width: 15px;
+    height: 15px;
+    background-image: url('../assets/icons/admin.png');
+}
+
+#sidebarRoleIcon.manager {
+    background-image: url('../assets/icons/projectManager.png');
+}
+
+#sidebarRoleIcon.engineer {
+    background-image: url('../assets/icons/engineer.png');
+}
+
+#sidebarRoleIcon.foreman {
+    background-image: url('../assets/icons/foreman.png');
+}
+ 
+#sidebarRole {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 0.25rem;
+    min-width: 0;
+}
+
+#sidebarRoleName {
+    display: flex;
+    font-weight: 600;
+    color: var(--blue-border);
+}
+
+#sidebarRoleEmail {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+}
+
+#roleEmail {
+    font-size: 10px;
+    color: var(--grayed-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 #sidebarContentContainer, #sidebarProjectContainer {
     display: flex;
     flex-direction: column;
@@ -215,6 +276,10 @@ body {
     background-color: #f0f0f0;
     overflow-y: auto;
 
+}
+
+#sidebarContentContainer {
+    border-top: solid var(--light-border) 1px;
 }
 
 .sidebar-tabs, .sidebar-project-tabs {
