@@ -101,7 +101,6 @@ export function warnType(div, type, color, divIcon, divText) {
             warnBox.classList.add('warn-solid');
             if(!color) return;
             chooseColor[color].color(warnBox);
-            
         } else {
             warnBox.classList.add('warn-glass');
             if(!color) return;
