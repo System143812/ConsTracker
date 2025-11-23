@@ -3,6 +3,7 @@
 
     import { fetchData } from "/js/apiURL.js";
     import { createTab, sidebarInitEvents } from "/mainJs/sidebar.js";
+    import { formatString } from "/js/string.js";
     import { alertPopup } from "/js/popups.js";
     import { displayContents } from "/admin/adminContent.js";
 
@@ -18,6 +19,9 @@
 
     const profileIcon = document.getElementById('profileIcon');
     const profileName = document.getElementById('profileName');
+    const roleIcon = document.getElementById('sidebarRoleIcon');
+    const roleName = document.getElementById('sidebarRoleName');
+    const roleEmail = document.getElementById('roleEmail');
     const hamburgerBtn = document.getElementById('hamburgerButton');
     const outerContainer = document.getElementById('outerContainer');
     const sidebarContainer =  document.getElementById('sidebarContainer');
@@ -66,8 +70,12 @@
         const profileIconAcronym = ((data.full_name.match(/\b\w/g).slice(0, 2)).join(""));
         profileIcon.innerText = profileIconAcronym;
         profileName.innerText = data.full_name;
-
-        await getAccessLevel(data.role)
+        if(data.role === 'engineer') roleIcon.classList.add('engineer');
+        if(data.role === 'project manager') roleIcon.classList.add('manager');
+        if(data.role === 'foreman') roleIcon.classList.add('foreman');
+        roleName.innerText = formatString(data.role); 
+        roleEmail.innerText = data.email;
+        await getAccessLevel(data.role);
     }
 
     async function getAccessLevel(role) {

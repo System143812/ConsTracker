@@ -4,6 +4,7 @@ loadingOverlay.classList.add("show");
 import { fetchData } from "/js/apiURL.js";
 import { createTab, sidebarInitEvents, createProjectsTab, noProjectTabPlaceholder } from "/mainJs/sidebar.js";
 import { alertPopup } from "/js/popups.js";
+import { formatString } from "/js/string.js";
 import { displayUserContents } from "/user/userContent.js";
 
 const dateTime = new Date();
@@ -18,6 +19,9 @@ date.innerText = formattedDateTime;
 
 const profileIcon = document.getElementById('profileIcon');
 const profileName = document.getElementById('profileName');
+const roleIcon = document.getElementById('sidebarRoleIcon');
+const roleName = document.getElementById('sidebarRoleName');
+const roleEmail = document.getElementById('roleEmail');
 const hamburgerBtn = document.getElementById('hamburgerButton');
 const outerContainer = document.getElementById('outerContainer');
 const sidebarContainer =  document.getElementById('sidebarContainer');
@@ -79,7 +83,11 @@ async function getProfileData() {
     const profileIconAcronym = ((data.full_name.match(/\b\w/g).slice(0, 2)).join(""));
     profileIcon.innerText = profileIconAcronym;
     profileName.innerText = data.full_name;
-
+    if(data.role === 'engineer') roleIcon.classList.add('engineer');
+    if(data.role === 'project manager') roleIcon.classList.add('manager');
+    if(data.role === 'foreman') roleIcon.classList.add('foreman');
+    roleName.innerText = formatString(data.role); 
+    roleEmail.innerText = data.email;
     await getAccessLevel(data.role);
 }
 

@@ -20,7 +20,7 @@
     --white-ishy-text: rgba(253, 253, 253, 1);
     --white-background: rgba(240, 240, 240, 1);
     --light-blue-background: rgba(219, 223, 227, 0.75);
-    --blue-border: rgba(23, 63, 112, 1);
+    --blue-border: #173f70;
 }
 
 .icons, .icons-with-bg, .tab-icons, .light-icons, .sidebar-big-icon {
