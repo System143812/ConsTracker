@@ -157,7 +157,7 @@ async function isUserExist(email) {
 
 async function getProjectCardData(res, project_id) {
     try {
-        const [result] = await pool.execute('SELECT * FROM projects WHERE project_id = ?', [project_id]);
+        const [result] = await pool.execute('SELECT *, (SELECT SUM(weights / 100 * milestone_progress) FROM project_milestones WHERE project_id = ?) AS progress FROM projects WHERE project_id = ?;', [project_id, project_id]);
         return result[0];
     } catch (error) {
         failed(res, 500, `Database Error ${error}`);

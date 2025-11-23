@@ -84,6 +84,8 @@ async function createProjectCard(projectId) {
     if(data === 'error') return alertPopup('error', 'Network Connection Error');
     const projectsBodyHeader = document.getElementById('projectsBodyHeader');
     projectsBodyHeader.style.backgroundImage = `url(/image/${data.image})`;
+    const projectsOverallPercent = document.getElementById('projectsOverallPercent');
+    projectsOverallPercent.innerText = `${Math.round(data.progress)}%`;
     const projectsHeaderTitle = document.getElementById('projectsHeaderTitle');
     projectsHeaderTitle.innerText = data.project_name;
     projectsHeaderTitle.style.color = 'var(--white-ishy-text)';

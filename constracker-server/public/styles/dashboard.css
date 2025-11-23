@@ -502,6 +502,13 @@ body {
     font-size: 11px;
 }
 
+#projectsOverallPercent {
+    align-content: end;
+    font-size: 32px;
+    color: #eeeeee;
+    z-index: 1;
+}
+
 .body-header-container {
     display: flex;
     flex-direction: column;
