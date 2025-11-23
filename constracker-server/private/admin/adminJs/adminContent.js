@@ -173,7 +173,7 @@ function dashboardGraphContainer() {
 }
 
 async function initDashboardGraphs() {
-    let { progress,  planning } = 0;
+    let { progress, planning, completed } = 0;
     const data = await fetchData('/api/projectStatusGraph');
     if(data === 'error') return;
     if(data.length === 0){
@@ -183,16 +183,17 @@ async function initDashboardGraphs() {
     }
     progress = data[0].in_progress;
     planning =  data[0].planning;
+    completed = data[0].completed;
     
     const projectStatusGraph = document.getElementById('projectStatusGraph').getContext('2d');
     new Chart(projectStatusGraph, {
         type: 'pie', 
         data: {
-            labels: ['Progress', 'Planning'],
+            labels: ['Completed', 'Progress', 'Planning'],
             datasets: [{
                 label: 'Project Status',
-                data: [progress, planning],
-                backgroundColor: ['rgba(23, 63, 112, 1)', 'rgba(19, 94, 58, 1)'],
+                data: [completed, progress, planning],
+                backgroundColor: ['#1A3E72', '#4187bfff', '#97a6c4'],
                 borderColor: ['#f0f0f0', '#f0f0f0'],
                 borderWidth: 2
             }]
@@ -202,6 +203,20 @@ async function initDashboardGraphs() {
             plugins: {
                 legend: {
                     position: 'top',
+                },
+                title: {
+                    display: true,
+                    text: [`Total Projects: ${planning + progress + completed}`, '',
+          `Completed: ${completed} · In Progress: ${progress} · Planning: ${planning}`],
+                    font: {
+                        size: 12,
+                        weight: 500,
+                        family: 'Inter, Arial'
+                    },
+                    align: 'center',
+                    gap: 10,
+                    color: '#666666',
+                    padding: 20
                 },
                 tooltip: {
                     callbacks: {
@@ -225,13 +240,13 @@ async function initDashboardGraphs() {
                 {
                     label: 'Budget',
                     data: [4, 5, 3],
-                    backgroundColor: ['rgba(23, 63, 112, 0.95)'],
+                    backgroundColor: ['#1A3E72'],
                     borderColor: ['#f0f0f0'],
                     borderWidth: 1
                 }, {
                     label: 'Spent',
                     data: [2, 1, 2.5],
-                    backgroundColor: ['rgba(19, 94, 58, 0.95)'],
+                    backgroundColor: ['#4187bfff'],
                     borderColor: ['#f0f0f0'],
                     borderWidth: 1
                 }   

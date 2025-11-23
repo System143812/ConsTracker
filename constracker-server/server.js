@@ -202,7 +202,7 @@ async function getProjectStatus(res) {
     try {
         
         const [result] = await pool.execute(
-            "SELECT (SELECT COUNT(p.project_id) FROM projects p WHERE p.status = 'in progress') AS in_progress, COUNT(p.project_id) AS planning FROM projects p WHERE status = 'planning';"
+            "SELECT (SELECT COUNT(p.project_id) FROM projects p WHERE p.status = 'in progress') AS in_progress, (SELECT COUNT(p.project_id) FROM projects p WHERE p.status = 'completed') AS completed, COUNT(p.project_id) AS planning FROM projects p WHERE status = 'planning';"
         );
         return result;
     } catch (error) {
