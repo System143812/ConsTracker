@@ -1,6 +1,6 @@
 import { alertPopup } from "./popups.js";
 
-export async function fetchData(url) { //baka malimutan!!!!! this won't handle empty arrays!!!!
+export async function fetchData(url) { //baka malimutan!!!!! this won't handle empty arrays!!!! make sure to check the length after calling this. :>
     try {
         const response = await fetch(url, {
             headers: {
@@ -25,3 +25,5 @@ export async function fetchData(url) { //baka malimutan!!!!! this won't handle e
         return 'error';
     }
 }
+
+//i-add soon here sa baba yung fetch call for post requests na may kasamang log notes for log activities

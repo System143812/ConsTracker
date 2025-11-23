@@ -187,7 +187,7 @@ async function initDashboardGraphs() {
     
     const projectStatusGraph = document.getElementById('projectStatusGraph').getContext('2d');
     new Chart(projectStatusGraph, {
-        type: 'pie', 
+        type: 'doughnut', 
         data: {
             labels: ['Completed', 'Progress', 'Planning'],
             datasets: [{
@@ -206,8 +206,7 @@ async function initDashboardGraphs() {
                 },
                 title: {
                     display: true,
-                    text: [`Total Projects: ${planning + progress + completed}`, '',
-          `Completed: ${completed} · In Progress: ${progress} · Planning: ${planning}`],
+                    text: [`Total Projects: ${planning + progress + completed}`],
                     font: {
                         size: 12,
                         weight: 500,

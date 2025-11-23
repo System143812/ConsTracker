@@ -19,6 +19,7 @@
     --flexible-color: rgba(30, 30, 30, 0.6);
     --white-ishy-text: rgba(253, 253, 253, 1);
     --white-background: rgba(240, 240, 240, 1);
+    --white-transparent: rgba(240, 240, 240, 0.1);
     --light-blue-background: rgba(219, 223, 227, 0.75);
     --blue-border: #173f70;
 }

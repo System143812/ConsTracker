@@ -93,27 +93,26 @@ async function createProjectCard(projectId) {
     projectsHeaderSubtitle.innerText = data.project_location;
     projectsHeaderSubtitle.style.color = `#cccccc`;
     const projectsHeaderStatus = document.getElementById('projectsHeaderStatus'); 
-    if(data.status === 'in progress') warnType(projectsHeaderStatus, 'solid', 'yellow');
-    if(data.status === 'planning') warnType(projectsHeaderStatus, 'solid', 'white');
-    if(data.status === 'completed') warnType(projectsHeaderStatus, 'solid', 'green');
+    if(data.status === 'in progress') warnType(projectsHeaderStatus, 'glass', 'yellow');
+    if(data.status === 'planning') warnType(projectsHeaderStatus, 'glass', 'white');
+    if(data.status === 'completed') warnType(projectsHeaderStatus, 'glass', 'green');
     projectsHeaderStatus.innerText = data.status;
 }
 
-function hideSelectionContents(div) { //re-refactor pa ito para pwede na gamitin sa lahat ng modules and flexible na
-    const selectionTabs = document.querySelectorAll('.selection-tabs');
-    for (const tab of selectionTabs) {
+function hideSelectionContents(contentContainer, tabClassName) { //done refactoring this, ready to use na anywhere
+    const sameClassTabs = document.querySelectorAll(`.${tabClassName}`);
+    for (const tab of sameClassTabs) {
         tab.classList.remove('selected');
     }
-    div.innerHTML = "";
-    
+    contentContainer.innerHTML = "";
 }
 
 function createSectionTabs(role) {
-    const tabs = [
+    const newContents = [
         {id: "selectionTabMilestones", label: "Milestones", render: renderMilestones},
         {id: "selectionTabInventory", label: "Inventory", render: renderInventory},
-        {id: "selectionTabWorkers", label: "Personnel & Workers", render: renderMilestones},
-        {id: "selectionTabAnalytics", label: "Analytics", render: renderMilestones},  
+        {id: "selectionTabWorkers", label: "Personnel & Workers", render: renderWorker},
+        {id: "selectionTabAnalytics", label: "Analytics", render: renderAnalytics},  
         // {id: "selectionTabEwan", label: "Ewan", render: renderMilestones} test lang    
     ]
 
@@ -121,11 +120,11 @@ function createSectionTabs(role) {
     const selectionTabContainer = div('selectionTabContainer');
     const selectionTabHeader = div('selectionTabHeader');
 
-    for (const tab of tabs) {
-        const elem = div(`${tab.id}`, 'selection-tabs');
-        elem.innerText = tab.label;
+    for (const contents of newContents) {
+        const elem = div(`${contents.id}`, 'selection-tabs');
+        elem.innerText = contents.label;
         elem.addEventListener("click", async() => {
-            await selectionTabRenderEvent(selectionTabContent, elem, tab)
+            await selectionTabRenderEvent(selectionTabContent, elem, contents)
         });
         selectionTabHeader.append(elem);
     }
@@ -133,25 +132,37 @@ function createSectionTabs(role) {
     return selectionTabContainer;
 }
 
-async function selectionTabRenderEvent(content, selectionTab, tab) {
-    hideSelectionContents(content);
-    selectionTab.classList.add('selected');
-    content.append(await tab.render());
+async function selectionTabRenderEvent(content, tab, newContent) {
+    hideSelectionContents(content, tab.className);
+    tab.classList.add('selected');
+    content.append(await newContent.render());
 }
 
 
 async function renderMilestones() {
     const milestoneSectionContainer = div('milestoneSectionContainer');
+
     milestoneSectionContainer.innerText = 'Milestone';
     return milestoneSectionContainer;
 }
 
 async function renderInventory() {
-    const inventorySectionContainer = div('inventoryText');
+    const inventorySectionContainer = div('inventorySectionContainer');
     inventorySectionContainer.innerText = 'Inventory';
     return inventorySectionContainer;
 }
 
+async function renderWorker() {
+    const workerSectionContainer = div('workerSectionContainer');
+    workerSectionContainer.innerText = 'Personnel & Workers';
+    return workerSectionContainer;
+}
+
+async function renderAnalytics() {
+    const analyticsSectionContainer = div('analyticsSectionContainer');
+    analyticsSectionContainer.innerText = 'Analytics';
+    return analyticsSectionContainer;
+}
 
 function div(id, className) {
     const el = document.createElement('div');

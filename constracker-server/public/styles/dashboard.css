@@ -57,6 +57,12 @@
     color: var(--green-text);
 }
 
+.warn-glass.white {
+    background-color: var(--white-transparent);
+    border: solid var(--white-ishy-text) 1px;
+    color: var(--white-ishy-text);
+}
+
 .warn-big-container {
     display: flex;
     border: solid var(--green-border) 1px;
@@ -471,7 +477,10 @@ body {
     right: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(30, 30, 30, 0.5);
+    background: linear-gradient(to right,
+        rgba(30, 30, 30, 1) 0%,
+        rgba(30, 30, 30, 0.5) 30%
+    );
     z-index: 0;
 }
 
@@ -491,7 +500,6 @@ body {
 #projectsHeaderStatus {
     margin-top: 0.5rem;
     font-size: 11px;
-    opacity: 0.95;
 }
 
 .body-header-container {
@@ -575,6 +583,7 @@ body {
     font-weight: 500;
     color: var(--grayed-text);
     background-color: var(--gray-no-opacity);
+    cursor: pointer;
     transition: all 0.5s ease;
 }
 
