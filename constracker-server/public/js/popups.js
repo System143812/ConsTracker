@@ -122,3 +122,22 @@ export function warnType(div, type, color, divIcon, divText) {
         }  
     } 
 }
+
+export function showEmptyPlaceholder(iconPath, contentContainer, popupOverlay, placeholderText, actionText, contentId) {
+    const emptyContentPlaceholder = document.createElement('div');
+    emptyContentPlaceholder.className = 'empty-content-placeholder';
+    const emptyContentIcon = document.createElement('div');
+    emptyContentIcon.classList.add('empty-placeholders');
+    emptyContentIcon.style.backgroundImage = `url(${iconPath})`;
+    const emptyContentText = document.createElement('div');
+    emptyContentText.className = 'empty-content-text';
+    emptyContentText.innerText = placeholderText;
+    const emptyContentAction = document.createElement('div');
+    emptyContentAction.innerText = actionText;
+    emptyContentAction.className = 'empty-content-action';
+    emptyContentAction.addEventListener("click", () => {
+        popupOverlay(contentId);
+    });
+    emptyContentPlaceholder.append(emptyContentIcon, emptyContentText, emptyContentAction);
+    contentContainer.append(emptyContentPlaceholder);
+}

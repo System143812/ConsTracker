@@ -9,6 +9,7 @@ import bcrypt from 'bcrypt'
 import rateLimit from 'express-rate-limit';
 import cookieParser from 'cookie-parser';
 import { fail } from 'assert';
+import e from 'express';
 
 dotenv.config();
 const PORT = process.env.PORT;
@@ -153,6 +154,15 @@ async function getUser(uid) {
 async function isUserExist(email) {
     const [result] = await pool.execute('SELECT * FROM users WHERE email = ?;', [email]);
     return result.length > 0 ? true : false;
+}
+
+async function getMilestonesData(res, projectId) {
+    try {
+        const [result] = await pool.execute('SELECT * FROM project_milestones WHERE project_id = ?', [projectId]);
+        return result;
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
 }
 
 async function getProjectCardData(res, project_id) {
@@ -322,6 +332,10 @@ app.get('/profile', authMiddleware(['all']), async(req, res) => {
     } catch (error) {
         failed(res, 500, "Database error");
     }
+});
+
+app.get('/api/milestones/:projectId', authMiddleware(['all']), async(req, res) => {
+    res.status(200).json(await getMilestonesData(res, req.params.projectId));
 });
 
 app.get('/api/getProjectCard/:projectId', authMiddleware(['all']), async(req, res) => {
