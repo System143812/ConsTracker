@@ -11,7 +11,7 @@
     --yellow-text: rgb(217, 119, 6);
     --grayed-text: rgb(102, 102, 102);
     --gray-low-opacity: rgba(102, 102, 102, 0.1);
-    --default-black-color: rgba(50, 50, 50, 1);
+    --default-black-color: rgb(50, 50, 50, 1);
     --gray--no-opacity: rgba(102, 102, 102, 0);
     --overlay-background:  rgba(30, 30, 30, 0.7);
     --light-border: rgba(204, 204, 204, 0.75);
@@ -24,7 +24,7 @@
     --blue-border: #173f70;
 }
 
-.icons, .icons-with-bg, .tab-icons, .light-icons, .sidebar-big-icon {
+.icons, .icons-with-bg, .tab-icons, .light-icons, .sidebar-big-icon, .empty-placeholders {
     background-position: center;
     background-size: cover;
     background-repeat: no-repeat;
@@ -40,6 +40,12 @@
     display: flex;
     width: 70px;
     height: 70px;
+}
+
+.empty-placeholders {
+    display: flex;
+    height: 150px;
+    width: 150px;
 }
 
 .icons-with-bg {
