@@ -8,8 +8,6 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt'
 import rateLimit from 'express-rate-limit';
 import cookieParser from 'cookie-parser';
-import { fail } from 'assert';
-import e from 'express';
 
 dotenv.config();
 const PORT = process.env.PORT;
