@@ -2,6 +2,7 @@ import { fetchData } from "/js/apiURL.js";
 import { formatString, dateFormatting } from "/js/string.js";
 import { alertPopup, warnType, showEmptyPlaceholder } from "/js/popups.js";
 import { hideContents } from "/mainJs/sidebar.js";
+import { createMilestoneOl, milestoneFullOl } from "/mainJs/overlays.js";
 
 const requiredRoles = ['engineer', 'foreman', 'project manager'];
 
@@ -109,10 +110,6 @@ function hideSelectionContents(contentContainer, tabClassName) { //done refactor
     contentContainer.innerHTML = "";
 }
 
-function showCreateMilestone(projectId) {
-    console.log(`Eto id: ${projectId}`);
-}
-
 function createSectionTabs(role, projectId) {
     const newContents = [
         {id: "selectionTabMilestones", label: "Milestones", render: renderMilestones},
@@ -144,35 +141,54 @@ async function selectionTabRenderEvent(content, tab, newContent, projectId) {
     content.append(await newContent.render(projectId));
 }
 
+function roundDecimal(number) {
+    return number * 10 / 10;
+}
+
 async function renderMilestones(projectId) {
 
     const milestoneSectionContainer = div('milestoneSectionContainer');
     const milestoneSectionHeader = div('milestoneSectionHeader');
-    milestoneSectionHeader.innerText = 'Project Milestones';
+    const milestoneHeaderText = div('milestoneHeaderText');
+    milestoneHeaderText.innerText = 'Project Milestones';
+    const milestoneAddBtn = div('milestoneAddBtn');
+    milestoneAddBtn.innerText = 'Create Milestone';
     const milestoneSectionBody = div('milestoneSectionBody');
 
     const data = await fetchData(`/api/milestones/${projectId}`);
     if(data === "error") return alertPopup('error', 'Network Connection Error');
     if(data.length === 0) {
-        showEmptyPlaceholder('/assets/icons/noMilestones.png', milestoneSectionBody, showCreateMilestone(projectId), "There are no milestones yet", "Create Milestones", projectId);
+        showEmptyPlaceholder('/assets/icons/noMilestones.png', milestoneSectionBody, createMilestoneOl(projectId), "There are no milestones yet", "Create Milestones", projectId);
     } else {
         let counter = 1;
         for (const milestone of data) {
             const milestonePartContainer = div('', 'milestone-part-container');
             const milestoneProgressContainer = div('', 'milestone-vertical-container');
             const milestoneProgressBar = div('', 'milestone-progress-bar');
-            milestoneProgressBar.style.height = `${milestone.milestone_progress}%`;
-            const milesotneProgressPoint = div('', 'milestone-progress-point')
-            if(milestone.status === 'completed') milesotneProgressPoint.classList.add('completed');
+            milestoneProgressBar.style.height = `${roundDecimal(milestone.milestone_progress)}%`;
+            const milestoneProgressPoint = div('', 'milestone-progress-point')
+            if(milestone.status === 'completed') milestoneProgressPoint.classList.add('completed');
             const milestoneCard = div('', 'milestone-cards');
-            if(counter % 2 === 0) milestoneCard.style.transform = 'translate(calc(0% + 1.5rem), 50%)';
-            if(counter % 2 !== 0) milestoneCard.style.transform = 'translate(calc(-100% + -1.5rem), 50%)';
+            if(counter % 2 === 0) {
+                milestoneCard.style.transform = 'translate(calc(0% + 1.5rem))';
+                milestoneCard.classList.add("lefty");
+            }
+            if(counter % 2 !== 0) {
+                milestoneCard.style.transform = 'translate(calc(-100% + -1.5rem))';
+                milestoneCard.classList.remove("lefty");
+            }
             const milestoneCardHeader = div('', 'milestone-card-header');
             const milestoneCardName = div('', 'milestone-card-name');
             milestoneCardName.innerText = milestone.milestone_name;
             const milestoneCardStatus = div('', 'milestone-card-status');
             milestoneCardStatus.classList.add('status');
             milestoneCardStatus.innerText = milestone.status;
+            milestoneCard.addEventListener("mouseenter", () => {
+                milestoneCardStatus.innerText = `${roundDecimal(milestone.milestone_progress)}%`;
+            });
+            milestoneCard.addEventListener("mouseleave", () => {
+                milestoneCardStatus.innerText = milestone.status;
+            });
             if(milestone.status === 'not started') warnType(milestoneCardStatus, 'solid', 'white');
             if(milestone.status === 'in progress') warnType(milestoneCardStatus, 'solid', 'yellow');
             if(milestone.status === 'completed') warnType(milestoneCardStatus, 'solid', 'green');
@@ -180,15 +196,17 @@ async function renderMilestones(projectId) {
             const milestoneCardDescription = div('', 'milestone-card-description');
             milestoneCardDescription.innerText = milestone.milestone_description;
             const milestoneCardBody = div('', 'milestone-card-body');
-            const milestoneCardProgress = div('', 'milestone-card-progress');
-            milestoneCardProgress.innerText = `Progress: ${milestone.milestone_progress}%`;
             const milestoneCardView = div('', 'milestone-card-view');
             milestoneCardView.innerText = 'View More';
+            milestoneCardView.addEventListener("click", () => {
+                milestoneFullOl(milestone);
+            });
 
-            milestoneCardBody.append(milestoneCardProgress, milestoneCardView);
+            milestoneSectionHeader.append(milestoneHeaderText, milestoneAddBtn);
+            milestoneCardBody.append(milestoneCardView);
             milestoneCardHeader.append(milestoneCardName, milestoneCardStatus);
             milestoneCard.append(milestoneCardHeader, milestoneCardDescription, milestoneCardBody);
-            milestoneProgressContainer.append(milestoneProgressBar, milesotneProgressPoint);
+            milestoneProgressContainer.append(milestoneProgressBar, milestoneProgressPoint);
             milestonePartContainer.append(milestoneProgressContainer, milestoneCard);
             milestoneSectionBody.append(milestonePartContainer);
             counter ++;

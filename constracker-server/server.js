@@ -156,7 +156,7 @@ async function isUserExist(email) {
 
 async function getMilestonesData(res, projectId) {
     try {
-        const [result] = await pool.execute('SELECT * FROM project_milestones WHERE project_id = ?', [projectId]);
+        const [result] = await pool.execute('SELECT pm.*, SUM(t.weights / 100 * t.task_progress) AS milestone_progress FROM tasks t JOIN project_milestones pm ON pm.id = t.milestone_id WHERE pm.project_id = ? GROUP BY pm.id;', [projectId]);
         return result;
     } catch (error) {
         failed(res, 500, `Database Error: ${error}`);
@@ -165,7 +165,7 @@ async function getMilestonesData(res, projectId) {
 
 async function getProjectCardData(res, project_id) {
     try {
-        const [result] = await pool.execute('SELECT *, (SELECT SUM(weights / 100 * milestone_progress) FROM project_milestones WHERE project_id = ?) AS progress FROM projects WHERE project_id = ?;', [project_id, project_id]);
+        const [result] = await pool.execute('SELECT *, (SELECT SUM(weights / 100 * milestone_progress) AS milestone_progress FROM (SELECT p.weights, SUM(t.weights / 100 * t.task_progress) AS milestone_progress FROM project_milestones p JOIN tasks t ON p.id = t.milestone_id WHERE p.project_id = ? GROUP BY p.id) AS m) AS progress FROM projects WHERE project_id = ?;', [project_id, project_id]);
         return result[0];
     } catch (error) {
         failed(res, 500, `Database Error ${error}`);
@@ -308,11 +308,12 @@ app.post('/login', async(req, res) => {
         const user = result[0];
         const match = await bcrypt.compare(password, user.password);
         if(!match) return failed(res, 401, "Invalid Credentials");
+        const isProduction = process.env.DEV_ENV === "production";
         const token = jwt.sign({id: user.user_id, role: user.role}, JWT_KEY, {expiresIn: "15m"});
         res.cookie("token", token, {
             httpOnly: true,
-            secure: true,
-            sameSite: 'Strict',
+            secure: isProduction,
+            sameSite: isProduction ? "none" : "lax",
             maxAge: 1000 * 3600
         });
         await pool.execute("UPDATE users SET is_active = 1 WHERE user_id = ?", [user.user_id]);

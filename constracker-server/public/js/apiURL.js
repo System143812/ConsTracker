@@ -9,7 +9,7 @@ export async function fetchData(url) { //baka malimutan!!!!! this won't handle e
             credentials: "include"
         });
         const data = await response.json();
-        console.log(data);
+        // console.log(data);
         if(!data){
             alertPopup('error', 'Server Error');
             return 'error';
