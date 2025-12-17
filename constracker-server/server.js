@@ -137,7 +137,8 @@ function dashboardRoleAccess(req, res) {
     const roles = [
         {role: 'admin', access: ['dashboard', 'projects', 'inventory', 'materialsRequest', 'personnel']},
         {role: 'engineer', access: ['dashboard']},
-        {role: 'foreman', access: ['dashboard']}
+        {role: 'foreman', access: ['dashboard']},
+        {role: 'project manager', access: ['dashboard']}
     ];
     const userRole = roles.find(obj => obj.role === req.user.role);
     if(userRole) return res.status(200).json(userRole.access);
@@ -260,12 +261,12 @@ app.get('/admin/:jsFile', authMiddleware(['admin']), (req, res) => {
     res.sendFile(path.join(privDir, 'admin', 'adminJs', file));
 });
 
-app.get('/user/dashboard', authMiddleware(['engineer', 'foreman']), (req, res) => {
+app.get('/user/dashboard', authMiddleware(['engineer', 'project manager', 'foreman']), (req, res) => {
     if(req.user.role === "admin") return  failed(res, 401, "Authorization Failed");
     res.sendFile(path.join(privDir, 'user', 'userDashboard.html'));
 });
 
-app.get('/user/:jsFile', authMiddleware(['engineer', 'foreman']), (req, res) => {
+app.get('/user/:jsFile', authMiddleware(['engineer', 'project manager', 'foreman']), (req, res) => {
     const file = req.params.jsFile;
     res.sendFile(path.join(privDir, 'user', 'userJs', file));
 });
@@ -335,6 +336,10 @@ app.get('/profile', authMiddleware(['all']), async(req, res) => {
 
 app.get('/api/milestones/:projectId', authMiddleware(['all']), async(req, res) => {
     res.status(200).json(await getMilestonesData(res, req.params.projectId));
+});
+
+app.get('/api/tasks/:milestoneId', authMiddleware(['all']), async(req, res) => {
+    res.status(200).json(await getTasksData(res, req.params.milestoneId));
 });
 
 app.get('/api/getProjectCard/:projectId', authMiddleware(['all']), async(req, res) => {
