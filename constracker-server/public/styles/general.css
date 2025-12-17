@@ -12,7 +12,7 @@
     --grayed-text: rgb(102, 102, 102);
     --gray-low-opacity: rgba(102, 102, 102, 0.1);
     --default-black-color: rgb(50, 50, 50, 1);
-    --gray--no-opacity: rgba(102, 102, 102, 0);
+    --gray-no-opacity: rgba(102, 102, 102, 0);
     --overlay-background:  rgba(30, 30, 30, 0.7);
     --light-border: rgba(204, 204, 204, 0.75);
     --content-border: rgb(204, 204, 204, 1);
@@ -22,9 +22,12 @@
     --white-transparent: rgba(240, 240, 240, 0.1);
     --light-blue-background: rgba(219, 223, 227, 0.75);
     --blue-border: #173f70;
+    --light-blue: #174e90;
+    --blue-border-invi: rgba(23, 63, 112, 0);
+    --btn-shadow: 0px 2px 8px 1px rgba(30, 30, 30, 0.25);
 }
 
-.icons, .icons-with-bg, .tab-icons, .light-icons, .sidebar-big-icon, .empty-placeholders {
+.icons, .icons-with-bg, .tab-icons, .light-icons, .sidebar-big-icon, .empty-placeholders, .btn-icons {
     background-position: center;
     background-size: cover;
     background-repeat: no-repeat;
@@ -34,6 +37,22 @@
     display: flex;
     width: 15px;
     height: 15px;
+}
+
+.icons-with-bg {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border-radius: 10px;
+    background-color: var(--gray-no-opacity);
+    width: 30px;
+    height: 30px;
+    background-size: 15px 15px;
+    transition: all 0.5s ease;
+}
+
+.icons-with-bg:hover {
+    background-color: var(--gray-low-opacity);
 }
 
 .sidebar-big-icon {
@@ -107,6 +126,62 @@
     box-sizing: border-box;
     word-wrap: break-word;
 }
+
+.solid-buttons, .glass-buttons, .wide-buttons {
+    display: inline-flex;
+    align-items: center;
+    height: fit-content;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.solid-buttons, .wide-buttons {
+    background-color: var(--blue-border);
+    border: solid var(--blue-border) 1px;
+}
+
+.wide-buttons {
+    padding: 0.75rem;
+    width: 100%;
+}
+
+.glass-buttons {
+    background-color: rgba(255, 255, 255, 0);
+    border: solid var(--blue-border) 1px;
+}
+
+.glass-buttons:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.glass-buttons:active {
+    opacity: 0.95;
+}
+
+.solid-buttons:hover, .wide-buttons:hover {
+    opacity: 0.9;
+}
+
+.solid-buttons:active, .wide-buttons:active {
+    transform: scale(95%);
+    opacity: 0.8;
+}
+
+.btn-icons {
+    height: 15px;
+    width: 15px;
+}
+
+.btn-texts {
+    font-weight: 600;
+    text-align: center;
+    white-space: nowrap;
+}
+
 
 #alertPopupContainer {
     display: flex;
@@ -216,7 +291,7 @@
     cursor: pointer;
     justify-content: center;
     padding: 0.5rem;
-    background-color: var(--gray--no-opacity);
+    background-color: var(--gray-no-opacity);
     border-radius: 5px;
     transition: all 0.25s ease;
 }
@@ -248,6 +323,38 @@
     pointer-events: auto;
     z-index: 10;
 }
+
+#editBtnContainer {
+    display: inline-flex;
+    gap: 1rem;
+}
+
+#editBtnIcon {
+    background-image: url('/assets/icons/editWhite.png');
+}
+
+.edit-form-btn, #save-form-btn, #cancel-form-btn {
+    text-align: center;
+    white-space: nowrap;
+    padding: 0.25rem 0.5rem;
+    border-radius: 5px;
+}
+
+.edit-form-btn {
+    background-color: var(--blue-border);
+    color: var(--white-ishy-text);
+}
+
+.save-form-btn {
+    background-color: var(--green-border);
+    color: var(--white-ishy-text);
+}
+
+.cancel-form-btn {
+    background-color: var(--gray-low-opacity);
+    color: var(--default-black-color);
+}
+
 @keyframes slightUpwardPush {
     0% {transform: translateY(10px);}
     100% {transform: translateY(0px);}

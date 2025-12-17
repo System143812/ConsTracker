@@ -341,6 +341,9 @@ async function dashboardActiveProjects(filter) {
         const progressBar = div(`progressBar`, 'progress-bar');
         progressBar.style.width = pctString;
         progressBar.style.animation = `progressBarAnim${num} 1s ease`;
+        progressBar.addEventListener("animationend", () => {
+            style.remove();
+        }, {once: true})
         num ++;
         progressLowerSection.append(progressBar);
         progressUpperSection.append(progressText, progressPercent);

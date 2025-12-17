@@ -137,7 +137,8 @@ function dashboardRoleAccess(req, res) {
     const roles = [
         {role: 'admin', access: ['dashboard', 'projects', 'inventory', 'materialsRequest', 'personnel']},
         {role: 'engineer', access: ['dashboard']},
-        {role: 'foreman', access: ['dashboard']}
+        {role: 'foreman', access: ['dashboard']},
+        {role: 'project manager', access: ['dashboard']}
     ];
     const userRole = roles.find(obj => obj.role === req.user.role);
     if(userRole) return res.status(200).json(userRole.access);
@@ -156,7 +157,7 @@ async function isUserExist(email) {
 
 async function getMilestonesData(res, projectId) {
     try {
-        const [result] = await pool.execute('SELECT * FROM project_milestones WHERE project_id = ?', [projectId]);
+        const [result] = await pool.execute('SELECT pm.*, SUM(t.weights / 100 * t.task_progress) AS milestone_progress FROM tasks t JOIN project_milestones pm ON pm.id = t.milestone_id WHERE pm.project_id = ? GROUP BY pm.id;', [projectId]);
         return result;
     } catch (error) {
         failed(res, 500, `Database Error: ${error}`);
@@ -165,7 +166,7 @@ async function getMilestonesData(res, projectId) {
 
 async function getProjectCardData(res, project_id) {
     try {
-        const [result] = await pool.execute('SELECT *, (SELECT SUM(weights / 100 * milestone_progress) FROM project_milestones WHERE project_id = ?) AS progress FROM projects WHERE project_id = ?;', [project_id, project_id]);
+        const [result] = await pool.execute('SELECT *, (SELECT SUM(weights / 100 * milestone_progress) AS milestone_progress FROM (SELECT p.weights, SUM(t.weights / 100 * t.task_progress) AS milestone_progress FROM project_milestones p JOIN tasks t ON p.id = t.milestone_id WHERE p.project_id = ? GROUP BY p.id) AS m) AS progress FROM projects WHERE project_id = ?;', [project_id, project_id]);
         return result[0];
     } catch (error) {
         failed(res, 500, `Database Error ${error}`);
@@ -260,12 +261,12 @@ app.get('/admin/:jsFile', authMiddleware(['admin']), (req, res) => {
     res.sendFile(path.join(privDir, 'admin', 'adminJs', file));
 });
 
-app.get('/user/dashboard', authMiddleware(['engineer', 'foreman']), (req, res) => {
+app.get('/user/dashboard', authMiddleware(['engineer', 'project manager', 'foreman']), (req, res) => {
     if(req.user.role === "admin") return  failed(res, 401, "Authorization Failed");
     res.sendFile(path.join(privDir, 'user', 'userDashboard.html'));
 });
 
-app.get('/user/:jsFile', authMiddleware(['engineer', 'foreman']), (req, res) => {
+app.get('/user/:jsFile', authMiddleware(['engineer', 'project manager', 'foreman']), (req, res) => {
     const file = req.params.jsFile;
     res.sendFile(path.join(privDir, 'user', 'userJs', file));
 });
@@ -308,11 +309,12 @@ app.post('/login', async(req, res) => {
         const user = result[0];
         const match = await bcrypt.compare(password, user.password);
         if(!match) return failed(res, 401, "Invalid Credentials");
+        const isProduction = process.env.DEV_ENV === "production";
         const token = jwt.sign({id: user.user_id, role: user.role}, JWT_KEY, {expiresIn: "15m"});
         res.cookie("token", token, {
             httpOnly: true,
-            secure: true,
-            sameSite: 'Strict',
+            secure: isProduction,
+            sameSite: isProduction ? "none" : "lax",
             maxAge: 1000 * 3600
         });
         await pool.execute("UPDATE users SET is_active = 1 WHERE user_id = ?", [user.user_id]);
@@ -334,6 +336,10 @@ app.get('/profile', authMiddleware(['all']), async(req, res) => {
 
 app.get('/api/milestones/:projectId', authMiddleware(['all']), async(req, res) => {
     res.status(200).json(await getMilestonesData(res, req.params.projectId));
+});
+
+app.get('/api/tasks/:milestoneId', authMiddleware(['all']), async(req, res) => {
+    res.status(200).json(await getTasksData(res, req.params.milestoneId));
 });
 
 app.get('/api/getProjectCard/:projectId', authMiddleware(['all']), async(req, res) => {

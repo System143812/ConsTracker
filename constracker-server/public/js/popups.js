@@ -1,4 +1,5 @@
-const urlBase = 'https://constracker.share.zrok.io';
+const urlBase2 = 'https://constracker.share.zrok.io';
+const urlBase = 'http://localhost:3000';
 
 const errorImg = new Image();
 errorImg.src = `${urlBase}/assets/icons/remove.png`;
