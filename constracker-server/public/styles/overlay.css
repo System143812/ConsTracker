@@ -87,7 +87,7 @@
 }
 
 #taskEditHeader {
-    padding-bottom: 0;
+    padding: 0 0.5rem;
     border-bottom: none;
 }
 
@@ -111,26 +111,48 @@
 #milestoneEditBody, #taskViewBody, #taskEditBody {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 0.75rem;
     flex: 1;
-    padding-top: 0.5rem;
+    padding: 0.5rem 0;
+}
+
+#taskEditBody {
+    gap: 0;
+    padding-top: 0;
 }
 
 #milestoneEditForm, #taskEditForm {
     display: flex;
     flex-direction: column;
     padding: 0.5rem;
-    gap: 0.5rem;
+    padding-bottom: 1rem;
+    gap: 0.75rem;
 }
 
 #taskFormHeader {
     display: flex;
 }
 
-#taskFormBody {
+#milestoneFormBody, #taskFormBody {
     display: flex;
-    gap: 1rem;
+    gap: 0.75rem;
+    flex-wrap: wrap;
 }
+
+#milestoneFormFooter, #taskFormFooter {
+    margin-top: 0.5rem;
+}
+
+#milestoneFormHeader {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+#milestoneFormFooter {
+    display: flex;
+}
+
 
 .task-containers {
     display: flex;
@@ -140,10 +162,12 @@
     border-bottom: solid var(--light-border) 1px; 
     background-color: var(--gray-no-opacity);
     cursor: pointer;
+    transform: scale(100%);
     transition: all 0.15s ease;
 }
 
 .task-containers:hover {
+    transform: scale(96%);
     background-color: var(--gray-low-opacity);
 }
 
@@ -161,11 +185,11 @@
 .task-numbers, .task-names {
     font-size: 11px;
     font-weight: 600;
-    color: var(--grayed-text);
+    color: var(--default-black-color);
 }
 
 .task-names {
-    color: var(--default-black-color);
+    /* color: var(--default-black-color); */
     display: inline-flex;
     width: fit-content;
 }
@@ -200,6 +224,7 @@
 
 .task-progress-labels, .task-progress-pct {
     font-size: 11px;
+    font-weight: 600;
     color: var(--grayed-text);
 }
 

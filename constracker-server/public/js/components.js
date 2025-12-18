@@ -20,6 +20,34 @@ export function button(id, className) {
     return el;
 }
 
+function getErrSpan(inputField) {
+    return inputField
+        .closest('.input-box-containers')
+        ?.querySelector('.error-messages');
+}
+
+function hideInputErr(inputField) {
+    inputField.classList.remove("error"); 
+    const errSpan = getErrSpan(inputField);
+    errSpan.innerText = errSpan.dataset.defaultMsg;
+    if(errSpan) errSpan.classList.remove("show");
+}
+
+function showInputErr(inputField) {
+    inputField.classList.add("error");
+    const errSpan = getErrSpan(inputField);
+    errSpan.innerText = errSpan.dataset.errMsg;
+    if(errSpan) errSpan.classList.add("show");
+}
+
+function validateInput(inputEl) {
+    if (inputEl.value.trim() === '') {
+        showInputErr(inputEl);
+    } else {
+        hideInputErr(inputEl);
+    }
+}
+
 export function emptyPlaceholder(divContainer, textContent) {
     const emptyContainer = div('', 'empty-containers');
     const emptyIcon = span('emptyIcon', 'icons');
@@ -62,7 +90,7 @@ export function editFormButton(form, successPopupFn, updateUiFn) {
     const editButton = createButton('editFormBtn', 'solid-buttons',  'Edit', 'editBtnText', 'editBtnIcon');
     const saveButton = createButton('saveFormBtn', 'solid-buttons', 'Save', 'saveBtnText');
     const cancelButton = createButton('cancelFormBtn', 'solid-buttons', 'Cancel', 'cancelBtnText');
-    const inputFields = form.querySelectorAll('input');
+    const inputFields = form.querySelectorAll('input, textarea');
     let changes = [];
     editButton.addEventListener("click", () => {
         editBtnContainer.innerHTML = "";
@@ -72,6 +100,7 @@ export function editFormButton(form, successPopupFn, updateUiFn) {
             inputField.classList.remove('read');
             inputField.classList.add('edit');
             inputField.removeAttribute("readOnly");
+            validateInput(inputField);
         }
     })
     cancelButton.addEventListener("click", () => {
@@ -82,6 +111,7 @@ export function editFormButton(form, successPopupFn, updateUiFn) {
             inputField.classList.remove('edit');
             inputField.setAttribute("readOnly", true);
             inputField.value = inputField.dataset.original;
+            validateInput(inputField);
         }
     });
     saveButton.addEventListener("click", () => {
@@ -102,8 +132,8 @@ export function editFormButton(form, successPopupFn, updateUiFn) {
             if(inputField.dataset.original !== inputField.value) { //add to sa log details
                 
             }
-            console.log(inputField.value);
             inputField.dataset.original = inputField.value;  
+            validateInput(inputField);
         }
         return successPopupFn();
     });
@@ -142,18 +172,21 @@ export function limitNumberInput(input, min = 0, max = 100, numType = "whole", d
 }
 
 
-
-
-export function createInput(inputType, mode, label, inputId, name, defaultVal, placeholder, min = null, max = null, numType = null) {
+export function createInput(inputType, mode, label, inputId, name, defaultVal, placeholder, min = null, max = null, numType = null, defaultLabel = null) {
     const inputBoxContainer = div('inputBoxContainer', 'input-box-containers');
 
     const labelEl = document.createElement("label");
     labelEl.className = "input-labels";
     labelEl.htmlFor = inputId;
     labelEl.innerText = label;
-
-    const inputEl = document.createElement("input");
-    inputEl.type = inputType;
+    let inputEl;
+    if(inputType === 'textarea') {
+        inputEl = document.createElement("textarea");
+        inputEl.rows = 3;
+    } else {
+        inputEl = document.createElement("input");
+        inputEl.type = inputType;
+    }
     inputEl.name = name;
     inputEl.id = inputId;
     inputEl.className = `input-fields ${mode}`;
@@ -161,24 +194,25 @@ export function createInput(inputType, mode, label, inputId, name, defaultVal, p
     inputEl.placeholder = placeholder ?? "";
     inputEl.dataset.numType = numType ?? "";
     inputEl.dataset.original = defaultVal ?? "";
-
     if (mode === "read") {
         inputEl.readOnly = true;
     }
 
-    const errorSpan = span('', 'error-messages');
-    errorSpan.innerText = `${label} Required`;
-
+    const errorSpan = span(``, 'error-messages');
+    errorSpan.dataset.errMsg = `${label} Required`;
+    errorSpan.dataset.defaultMsg = defaultLabel ?? " ";
+    errorSpan.innerText = errorSpan.dataset.defaultMsg;
+    if(!numType && max) {
+        inputEl.addEventListener("input", () => {
+            if(inputEl.value.length > max) {
+                inputEl.value = inputEl.value.slice(0, max);
+            }
+        });
+    };
     if(numType) limitNumberInput(inputEl, min, max, numType);
 
     inputEl.addEventListener('input', () => {
-        if(inputEl.value === '') {
-            inputEl.classList.add('error');
-            errorSpan.classList.add('show');
-        } else {
-            inputEl.classList.remove('error');
-            errorSpan.classList.remove('show');
-        }
+        validateInput(inputEl);
     });
 
     inputBoxContainer.append(labelEl, inputEl, errorSpan);

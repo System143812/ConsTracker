@@ -156,7 +156,7 @@ async function renderMilestones(role, projectId) {
     milestoneSubheaderText.innerText = 'Track progress across construction milestones and tasks';
     let milestoneAddBtn = div('emptyDiv');
     if(role !== 'foreman') {
-        milestoneAddBtn = createButton('milestoneAddBtn', 'solid-buttons', 'New Milestone', 'milestoneAddText', 'milestoneAddIcon');
+        milestoneAddBtn = createButton('milestoneAddBtn', 'solid-buttons', 'Create', 'milestoneAddText', 'milestoneAddIcon');
         milestoneAddBtn.addEventListener("click", () => {
 
         });
