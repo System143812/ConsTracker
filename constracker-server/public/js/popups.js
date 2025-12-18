@@ -1,27 +1,26 @@
-const urlBase2 = 'https://constracker.share.zrok.io';
-const urlBase = 'http://localhost:3000';
-
 const errorImg = new Image();
-errorImg.src = `${urlBase}/assets/icons/remove.png`;
+errorImg.src = `/assets/icons/remove.png`;
 const successImg = new Image();
-successImg.src = `${urlBase}/assets/icons/check.png`;
+successImg.src = `/assets/icons/check.png`;
 
 
 export function alertPopup(status, message) {
     const popupContainer = document.createElement('div');
     popupContainer.id = 'alertPopupContainer';
+    const popupOverlay = document.createElement('div');
+    popupOverlay.id = 'alertPopupOverlay'
     const popupIcon = document.createElement('div');
     popupIcon.id = 'alertPopupIcon';
     const popupMessage = document.createElement('div');
     popupMessage.id = 'alertPopupMessage';
     popupMessage.innerText = message;
     if(status === "error"){
-        popupContainer.classList.add('error');
+        popupOverlay.classList.add('error');
         popupIcon.classList.add('error');
         popupIcon.style.backgroundImage = `url(${errorImg.src})`;
         popupMessage.classList.add('error');
     } else if(status === "success") {
-        popupContainer.classList.remove('error');
+        popupOverlay.classList.remove('error');
         popupIcon.classList.remove('error');
         popupIcon.style.backgroundImage = `url(${successImg.src})`;
         popupMessage.classList.remove('error');
@@ -29,7 +28,8 @@ export function alertPopup(status, message) {
         return;
     }
     document.body.appendChild(popupContainer);
-    popupContainer.append(popupIcon, popupMessage);
+    popupContainer.append(popupOverlay);
+    popupOverlay.append(popupIcon, popupMessage);
 
     popupContainer.style.opacity = 1;
     popupContainer.style.pointerEvents = 'auto';

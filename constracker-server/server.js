@@ -155,10 +155,37 @@ async function isUserExist(email) {
     return result.length > 0 ? true : false;
 }
 
-async function getMilestonesData(res, projectId) {
+async function getAllMilestones(res, projectId) {
     try {
         const [result] = await pool.execute('SELECT pm.*, SUM(t.weights / 100 * t.task_progress) AS milestone_progress FROM tasks t JOIN project_milestones pm ON pm.id = t.milestone_id WHERE pm.project_id = ? GROUP BY pm.id;', [projectId]);
         return result;
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+}
+
+async function getMilestone(res, milestoneId) {
+    try {
+        const [result] = await pool.execute('SELECT pm.*, SUM(t.weights / 100 * t.task_progress) AS milestone_progress FROM tasks t JOIN project_milestones pm ON pm.id = t.milestone_id WHERE pm.id = ? GROUP BY pm.id;', [milestoneId]);
+        return result[0];
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+}
+
+async function getAllTasks(res, milestoneId) {
+    try {
+        const [result] = await pool.execute('SELECT * FROM tasks WHERE milestone_id = ?;', [milestoneId]);
+        return result;
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+}
+
+async function getTask(res, taskId) {
+    try {
+        const [result] = await pool.execute('SELECT * FROM tasks WHERE id = ?;', [taskId]);
+        return result[0];
     } catch (error) {
         failed(res, 500, `Database Error: ${error}`);
     }
@@ -335,11 +362,19 @@ app.get('/profile', authMiddleware(['all']), async(req, res) => {
 });
 
 app.get('/api/milestones/:projectId', authMiddleware(['all']), async(req, res) => {
-    res.status(200).json(await getMilestonesData(res, req.params.projectId));
+    res.status(200).json(await getAllMilestones(res, req.params.projectId));
+});
+
+app.get('/api/milestone/:milestoneId', authMiddleware(['all']), async(req, res) => {
+    res.status(200).json(await getMilestone(res, req.params.milestoneId));
 });
 
 app.get('/api/tasks/:milestoneId', authMiddleware(['all']), async(req, res) => {
-    res.status(200).json(await getTasksData(res, req.params.milestoneId));
+    res.status(200).json(await getAllTasks(res, req.params.milestoneId));
+});
+
+app.get('/api/task/:taskId', authMiddleware(['all']), async(req, res) => {
+    res.status(200).json(await getTask(res, req.params.taskId));
 });
 
 app.get('/api/getProjectCard/:projectId', authMiddleware(['all']), async(req, res) => {

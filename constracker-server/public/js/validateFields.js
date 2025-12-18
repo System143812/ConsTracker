@@ -7,7 +7,7 @@ function removeRedFields(inputFields, form){
     });
 }
 
-export function emptyFieldExists(inputFields, form) {
+export function emptyFieldExists(inputFields, form) { //sa login lang to ginamit, gumawa nako ng bagong version nito
     removeRedFields(inputFields, form);
     return new Promise(resolve => {
         setTimeout(() => {

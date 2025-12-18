@@ -25,6 +25,7 @@
     --light-blue: #174e90;
     --blue-border-invi: rgba(23, 63, 112, 0);
     --btn-shadow: 0px 2px 8px 1px rgba(30, 30, 30, 0.25);
+    --input-border: rgba(100, 100, 100, 0.75);
 }
 
 .icons, .icons-with-bg, .tab-icons, .light-icons, .sidebar-big-icon, .empty-placeholders, .btn-icons {
@@ -182,36 +183,83 @@
     white-space: nowrap;
 }
 
+.empty-containers {
+    display: flex;
+    flex: 1;
+    gap: 0.5rem;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    opacity: 0.9;
+    
+}
+
+#emptyIcon {
+    display: inline-flex;
+    width: 15px;
+    height: 15px;
+    background-image: url('/assets/icons/exclamation-black.png');
+}
+
+.empty-texts {
+    color: #2e2e2e;
+    font-weight: 600;
+    white-space: nowrap;
+    text-align: center;
+}
+
+#goBackBtn {
+    display: flex;
+    height: 25px;
+    width: 25px;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 5px;
+    background-color: var(--gray-no-opacity);
+    transition: all 0.15s ease;
+}
+
+#goBackBtn:hover {
+    background-color: var(--gray-low-opacity);
+}
+
+#goBackBtnIcon {
+    height: 15px;
+    width: 15px;
+    background-image: url('/assets/icons/backBlack.png');
+}
 
 #alertPopupContainer {
     display: flex;
     position: absolute;
     opacity: 0;
     pointer-events: none;
-    padding: 0.5rem 1rem;
-    gap: 1rem;
     bottom: 1rem;
     right: 1rem;
-    background-color: var(--green-background);
-    backdrop-filter: blur(50px);
-    border: solid var(--green-border) 0.1px;
+    background-color: rgba(255, 255, 255, 0.7);
     border-radius: 5px;
     box-shadow: 0px 3px 9px  rgba(0, 0, 0, 0.25);
     animation: slightUpwardPush 0.3s ease;
     transition: all 1s ease;
+    z-index: 10;
 }
 
-#alertPopupContainer.error {
+#alertPopupOverlay {
+    display: flex;
+    flex: 1;
+    gap: 1rem;
+    padding: 0.5rem 1rem;
+    background-color: var(--green-background);
+    border: solid var(--green-border) 1px;
+    backdrop-filter: blur(50px);
+    transition: all 1s ease;
+    border-radius: 5px;
+}
+
+#alertPopupOverlay.error {
     background-color: var(--red-background);
     border: solid var(--red-border) 0.1px;
-}
-
-#alertPopupcontainer::before {
-    display: flex;
-    position: absolute;
-    height: 100%;
-    width: 100%;
-    background-color: rgba(250, 250, 250, 0.25);
 }
 
 #alertPopupIcon {
@@ -329,33 +377,118 @@
     gap: 1rem;
 }
 
+#editBtnIcon, #deleteBtnIcon {
+    width: 10px;
+    height: 10px;
+}
+
 #editBtnIcon {
     background-image: url('/assets/icons/editWhite.png');
 }
 
-.edit-form-btn, #save-form-btn, #cancel-form-btn {
+#deleteBtnIcon {
+    width: 12px;
+    height: 12px;
+    background-image: url('/assets/icons/deleteWhite.png');
+}
+
+#deleteFormBtn {
+    border: none;
+    border-radius: 5px;
+    font-size: 12px;
+    padding: 0.5rem 0.75rem;
+    background-color: var(--red-border);
+}
+
+#editFormBtn, #saveFormBtn, #cancelFormBtn {
     text-align: center;
     white-space: nowrap;
-    padding: 0.25rem 0.5rem;
+    font-size: 10px;
+    padding: 0.5rem 0.75rem;
     border-radius: 5px;
+    border: none;
+    animation: fadeIn 0.15s ease;
+    transition: all 0.15s ease;
 }
 
-.edit-form-btn {
+#editFormBtn {
     background-color: var(--blue-border);
-    color: var(--white-ishy-text);
 }
 
-.save-form-btn {
+#saveFormBtn {
     background-color: var(--green-border);
+}
+
+#cancelFormBtn {
+    background-color: var(--gray-low-opacity);
+}
+
+#editBtnText, #saveBtnText, #deleteBtnText {
     color: var(--white-ishy-text);
 }
 
-.cancel-form-btn {
-    background-color: var(--gray-low-opacity);
+#cancelBtnText {
     color: var(--default-black-color);
+}
+
+.input-box-containers {
+    display: flex;
+    gap: 0.25rem;
+    width: 100%;
+    flex-direction: column;
+}
+
+.input-labels {
+    font-weight: 600;
+}
+
+.input-fields {
+    display: flex;
+    width: 100%;
+    padding: 0.25rem 0.5rem;
+    pointer-events: auto;
+    border-radius: 3px;
+    font-size: 12px;
+    border: solid rgba(100, 100, 100, 0.5) 1px;
+    color: var(--default-black-color);
+    background-color: var(--white-transparent);
+    transition: all 0.5s ease;
+}
+
+.input-fields.edit {
+    pointer-events: auto;
+    border: solid rgba(100, 100, 100, 0.5) 1px;
+    color: var(--default-black-color);
+}
+
+.input-fields.read {
+    pointer-events: none;
+    border: solid rgba(100, 100, 100, 0.25) 1px;
+    color: var(--grayed-text);
+}
+
+.input-fields.error {
+    border: solid var(--red-border) 1px;
+    background-color: var(--red-background);
+}
+
+.error-messages {
+    color: var(--red-text);
+    opacity: 0;
+    pointer-events: none;
+    transition: all 0.5s ease;
+}
+
+.error-messages.show {
+    opacity: 1;
 }
 
 @keyframes slightUpwardPush {
     0% {transform: translateY(10px);}
     100% {transform: translateY(0px);}
+}
+
+@keyframes fadeIn {
+    0% {opacity: 0;}
+    100% {opacity: 1;}
 }
