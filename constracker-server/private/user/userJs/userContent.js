@@ -168,7 +168,7 @@ async function renderMilestones(role, projectId) {
         showEmptyPlaceholder('/assets/icons/noMilestones.png', milestoneSectionBody, createMilestoneOl(projectId), "There are no milestones yet", "Create Milestones", projectId);
     } else {
         let counter = 1;
-        let interval = 0;
+        let interval = 100;
         for (const milestone of data) {
             const milestonePartContainer = div('', 'milestone-part-container');
             const milestoneProgressContainer = div('', 'milestone-vertical-container');
@@ -229,7 +229,13 @@ async function renderMilestones(role, projectId) {
             const milestoneCardView = div('', 'milestone-card-view');
             milestoneCardView.innerText = 'View More';
             milestoneCardView.addEventListener("click", () => {
-                milestoneFullOl(milestone);
+                milestoneFullOl(milestone.id, milestone.milestone_name, async() => {
+                    const content = document.getElementById('selectionTabContent');
+                    const tab = document.getElementById('selectionTabMilestones');
+                    hideSelectionContents(content, tab.className);
+                    tab.classList.add('selected');
+                    content.append(await renderMilestones(role, projectId));
+                }); //eto yung callback na ipapasa sa modal para pag ka save auto update ang ui
             });
 
             milestoneSectionHeader.append(milestoneHeaderTitle, milestoneAddBtn);
