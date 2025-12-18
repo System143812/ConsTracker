@@ -210,8 +210,8 @@
 
 #goBackBtn {
     display: flex;
-    height: 25px;
-    width: 25px;
+    height: 30px;
+    width: 30px;
     align-items: center;
     justify-content: center;
     border: none;
@@ -434,12 +434,21 @@
 .input-box-containers {
     display: flex;
     gap: 0.25rem;
-    width: 100%;
+    flex: 1;
+    height: fit-content;
+    min-width: fit-content;
     flex-direction: column;
 }
 
 .input-labels {
     font-weight: 600;
+    pointer-events: none;
+}
+
+textarea {
+    resize: none;
+    white-space: pre-wrap;
+    word-wrap: break-word;
 }
 
 .input-fields {
@@ -452,7 +461,6 @@
     border: solid rgba(100, 100, 100, 0.5) 1px;
     color: var(--default-black-color);
     background-color: var(--white-transparent);
-    transition: all 0.5s ease;
 }
 
 .input-fields.edit {
@@ -473,14 +481,14 @@
 }
 
 .error-messages {
-    color: var(--red-text);
-    opacity: 0;
+    display: flex;
+    color: var(--grayed-text);
     pointer-events: none;
     transition: all 0.5s ease;
 }
 
 .error-messages.show {
-    opacity: 1;
+    color: var(--red-text);
 }
 
 @keyframes slightUpwardPush {

@@ -21,6 +21,10 @@ export function dateFormatting(fullDateTime, options) {
             day: 'numeric'
         });
         return formattedDate;
+    } else if(options === "calendar") {
+        const dateObj = new Date(fullDateTime);
+        const formattedCalendarDate = dateObj.toISOString().split("T")[0];
+        return formattedCalendarDate;
     } else if(options === "dateTime") {
         const dateObj = new Date(fullDateTime);
         const formattedDate = dateObj.toLocaleDateString('en-US', {

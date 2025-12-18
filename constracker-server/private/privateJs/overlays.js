@@ -50,7 +50,7 @@ async function updateContents(divContainer, newContentFn) {
     divContainer.append(await newContentFn());
 }
 
-async function renderEditMilestone(milestoneId, updateUiFn) { //milestone tab content ng milestone edit ol
+async function renderEditMilestone(milestoneId, updateUiFn, overlayBackground) { //milestone tab content ng milestone edit ol
     const milestoneEditContainer = div('milestoneEditContainer');
     const milestoneData = await fetchData(`/api/milestone/${milestoneId}`);
     if(milestoneData === "error") return alertPopup('error', 'Network Connection Error');
@@ -69,6 +69,25 @@ async function renderEditMilestone(milestoneId, updateUiFn) { //milestone tab co
     const milestoneEditForm = document.createElement('form');
     milestoneEditForm.id = 'milestoneEditForm';
 
+    const milestoneFormHeader = div('milestoneFormHeader');
+    const milestoneFormBody = div('milestoneFormBody');
+    const milestoneFormFooter = div('milestoneFormFooter');
+
+    milestoneFormHeader.append(
+        createInput('text', 'read', 'Milestone Name', 'milestoneInputName', 'milestone_name', milestoneData.milestone_name, 'Enter milestone name', '', '', '', ''),
+        createInput('textarea', 'read', 'Description', 'milestoneInputDescription', 'milestone_description', milestoneData.milestone_description, 'Enter milestone description', '', '100', '', '100 characters max')
+    );
+    const duedate = dateFormatting(milestoneData.duedate, 'calendar');
+    milestoneFormBody.append(
+        createInput('text', 'read', 'Weights', 'milestoneInputWeights', 'milestone_weights', milestoneData.weights, 'Enter weight amount', 0, 100, 'decimal', 'maximum: 100%'),
+        createInput('date', 'read', 'Due Date', 'milestoneInputDue', 'milestone_due', duedate, 'Select due date', '', '', '', `mm/dd/yyyy`),
+    );
+    milestoneFormFooter.append(
+        deleteFormButton(milestoneData.id, 'Milestone', () => { alertPopup("success", "Milestone Deleted Successfully") }, updateUiFn, () => { hideOverlayWithBg(overlayBackground) })
+    );
+
+    milestoneEditForm.append(milestoneFormHeader, milestoneFormBody, milestoneFormFooter);
+    milestoneEditBody.append(milestoneEditForm);
     milestoneEditIntro.append(milestoneEditTitle, milestoneEditSubtitle);
     milestoneEditHeader.append(milestoneEditIntro, editFormButton(milestoneEditForm, () => { alertPopup('success', 'Saved Successfully') }, updateUiFn));
     milestoneEditContainer.append(milestoneEditHeader, milestoneEditBody);
@@ -104,12 +123,12 @@ async function renderEditTask(milestoneId, milestoneName, taskId, updateUiFn, ov
 
     taskFormHeader.append(createInput('text', 'read', 'Task Name', 'taskInputName', 'task_name', taskData.task_name, 'Enter task name'));
     taskFormBody.append(
-        createInput('text', 'read', 'Progress', 'taskInputProgress', 'task_progress', taskData.task_progress, 'Enter progress percentage', 0, 100, 'decimal'),
-        createInput('text', 'read', 'Weights', 'taskInputWeights', 'task_weights', taskData.weights, 'Enter weight amount', 0, 100, 'decimal')
+        createInput('text', 'read', 'Progress', 'taskInputProgress', 'task_progress', taskData.task_progress, 'Enter progress percentage', 0, 100, 'decimal', 'maximum: 100%'),
+        createInput('text', 'read', 'Weights', 'taskInputWeights', 'task_weights', taskData.weights, 'Enter weight amount', 0, 100, 'decimal', 'maximum: 100%')
     );
-    taskFormFooter.append(deleteFormButton(taskData.id, 'Task', () => { alertPopup("success", "Task Deleted") }, updateUiFn, () => updateContents(overlayBody, () => renderViewTask(milestoneId, milestoneName, updateUiFn, overlayBody))));
-    taskEditForm.append(taskFormHeader, taskFormBody, taskFormFooter);
 
+    taskFormFooter.append(deleteFormButton(taskData.id, 'Task', () => { alertPopup("success", "Task Deleted Successfully") }, updateUiFn, () => updateContents(overlayBody, () => renderViewTask(milestoneId, milestoneName, updateUiFn, overlayBody))));
+    taskEditForm.append(taskFormHeader, taskFormBody, taskFormFooter);
     taskEditBody.append(taskEditForm);
     goBackBtn.append(goBackBtnIcon);
     taskEditHeader.append(goBackBtn, editFormButton(taskEditForm, () => { alertPopup("success", "Saved Successfully") }, updateUiFn));
@@ -189,7 +208,7 @@ export async function milestoneFullOl(milestoneId, milestoneName, updateUiFn) { 
     milestoneBar.addEventListener("click", () => {
         removeSelectedChildren(overlayHeader);
         milestoneBar.classList.add("selected");
-        updateContents(overlayBody, async() => await renderEditMilestone(milestoneId, updateUiFn));
+        updateContents(overlayBody, async() => await renderEditMilestone(milestoneId, updateUiFn, overlayBackground));
     });
     taskBar.addEventListener("click", () => {
         removeSelectedChildren(overlayHeader);
@@ -198,7 +217,7 @@ export async function milestoneFullOl(milestoneId, milestoneName, updateUiFn) { 
     });
 
     overlayHeader.append(milestoneBar, taskBar);
-    overlayBody.append(await renderEditMilestone(milestoneId, updateUiFn));
+    overlayBody.append(await renderEditMilestone(milestoneId, updateUiFn, overlayBackground));
     milestoneBar.classList.add("selected"); 
     showOverlayWithBg(overlayBackground);
 }
