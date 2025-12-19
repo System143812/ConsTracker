@@ -317,6 +317,7 @@ body {
 
 .tab-names {
     display: flex;
+    /* font-weight: 500; */
     min-width: 0;
     align-items: center;
     flex: 1; 
@@ -325,6 +326,7 @@ body {
 .tab-text {
     flex: 1;
     min-width: 0;
+    /* font-weight: 500; */
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -604,7 +606,7 @@ body {
 }
 
 .selection-tabs.selected {
-    color: var(--default-black-color);
+    color: var(--blue-border);
     box-shadow: inset 0 -2px 0 0 var(--blue-border);
 }
 
@@ -651,17 +653,28 @@ body {
     font-size: 12px;
 }
 
-#milestoneAddBtn {
+#milestoneAddBtn, #taskAddBtn {
     background-color: var(--blue-border);
     color: var(--white-ishy-text);
     font-size: 12px;
 }
 
-#milestoneAddIcon {
+#taskAddBtn {
+    padding: 0.5rem 0.75rem;
+    border-radius: 5px;
+    font-size: 10px;
+}
+
+#milestoneAddIcon, #taskAddIcon {
     background-image: url('/assets/icons/addWhite.png');
 }
 
-#milestoneAddText {
+#taskAddIcon {
+    width: 11px;
+    height: 11px;
+}
+
+#milestoneAddText, #taskAddText {
     color: var(--white-ishy-text);
 }
 
@@ -669,7 +682,7 @@ body {
     display: flex;
     flex-direction: column;
     flex: 1;
-    padding: 0 2rem;
+    padding: 1rem 2rem;
     /* overflow-y: auto; */
 }
 
@@ -733,7 +746,7 @@ body {
     border-radius: 10px;
     border-top-right-radius: 0px;
     padding: 0.5rem;
-    box-shadow: var(--btn-shadow);
+    box-shadow: none;
     transform: scale(100%);
     pointer-events: auto;
     cursor: pointer;
@@ -742,7 +755,7 @@ body {
 
 .milestone-cards:hover {
     transform: scale(90%);
-    box-shadow: none;
+    box-shadow: var(--btn-shadow);
 }
 
 .milestone-cards.lefty {
@@ -791,18 +804,20 @@ body {
 }
 
 .milestone-card-view {
+    display: flex;
+    width: fit-content;
+    margin-left: auto;
     cursor: pointer;
-    font-weight: 600;
+    gap: 0.25rem;
     padding: 0.25rem 0;
-    color: var(--blue-border);
-    border-bottom: solid var(--gray-no-opacity) 1px;
-    transform: scale(100%);
+    opacity: 1;
+    transform: scale(90%);
     transition: all 0.15s ease;
 }
 
 .milestone-card-view:hover {
-    transform: scale(90%);
-    border-bottom: solid var(--blue-border) 1px;
+    transform: scale(85%);
+    opacity: 0.9;
 }
 
 .empty-content-placeholder {

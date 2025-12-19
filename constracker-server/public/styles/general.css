@@ -11,7 +11,7 @@
     --yellow-text: rgb(217, 119, 6);
     --grayed-text: rgb(102, 102, 102);
     --gray-low-opacity: rgba(102, 102, 102, 0.1);
-    --default-black-color: rgb(50, 50, 50, 1);
+    --default-black-color: #2a2f3a;
     --gray-no-opacity: rgba(102, 102, 102, 0);
     --overlay-background:  rgba(30, 30, 30, 0.7);
     --light-border: rgba(204, 204, 204, 0.75);
@@ -386,18 +386,41 @@
     background-image: url('/assets/icons/editWhite.png');
 }
 
-#deleteBtnIcon {
+#deleteBtnIcon, #weightsBtnIcon {
     width: 12px;
     height: 12px;
     background-image: url('/assets/icons/deleteWhite.png');
 }
 
-#deleteFormBtn {
+#weightsBtnIcon {
+    background-image: url('/assets/icons/nextBlue.png');
+}
+
+#milestoneCardViewIcon {
+    background-image: url('/assets/icons/nextBlue.png');
+}
+
+#deleteFormBtn, #weightsFormBtn {
     border: none;
     border-radius: 5px;
     font-size: 12px;
     padding: 0.5rem 0.75rem;
     background-color: var(--red-border);
+    transition: all 0.15s ease;
+}
+
+#weightsFormBtn {
+    display: grid;
+    grid-template-columns: 0fr 0fr;
+    justify-content: end;
+    width: 100%;
+    border-radius: 0px;
+    padding: 0;
+    background-color: var(--gray-no-opacity);
+}
+
+#weightsFormBtn:hover {
+    opacity: 0.8;
 }
 
 #editFormBtn, #saveFormBtn, #cancelFormBtn {
@@ -423,8 +446,17 @@
     background-color: var(--gray-low-opacity);
 }
 
-#editBtnText, #saveBtnText, #deleteBtnText {
+#editBtnText, #saveBtnText, #deleteBtnText, #weightsBtnText {
     color: var(--white-ishy-text);
+}
+
+#weightsBtnText {
+    color: var(--blue-border);
+}
+
+#milestoneCardViewText {
+    color: var(--blue-border);
+    font-weight: 600;
 }
 
 #cancelBtnText {
@@ -454,6 +486,7 @@ textarea {
 .input-fields {
     display: flex;
     width: 100%;
+    min-width: fit-content;
     padding: 0.25rem 0.5rem;
     pointer-events: auto;
     border-radius: 3px;
@@ -476,6 +509,7 @@ textarea {
 }
 
 .input-fields.error {
+    color: var(--red-text);
     border: solid var(--red-border) 1px;
     background-color: var(--red-background);
 }
@@ -484,6 +518,7 @@ textarea {
     display: flex;
     color: var(--grayed-text);
     pointer-events: none;
+    font-size: 11px;
     transition: all 0.5s ease;
 }
 

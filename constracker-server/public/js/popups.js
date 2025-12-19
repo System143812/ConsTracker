@@ -35,7 +35,10 @@ export function alertPopup(status, message) {
     popupContainer.style.pointerEvents = 'auto';
     setTimeout(() => { 
         popupContainer.style.opacity = 0;
-        popupContainer.pointerEvents = 'none';   
+        popupContainer.pointerEvents = 'none'; 
+        setTimeout(() => {
+            popupContainer.remove(); 
+        }, 1100); 
     }, 3000);
 }
 
@@ -124,7 +127,7 @@ export function warnType(div, type, color, divIcon, divText) {
     } 
 }
 
-export function showEmptyPlaceholder(iconPath, contentContainer, popupOverlay, placeholderText, actionText, contentId) {
+export function showEmptyPlaceholder(iconPath, contentContainer, popupOverlay = null, placeholderText, actionText = null, contentId) {
     const emptyContentPlaceholder = document.createElement('div');
     emptyContentPlaceholder.className = 'empty-content-placeholder';
     const emptyContentIcon = document.createElement('div');
@@ -133,12 +136,16 @@ export function showEmptyPlaceholder(iconPath, contentContainer, popupOverlay, p
     const emptyContentText = document.createElement('div');
     emptyContentText.className = 'empty-content-text';
     emptyContentText.innerText = placeholderText;
-    const emptyContentAction = document.createElement('div');
-    emptyContentAction.innerText = actionText;
-    emptyContentAction.className = 'empty-content-action';
-    emptyContentAction.addEventListener("click", () => {
-        popupOverlay(contentId);
-    });
-    emptyContentPlaceholder.append(emptyContentIcon, emptyContentText, emptyContentAction);
+    if(popupOverlay) {
+        const emptyContentAction = document.createElement('div');
+        emptyContentAction.innerText = actionText;
+        emptyContentAction.className = 'empty-content-action';
+        emptyContentAction.addEventListener("click", () => {
+            popupOverlay(contentId);
+        });
+        emptyContentPlaceholder.append(emptyContentIcon, emptyContentText, emptyContentAction);
+    } else {
+        emptyContentPlaceholder.append(emptyContentIcon, emptyContentText);
+    }
     contentContainer.append(emptyContentPlaceholder);
 }

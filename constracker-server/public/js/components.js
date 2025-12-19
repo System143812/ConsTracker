@@ -85,7 +85,7 @@ export function deleteFormButton(itemId, itemName, successPopupFn, updateUiFn, c
     return deleteBtn;
 }
 
-export function editFormButton(form, successPopupFn, updateUiFn) {
+export function editFormButton(form, successPopupFn, updateUiFn, recheckFieldsFn = null) {
     const editBtnContainer = div('editBtnContainer');
     const editButton = createButton('editFormBtn', 'solid-buttons',  'Edit', 'editBtnText', 'editBtnIcon');
     const saveButton = createButton('saveFormBtn', 'solid-buttons', 'Save', 'saveBtnText');
@@ -113,16 +113,18 @@ export function editFormButton(form, successPopupFn, updateUiFn) {
             inputField.value = inputField.dataset.original;
             validateInput(inputField);
         }
+        if(recheckFieldsFn) recheckFieldsFn();
     });
     saveButton.addEventListener("click", () => {
         editBtnContainer.innerHTML = "";
         editBtnContainer.append(editButton);
-        updateUiFn();
+        
         for (const inputField of inputFields) {
             inputField.classList.add('read');
             inputField.classList.remove('edit');
             inputField.setAttribute("readOnly", true);
-            if(inputField.dataset.numType === 'decimal') {
+
+            if(inputField.dataset.numType === 'decimal') { //pag nag save ka ng number field but ang last char is dot, this will trigger. Gagawing .00 ang last char.
                 const parts = inputField.value.split(".");
                 if(inputField.value.includes(".") && !parts[1]) {
                     
@@ -135,10 +137,11 @@ export function editFormButton(form, successPopupFn, updateUiFn) {
             inputField.dataset.original = inputField.value;  
             validateInput(inputField);
         }
+
+        updateUiFn();
         return successPopupFn();
     });
     editBtnContainer.append(editButton);
-
     return editBtnContainer;
 }
 

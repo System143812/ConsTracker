@@ -157,15 +157,17 @@ async function renderMilestones(role, projectId) {
     let milestoneAddBtn = div('emptyDiv');
     if(role !== 'foreman') {
         milestoneAddBtn = createButton('milestoneAddBtn', 'solid-buttons', 'Create', 'milestoneAddText', 'milestoneAddIcon');
-        milestoneAddBtn.addEventListener("click", () => {
-
-        });
+        milestoneAddBtn.addEventListener("click", () => { createMilestoneOl(projectId) });
     }
     const milestoneSectionBody = div('milestoneSectionBody');
     const data = await fetchData(`/api/milestones/${projectId}`);
     if(data === "error") return alertPopup('error', 'Network Connection Error');
     if(data.length === 0) {
-        showEmptyPlaceholder('/assets/icons/noMilestones.png', milestoneSectionBody, createMilestoneOl(projectId), "There are no milestones yet", "Create Milestones", projectId);
+        if(role !== 'foreman') {
+            showEmptyPlaceholder('/assets/icons/noMilestones.png', milestoneSectionBody, createMilestoneOl(projectId), "There are no milestones yet", "Create Milestones", projectId);
+        } else {
+            showEmptyPlaceholder('/assets/icons/noMilestones.png', milestoneSectionBody, "", "There are no milestones yet", "", projectId);
+        }
     } else {
         let counter = 1;
         let interval = 100;
@@ -227,15 +229,18 @@ async function renderMilestones(role, projectId) {
             milestoneCardDescription.innerText = milestone.milestone_description;
             const milestoneCardBody = div('', 'milestone-card-body');
             const milestoneCardView = div('', 'milestone-card-view');
-            milestoneCardView.innerText = 'View More';
+            const milestoneCardViewText = span('milestoneCardViewText', 'btn-texts');
+            milestoneCardViewText.innerText = 'View More';
+            const milestoneCardViewIcon = span('milestoneCardViewIcon', 'btn-icons');
+            milestoneCardView.append(milestoneCardViewText, milestoneCardViewIcon);
             milestoneCardView.addEventListener("click", () => {
-                milestoneFullOl(milestone.id, milestone.milestone_name, async() => {
+                milestoneFullOl(projectId, milestone.id, milestone.milestone_name, async() => {
                     const content = document.getElementById('selectionTabContent');
                     const tab = document.getElementById('selectionTabMilestones');
                     hideSelectionContents(content, tab.className);
                     tab.classList.add('selected');
                     content.append(await renderMilestones(role, projectId));
-                }); //eto yung callback na ipapasa sa modal para pag ka save auto update ang ui
+                }, role); //eto yung callback na ipapasa sa modal para pag ka save auto update ang ui
             });
 
             milestoneSectionHeader.append(milestoneHeaderTitle, milestoneAddBtn);

@@ -28,6 +28,7 @@
     max-height: 80%;
     width: fit-content;
     height: fit-content;
+    min-width: 30%;
 }
 
 .overlay-headers {
@@ -63,11 +64,11 @@
 }
 
 #milestoneBar.selected, #taskBar.selected {
-    color: var(--default-black-color);
+    color: var(--blue-border);
     box-shadow: inset 0 -2px 0 0 var(--blue-border);
 }
 
-#milestoneEditContainer, #taskViewContainer, #taskEditContainer {
+.form-edit-containers {
     display: flex;
     width: 100%;
     flex-direction: column;
@@ -75,40 +76,42 @@
     transition: all 0.15s ease;
 }
 
-#milestoneEditHeader, #taskViewHeader, #taskEditHeader {
+.form-edit-headers {
     display: flex;
     align-items: center;
     justify-content: space-between;
     width: 100%;
     height: fit-content;
+    padding: 0 0.5rem;
     padding-bottom: 1rem;
     gap: 1.5rem;
     border-bottom: solid var(--light-border) 1px;
 }
 
 #taskEditHeader {
-    padding: 0 0.5rem;
+    padding: 0 0.35rem;
     border-bottom: none;
 }
 
-#milestoneEditIntro, #taskViewIntro {
+.form-edit-intros {
     display: flex;
     flex-direction: column;
     gap: 0.25rem;
+    margin-right: auto;
 }
 
-#milestoneEditTitle, #taskViewTitle {
+.form-edit-titles {
     color: var(--default-black-color);
     font-weight: 600;
     font-size: 12px;
 }
 
-#milestoneEditSubtitle, #taskViewSubtitle {
+.form-edit-subtitles {
     color: var(--grayed-text);
-    font-size: 10px;
+    font-size: 11px;
 }
 
-#milestoneEditBody, #taskViewBody, #taskEditBody {
+.form-edit-bodies {
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
@@ -121,16 +124,96 @@
     padding-top: 0;
 }
 
-#milestoneEditForm, #taskEditForm {
+.form-edit-forms {
     display: flex;
     flex-direction: column;
     padding: 0.5rem;
-    padding-bottom: 1rem;
     gap: 0.75rem;
 }
 
-#taskFormHeader {
+#milestoneFormHeader, #taskFormHeader {
     display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+#weightEditForm {
+    gap: 0;
+}
+
+#weightFormHeader {
+    display: flex;
+    align-items: center;
+    padding-bottom: 0.5rem;
+    border-bottom: solid var(--light-border) 1px;
+}
+
+#weightTypeName {
+    display: flex;
+    justify-content: center;
+    text-align: center;
+    width: 50%;
+    font-weight: 600;
+    padding: 0 0.5rem;
+    color: var(--grayed-text);
+}
+
+#weightTotalContainer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 50%;
+    padding: 0 0.5rem;
+    gap: 0.25rem;
+    border-left: solid var(--light-border) 1px;
+}
+
+#weightTotalLabel {
+    width: fit-content;
+    text-align: center;
+    font-weight: 600;
+    color: var(--grayed-text);
+}
+
+#weightTotalErr {
+    width: fit-content;
+    text-align: center;
+    font-size: 11px;
+    color: var(--grayed-text);
+    transition: all 0.5s ease;
+}
+
+#weightTotalErr.error {
+    color: var(--red-text);
+}
+
+#weightFormBody {
+    display: flex;
+    flex-direction: column;
+    /* border-top: solid var(--light-border) 1px; */
+}
+
+#weightContainer {
+    display: flex;
+    width: 100%;
+    border-radius: 5px;
+    padding: 0.5rem 0;
+    border-bottom: solid var(--light-border) 1px;
+}
+
+#weightName, #weightInputContainer {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 50%;
+    padding: 0.5rem 1rem;
+}
+
+#weightName {
+    text-align: center;
+    color: var(--grayed-text);
+    font-weight: 500;
 }
 
 #milestoneFormBody, #taskFormBody {
@@ -140,19 +223,12 @@
 }
 
 #milestoneFormFooter, #taskFormFooter {
-    margin-top: 0.5rem;
-}
-
-#milestoneFormHeader {
+    padding-top: 1rem;
+    border-top: solid var(--light-border) 1px;
     display: flex;
-    flex-direction: column;
     gap: 0.75rem;
+    flex-direction: column;
 }
-
-#milestoneFormFooter {
-    display: flex;
-}
-
 
 .task-containers {
     display: flex;
@@ -233,6 +309,7 @@
     .overlay-containers {
         max-width: 80%;
         max-height: 70%;
+        min-width: 50%;
     }
 }
 
