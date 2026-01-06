@@ -140,5 +140,5 @@ vite.config.ts.timestamp-*
 
 
 # mga schema
-.sql
+*.sql
 .sql.*
