@@ -288,7 +288,7 @@ export async function createLogs(logType, action, logName, project_id = null, lo
             action: action,
             logDetails: logDetailsObj
         }
-        const response = await fetchPostJson('/api/logs', '', logObject, '');
+        const response = await fetchPostJson('/api/logs', 'POST', logObject, null);
         if(response === "error") return alertPopup('error', 'Network Connection Error');
     } catch (error) {
         return alertPopup("error", `Network Connection Error`);
@@ -622,4 +622,103 @@ export function createInput(inputType, mode, label, inputId, name, defaultVal, p
     inputBoxContainer.append(labelEl, inputEl, errorSpan);
     return inputBoxContainer;
 }
+
+export function createPaginationControls({
+    currentPage,
+    totalItems,
+    itemsPerPage,
+    onPageChange,
+    onItemsPerPageChange
+}) {
+    const totalPages = Math.ceil(totalItems / itemsPerPage);
+
+    const paginationContainer = div('paginationContainer', 'pagination-container');
+    
+    const prevButton = button('prevButton', 'pagination-nav-button');
+    prevButton.textContent = 'Previous';
+    const nextButton = button('nextButton', 'pagination-nav-button');
+    nextButton.textContent = 'Next';
+
+    const pageButtonsContainer = div('pageButtonsContainer', 'page-buttons-container');
+
+    function renderPageButtons() {
+        pageButtonsContainer.innerHTML = '';
+        if (totalPages === 0) return;
+
+        let startPage, endPage;
+        const maxPageButtons = 5;
+
+        if (totalPages <= maxPageButtons) {
+            startPage = 1;
+            endPage = totalPages;
+        } else {
+            if (currentPage <= 3) {
+                startPage = 1;
+                endPage = maxPageButtons;
+            } else if (currentPage + 2 >= totalPages) {
+                startPage = totalPages - maxPageButtons + 1;
+                endPage = totalPages;
+            } else {
+                startPage = currentPage - 2;
+                endPage = currentPage + 2;
+            }
+        }
+
+        for (let i = startPage; i <= endPage; i++) {
+            const pageButton = button(`pageButton-${i}`, 'page-button');
+            pageButton.textContent = i;
+            if (i === currentPage) {
+                pageButton.classList.add('active');
+            }
+            pageButton.addEventListener('click', () => onPageChange(i));
+            pageButtonsContainer.append(pageButton);
+        }
+    }
+
+    renderPageButtons();
+
+    prevButton.addEventListener('click', () => {
+        if (currentPage > 1) {
+            onPageChange(currentPage - 1);
+        }
+    });
+    nextButton.addEventListener('click', () => {
+        if (currentPage < totalPages) {
+            onPageChange(currentPage + 1);
+        }
+    });
+
+    prevButton.disabled = currentPage === 1;
+    nextButton.disabled = currentPage === totalPages || totalPages === 0;
+
+    const itemsPerPageContainer = div('itemsPerPageContainer', 'items-per-page-container');
+    const itemsPerPageLabel = document.createElement('label');
+    itemsPerPageLabel.textContent = 'Items per page:';
+    itemsPerPageLabel.htmlFor = 'itemsPerPageInput';
+    const itemsPerPageInput = document.createElement('input');
+    itemsPerPageInput.id = 'itemsPerPageInput';
+    itemsPerPageInput.type = 'number';
+    itemsPerPageInput.min = 1;
+    itemsPerPageInput.max = 20;
+    itemsPerPageInput.value = itemsPerPage;
+
+    itemsPerPageInput.addEventListener('change', () => {
+        let newValue = parseInt(itemsPerPageInput.value, 10);
+        if (isNaN(newValue) || newValue < 1) {
+            newValue = 10;
+        }
+        if (newValue > 20) {
+            newValue = 20;
+        }
+        itemsPerPageInput.value = newValue;
+        onItemsPerPageChange(newValue);
+    });
+
+    itemsPerPageContainer.append(itemsPerPageLabel, itemsPerPageInput);
+
+    paginationContainer.append(pageButtonsContainer, prevButton, nextButton, itemsPerPageContainer);
+
+    return paginationContainer;
+}
+
 

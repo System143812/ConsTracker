@@ -3,7 +3,7 @@ import { formatString, dateFormatting } from "/js/string.js";
 import { alertPopup, warnType, showEmptyPlaceholder } from "/js/popups.js";
 import { hideContents } from "/mainJs/sidebar.js";
 import { createMilestoneOl, milestoneFullOl, showLogDetailsOverlay, createOverlayWithBg, hideOverlayWithBg } from "/mainJs/overlays.js";
-import { div, span, button, createButton, createFilterContainer } from "/js/components.js";
+import { div, span, button, createButton, createFilterContainer, createPaginationControls } from "/js/components.js";
 
 const requiredRoles = ['engineer', 'foreman', 'project manager'];
 
@@ -77,13 +77,40 @@ function createLogCard(logData) {
     const logDate = span('', 'log-dates');
     logDate.innerText = dateFormatting(logData.created_at, 'date');
     const logCardBody = div('', 'log-card-bodies');
+    
     const logCardIcon = span('', 'log-card-icons');
+    const action = logData.action;
+
+    const actionStyles = {
+        edit: { icon: 'editWhite.png', bgColor: '#1976d2' },
+        delete: { icon: 'deleteWhite.png', bgColor: '#d32f2f' },
+        create: { icon: 'addWhite.png', bgColor: '#388e3c' },
+        approved: { icon: 'checkWhite.png', bgColor: '#689f38' },
+        declined: { icon: 'xWhite.png', bgColor: '#f57c00' },
+        requests: { icon: 'weightsWhite.png', bgColor: '#7b1fa2' }
+    };
+
+    const style = actionStyles[action];
+    if (style) {
+        logCardIcon.style.backgroundImage = `url('/assets/icons/${style.icon}')`;
+        logCardIcon.style.backgroundColor = style.bgColor;
+    }
+
     const logCardName = span('', 'log-card-names');
     logCardName.innerText = `${logData.full_name} ${logData.log_name}`;
+    
     const logCardFooter = div('', 'log-card-footers');
     const logDetailsBtn = createButton('logDetailsBtn', 'solid-buttons', 'Details', 'logDetailsText', '', () => {});
     const logDetailsIcon  = span('logDetailsIcon', 'btn-icons');
     
+    const clickableActions = ['edit', 'requests', 'approved', 'declined'];
+    if (clickableActions.includes(logData.action)) {
+        logDetailsBtn.style.cursor = 'pointer';
+        logDetailsBtn.addEventListener('click', () => showLogDetailsOverlay(logData.log_id));
+    } else {
+        logDetailsBtn.style.display = 'none'; // Hide button if not applicable
+    }
+
     logDetailsBtn.append(logDetailsIcon);
     logCardFooter.append(logDetailsBtn);
     logCardBody.append(logCardIcon, logCardName);
@@ -119,6 +146,40 @@ async function generateProjectContent(projectTabName, role) { //project1
     const milestoneTab = document.getElementById('selectionTabMilestones');
     const render = {label: "Milestones", render: renderMilestones};
     selectionTabRenderEvent(selectionTabContent, milestoneTab, render, projectId, role);
+}
+
+async function refreshUserProjectContent(currentProjectId, role) {
+    await createProjectCard(currentProjectId);
+
+    const selectionTabContent = document.getElementById('selectionTabContent');
+    if (!selectionTabContent) return;
+
+    const selectionTabContainer = document.getElementById('selectionTabContainer');
+    if (!selectionTabContainer) return;
+
+    const activeTab = selectionTabContainer.querySelector('.selection-tabs.selected');
+
+    let currentRenderFunction;
+    const newContents = [
+        {id: "selectionTabMilestones", label: "Milestones", render: renderMilestones},
+        {id: "selectionTabInventory", label: "Inventory", render: renderInventory},
+        {id: "selectionTabWorkers", label: "Personnel & Workers", render: renderWorker},
+        {id: "selectionTabAnalytics", label: "Analytics", render: renderAnalytics},  
+    ];
+
+    if (activeTab) {
+        const foundTab = newContents.find(item => item.id === activeTab.id);
+        if (foundTab) {
+            currentRenderFunction = foundTab.render;
+        }
+    }
+    
+    if (!currentRenderFunction) {
+        currentRenderFunction = renderMilestones; 
+    }
+
+    selectionTabContent.innerHTML = '';
+    selectionTabContent.append(await currentRenderFunction(role, currentProjectId));
 }
 
 async function createProjectCard(projectId) {
@@ -197,14 +258,14 @@ async function renderMilestones(role, projectId) {
     let milestoneAddBtn = div('emptyDiv');
     if(role !== 'foreman') {
         milestoneAddBtn = createButton('milestoneAddBtn', 'solid-buttons', 'Create', 'milestoneAddText', 'milestoneAddIcon');
-        milestoneAddBtn.addEventListener("click", () => { createMilestoneOl(projectId, () => generateProjectContent(`project${projectId}`, role)) });
+        milestoneAddBtn.addEventListener("click", () => { createMilestoneOl(projectId, () => refreshUserProjectContent(projectId, role)) });
     }
     const milestoneSectionBody = div('milestoneSectionBody');
     const data = await fetchData(`/api/milestones/${projectId}`);
     if(data === "error") return alertPopup('error', 'Network Connection Error');
     if(data.length === 0) {
         if(role !== 'foreman') {
-            showEmptyPlaceholder('/assets/icons/noMilestones.png', milestoneSectionBody, () => createMilestoneOl(projectId, () => generateProjectContent(`project${projectId}`, role)), "There are no milestones yet", "Create Milestones", projectId);
+            showEmptyPlaceholder('/assets/icons/noMilestones.png', milestoneSectionBody, () => createMilestoneOl(projectId, () => refreshUserProjectContent(projectId, role)), "There are no milestones yet", "Create Milestones", projectId);
         } else {
             showEmptyPlaceholder('/assets/icons/noMilestones.png', milestoneSectionBody, null, "There are no milestones yet", null, projectId);
         }
@@ -336,39 +397,76 @@ async function renderLogs(logListContainer, urlParams = new URLSearchParams()) {
 
 async function generateLogsContent(role) {
     const logsBodyContent = document.getElementById('logsBodyContent');
-    logsBodyContent.innerHTML = ''; // Clear existing content
+    logsBodyContent.innerHTML = '';
 
     const logsContainer = div('logs-main-container');
     const filterContainer = div('logs-filter-container');
-    const scrollableLogListWrapper = div('scrollable-log-list-wrapper'); // New wrapper for scrolling
+    const scrollableLogListWrapper = div('scrollable-log-list-wrapper');
     const logListContainer = div('logs-list-container');
+    const paginationContainer = div('paginationContainer', 'pagination-container');
     
-    scrollableLogListWrapper.append(logListContainer); // logListContainer goes inside the wrapper
-    logsContainer.append(filterContainer, scrollableLogListWrapper); // Append filter and wrapper
+    scrollableLogListWrapper.append(logListContainer);
+    logsContainer.append(filterContainer, scrollableLogListWrapper, paginationContainer);
     logsBodyContent.append(logsContainer);
-    
-    async function renderLogs(urlParams = new URLSearchParams()) {
-        logListContainer.innerHTML = '<div class="loading-spinner"></div>'; // Show a loading spinner
-        const logs = await fetchData(`/api/logs?${urlParams.toString()}`);
+
+    let currentPage = 1;
+    let itemsPerPage = 10;
+    let allLogs = []; // Cache for all logs
+
+    function renderPage() {
         logListContainer.innerHTML = '';
-        
-        if (logs === 'error' || logs.length === 0) {
+        paginationContainer.innerHTML = '';
+
+        if (allLogs.length === 0) {
             showEmptyPlaceholder('/assets/icons/emptyLogs.png', logListContainer, null, "No logs found for the selected filters.");
             return;
         }
 
-        logs.forEach(log => {
+        const start = (currentPage - 1) * itemsPerPage;
+        const end = start + itemsPerPage;
+        const pageLogs = allLogs.slice(start, end);
+
+        pageLogs.forEach(log => {
             logListContainer.append(createLogCard(log));
         });
+
+        const paginationControls = createPaginationControls({
+            currentPage,
+            totalItems: allLogs.length,
+            itemsPerPage,
+            onPageChange: (page) => {
+                currentPage = page;
+                renderPage();
+            },
+            onItemsPerPageChange: (limit) => {
+                itemsPerPage = limit;
+                currentPage = 1;
+                renderPage();
+            }
+        });
+        paginationContainer.append(paginationControls);
     }
 
-    // New function to be passed as the filter callback
-    async function applyFilterToLogs(filteredUrlParams) {
-        await renderLogs(filteredUrlParams);
+    async function fetchAndRender(urlParams = new URLSearchParams()) {
+        logListContainer.innerHTML = '<div class="loading-spinner"></div>';
+        paginationContainer.innerHTML = '';
+
+        const logs = await fetchData(`/api/logs?${urlParams.toString()}`);
+        
+        if (logs === 'error') {
+            logListContainer.innerHTML = '';
+            showEmptyPlaceholder('/assets/icons/emptyLogs.png', logListContainer, null, "An error occurred while fetching logs.");
+            allLogs = [];
+        } else {
+            allLogs = logs;
+        }
+        
+        currentPage = 1;
+        renderPage();
     }
-    
+
     const filters = await createFilterContainer(
-        applyFilterToLogs, // The new applyFilterCallback
+        fetchAndRender, // The new applyFilterCallback
         'Search by user...', 
         { name: true, project: true, dateFrom: true, dateTo: true, recent: true }, // Removed category
         'username'
@@ -376,5 +474,5 @@ async function generateLogsContent(role) {
     
     filterContainer.append(filters);
 
-    await renderLogs(new URLSearchParams()); // Initial render without filters
+    await fetchAndRender(new URLSearchParams()); // Initial render without filters
 }

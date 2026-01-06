@@ -1,7 +1,7 @@
 import { fetchData } from "/js/apiURL.js";
 import { formatString, dateFormatting } from "/js/string.js";
 import { alertPopup, warnType, showDeleteConfirmation, showEmptyPlaceholder } from "/js/popups.js";
-import { createFilterContainer, createButton, div } from "/js/components.js";
+import { createFilterContainer, createButton, createPaginationControls} from "/js/components.js";
 import { createMilestoneOl, milestoneFullOl, showLogDetailsOverlay, createOverlayWithBg, hideOverlayWithBg } from "/mainJs/overlays.js";
 
 
@@ -13,10 +13,14 @@ async function generateLogsContent() {
     const filterContainer = div('logs-filter-container');
     const scrollableLogListWrapper = div('scrollable-log-list-wrapper'); // New wrapper for scrolling
     const logListContainer = div('logs-list-container');
+    const paginationContainer = div('paginationContainer', 'pagination-container');
     
     scrollableLogListWrapper.append(logListContainer); // logListContainer goes inside the wrapper
-    logsContainer.append(filterContainer, scrollableLogListWrapper); // Append filter and wrapper
+    logsContainer.append(filterContainer, scrollableLogListWrapper, paginationContainer); // Append filter and wrapper
     logsBodyContent.append(logsContainer);
+
+    let currentPage = 1;
+    let itemsPerPage = 10;
     
     function createLogCard(logData) {
         const logCard = div('', 'log-cards');
@@ -26,19 +30,38 @@ async function generateLogsContent() {
         const logDate = span('', 'log-dates');
         logDate.innerText = dateFormatting(logData.created_at, 'date');
         const logCardBody = div('', 'log-card-bodies');
-        const logCardIcon = span('', 'log-card-icons'); 
+        
+        const logCardIcon = span('', 'log-card-icons');
+        const action = logData.action;
+
+        const actionStyles = {
+            edit: { icon: 'editWhite.png', bgColor: '#1976d2' },
+            delete: { icon: 'deleteWhite.png', bgColor: '#d32f2f' },
+            create: { icon: 'addWhite.png', bgColor: '#388e3c' },
+            approved: { icon: 'checkWhite.png', bgColor: '#689f38' },
+            declined: { icon: 'xWhite.png', bgColor: '#f57c00' },
+            requests: { icon: 'weightsWhite.png', bgColor: '#7b1fa2' }
+        };
+
+        const style = actionStyles[action];
+        if (style) {
+            logCardIcon.style.backgroundImage = `url('/assets/icons/${style.icon}')`;
+            logCardIcon.style.backgroundColor = style.bgColor;
+        }
+
         const logCardName = span('', 'log-card-names');
         logCardName.innerText = `${logData.full_name} ${logData.log_name}`;
+
         const logCardFooter = div('', 'log-card-footers');
         const logDetailsBtn = createButton('logDetailsBtn', 'solid-buttons', 'Details', 'logDetailsText', '', () => {});
         const logDetailsIcon  = span('logDetailsIcon', 'btn-icons');
         
-        // Conditional clickability for the details button
-        if (logData.action === 'edit') {
+        const clickableActions = ['edit', 'requests', 'approved', 'declined'];
+        if (clickableActions.includes(logData.action)) {
             logDetailsBtn.style.cursor = 'pointer';
             logDetailsBtn.addEventListener('click', () => showLogDetailsOverlay(logData.log_id));
         } else {
-            logDetailsBtn.style.display = 'none'; // Hide button if not editable
+            logDetailsBtn.style.display = 'none';
         }
     
         logDetailsBtn.append(logDetailsIcon);
@@ -51,21 +74,43 @@ async function generateLogsContent() {
 
     async function renderLogs(urlParams = new URLSearchParams()) {
         logListContainer.innerHTML = '<div class="loading-spinner"></div>'; // Show a loading spinner
-        const logs = await fetchData(`/api/logs?${urlParams.toString()}`);
+        paginationContainer.innerHTML = '';
+
+        urlParams.set('page', currentPage);
+        urlParams.set('limit', itemsPerPage);
+
+        const data = await fetchData(`/api/logs?${urlParams.toString()}`);
         logListContainer.innerHTML = '';
         
-        if (logs === 'error' || logs.length === 0) {
+        if (data === 'error' || data.logs.length === 0) {
             showEmptyPlaceholder('/assets/icons/emptyLogs.png', logListContainer, null, "No logs found for the selected filters.");
             return;
         }
 
-        logs.forEach(log => {
+        data.logs.forEach(log => {
             logListContainer.append(createLogCard(log));
         });
+
+        const paginationControls = createPaginationControls({
+            currentPage,
+            totalItems: data.total,
+            itemsPerPage,
+            onPageChange: (page) => {
+                currentPage = page;
+                renderLogs(urlParams);
+            },
+            onItemsPerPageChange: (limit) => {
+                itemsPerPage = limit;
+                currentPage = 1; // Reset to first page
+                renderLogs(urlParams);
+            }
+        });
+        paginationContainer.append(paginationControls);
     }
 
     // New function to be passed as the filter callback
     async function applyFilterToLogs(filteredUrlParams) {
+        currentPage = 1;
         await renderLogs(filteredUrlParams);
     }
 
@@ -91,7 +136,11 @@ const tabContents = {
         generateGraphs: async() => ''
     },
     inventory: {
-        generateContent: async () => '',
+        generateContent: async function renderInventory(projectId, role, refreshActiveTabContentFn) {
+            const inventorySectionContainer = div('inventorySectionContainer');
+            inventorySectionContainer.innerText = 'Inventory Content for Project: ' + projectId + ' (Role: ' + role + ')'; // Example with parameters
+            return inventorySectionContainer;
+        },
         generateGraphs: async() => ''
     },
     materialsRequest: {
@@ -181,29 +230,67 @@ async function generateProjectsContent() {
 }
 
 async function showProjectDetails(projectId, container) {
-    container.innerHTML = ''; // Clear previous details
-    const milestonesContent = await generateMilestonesContent(projectId);
-    container.append(milestonesContent);
+    // New helper function to update project percentage
+    async function updateProjectPercentage() {
+        const data = await fetchData(`/api/getProjectCard/${projectId}`);
+        if(data === 'error') return alertPopup('error', 'Network Connection Error');
+        const projectsOverallPercent = document.getElementById('projectsOverallPercent');
+        if (projectsOverallPercent) { // Ensure element exists before updating
+            projectsOverallPercent.innerText = `${Math.round(data.progress)}%`;
+        }
+    }
+
+    // New helper function to refresh the content of the currently active tab
+    async function refreshActiveTabContent(currentProjectId, role) { // currentProjectId and role passed to ensure context
+        await updateProjectPercentage(currentProjectId); // Update project percentage
+
+        const selectionTabContent = document.getElementById('selectionTabContent');
+        if (!selectionTabContent) return; // Should not happen if initialized correctly
+
+        const activeTab = selectionTabContent.closest('.selection-tab-container')?.querySelector('.selection-tabs.selected');
+
+        let currentRenderFunction;
+        let currentTabData;
+
+        // Retrieve the render function and tab data from the active tab element
+        if (activeTab && activeTab.tabData) {
+            currentTabData = activeTab.tabData;
+            currentRenderFunction = currentTabData.render;
+        } else {
+            // Default to milestones if no tab is active or tabData is missing
+            currentTabData = {id: "selectionTabMilestones", label: "Milestones", render: generateMilestonesContent};
+            currentRenderFunction = generateMilestonesContent;
+        }
+        
+        // Clear the current content and append the refreshed content
+        selectionTabContent.innerHTML = '';
+        selectionTabContent.append(await currentRenderFunction(currentProjectId, role, refreshActiveTabContent));
+    }
+
+
+    let selectionTabContainer = container.querySelector('#selectionTabContainer'); // Try to find it inside the container
+
+    if (!selectionTabContainer) {
+        // If selectionTabContainer doesn't exist, create it once
+        container.innerHTML = ''; // Clear previous details before appending new structure
+        selectionTabContainer = createSectionTabs('admin', projectId, refreshActiveTabContent); // Pass refresh function here
+        container.append(selectionTabContainer);
+    } else {
+        // If it exists, ensure its body content is cleared before re-rendering new content for the selected tab
+        const selectionTabContent = selectionTabContainer.querySelector('#selectionTabContent');
+        selectionTabContent.innerHTML = '';
+    }
+
+    // Now, call the initial rendering of the active tab content
+    await refreshActiveTabContent(projectId, 'admin'); // Initial refresh for the current project
 }
 
-async function generateMilestonesContent(projectId) {
-    const milestonesContainer = div('milestones-container');
-    const milestonesHeader = div('milestones-header', 'content-card-header');
-    const milestonesTitle = div('milestones-title', 'content-card-title');
-    milestonesTitle.innerText = 'Milestones';
-    const createMilestoneBtn = createButton('create-milestone-btn', 'solid-buttons', 'Create Milestone', 'create-milestone-txt', 'addIcon');
-
-    createMilestoneBtn.addEventListener('click', () => {
-        createMilestoneOl(projectId, () => showProjectDetails(projectId, document.querySelector('.project-details-container')));
-    });
-
-    milestonesHeader.append(milestonesTitle, createMilestoneBtn);
-
+async function generateMilestonesContent(projectId, role, refreshActiveTabContentFn) {
     const milestonesBody = div('milestones-body');
     const milestones = await fetchData(`/api/milestones/${projectId}`);
 
     if (milestones === 'error' || milestones.length === 0) {
-        showEmptyPlaceholder('/assets/icons/noMilestones.png', milestonesBody, () => createMilestoneOl(projectId, () => showProjectDetails(projectId, document.querySelector('.project-details-container'))), "No milestones found for this project.", "Create Milestones", projectId);
+        showEmptyPlaceholder('/assets/icons/noMilestones.png', milestonesBody, () => createMilestoneOl(projectId, refreshActiveTabContentFn), "No milestones found for this project.", "Create Milestones", projectId);
     } else {
         milestones.forEach(milestone => {
             const milestoneCard = div(`milestone-card-${milestone.id}`, 'milestone-card');
@@ -214,15 +301,15 @@ async function generateMilestonesContent(projectId) {
             
             milestoneCard.addEventListener('click', (e) => {
                 if (e.target.closest('.icon-buttons')) return;
-                milestoneFullOl(projectId, milestone.id, milestone.milestone_name, () => showProjectDetails(projectId, document.querySelector('.project-details-container')), 'admin');
+                milestoneFullOl(projectId, milestone.id, milestone.milestone_name, refreshActiveTabContentFn, role); // Pass refreshActiveTabContentFn
             });
 
-            deleteBtn.addEventListener('click', () => {
+            deleteBtn.addEventListener('click', async () => {
                 showDeleteConfirmation(milestone.milestone_name, async () => {
                     const response = await fetch(`/api/milestones/${milestone.id}`, { method: 'DELETE' });
                     if (response.ok) {
                         alertPopup('success', 'Milestone deleted successfully!');
-                        await showProjectDetails(projectId, document.querySelector('.project-details-container'));
+                        await refreshActiveTabContentFn(projectId, role); // Use refreshActiveTabContentFn
                     } else {
                         alertPopup('error', 'Failed to delete milestone.');
                     }
@@ -235,8 +322,7 @@ async function generateMilestonesContent(projectId) {
         });
     }
 
-    milestonesContainer.append(milestonesHeader, milestonesBody);
-    return milestonesContainer;
+    return milestonesBody; // Only return the body
 }
 
 async function dashboardSummaryCards() {
@@ -347,17 +433,14 @@ function dashboardGraphContainer() {
 }
 
 async function initDashboardGraphs() {
-    let { progress, planning, completed } = 0;
+    let progress = 0, planning = 0, completed = 0;
     const data = await fetchData('/api/projectStatusGraph');
     if(data === 'error') return;
-    if(data.length === 0){
-        progress = 0,
-        planning = 0
-        return;
+    if(data.length > 0){
+        progress = data[0].in_progress;
+        planning =  data[0].planning;
+        completed = data[0].completed;
     }
-    progress = data[0].in_progress;
-    planning =  data[0].planning;
-    completed = data[0].completed;
     
     const projectStatusGraph = document.getElementById('projectStatusGraph').getContext('2d');
     new Chart(projectStatusGraph, {
@@ -602,6 +685,13 @@ async function recentMaterialsRequest() {
 }
 
 
+
+function span(id, className) {
+    const el = document.createElement('span');
+    if(id) el.id = id;
+    if(className) el.className = className;
+    return el;
+}
 
 function div(id, className) {
     const el = document.createElement('div');

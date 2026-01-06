@@ -23,8 +23,10 @@ export function dateFormatting(fullDateTime, options) {
         return formattedDate;
     } else if(options === "calendar") {
         const dateObj = new Date(fullDateTime);
-        const formattedCalendarDate = dateObj.toISOString().split("T")[0];
-        return formattedCalendarDate;
+        const year = dateObj.getUTCFullYear();
+        const month = String(dateObj.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(dateObj.getUTCDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
     } else if(options === "dateTime") {
         const dateObj = new Date(fullDateTime);
         const formattedDate = dateObj.toLocaleDateString('en-US', {

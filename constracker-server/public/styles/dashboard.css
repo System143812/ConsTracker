@@ -612,11 +612,13 @@ body {
     height: 32px;
     border-radius: 10px;
     background-color: var(--blue-border);
-    background-image: url('/assets/icons/editWhite.png');
+    background-image: url('../assets/icons/editWhite.png'); /* Default edit icon */
     background-position: center;
     background-repeat: no-repeat;
     background-size: 12px 12px;
 }
+
+
 
 #noProjectBodyContainer {
     display: flex;
@@ -899,6 +901,10 @@ body {
 .empty-content-placeholder {
     display: flex;
     flex-direction: column;
+    flex: 1;
+    padding: 2rem 0;
+    align-self: center;
+    justify-self: center;
     height: 100%;
     width: 100%;
     align-items: center;

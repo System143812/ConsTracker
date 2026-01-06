@@ -32,7 +32,7 @@ export function createOverlayWithBg() {
     const overlayHeader = div('overlayHeader', 'overlay-headers');
     const overlayBody = div('overlayBody', 'overlay-bodies'); //eto yung body kung san i rerender yung ol dynamic contents
     overlayContainer.append(overlayHeader, overlayBody); 
-    return {overlayBackground, overlayHeader, overlayBody};
+    return {overlayBackground, overlayContainer, overlayHeader, overlayBody};
 }
 
 export function showDeleteConfirmation(itemName, onConfirm) {
@@ -87,11 +87,10 @@ async function renderEditWeights(weightsData, type = null , data) {
                 originalVal: Number(inputField.dataset.original),
                 value: Number(inputField.value)
             });          
-            //kunin yung name yung inputField gamit closest, nag vavary to sa layout ng forms, this is exclusive for weights lang
-            const label = inputField.closest('#weightContainer')?.querySelector("#weightName").innerText;            
+            const labelName = inputField.closest('#weightContainer')?.querySelector("#weightName").innerText;            
             if(Number(inputField.dataset.original) !== Number(inputField.value)) {
                 logDetails.push({
-                    label: label,
+                    label: `${labelName} weight`,
                     varName: "weight",
                     oldVal: Number(inputField.dataset.original),
                     newVal: Number(inputField.value)
@@ -99,12 +98,17 @@ async function renderEditWeights(weightsData, type = null , data) {
             }
             inputField.dataset.original = inputField.value; 
         }
+
         let updateWeightUrl;
         if(type === "milestones") {    
-            createLogs('non-item', 'edit', 'updated the milestone weights', data.projectId, logDetails);
+            if (logDetails.length > 0) {
+                await createLogs('non-item', 'edit', 'updated the milestone weights', data.projectId, logDetails);
+            }
             updateWeightUrl = '/api/edit/milestones/weights';
         } else {
-            createLogs('non-item', 'edit', `updated the task weights of milestone ${data.milestoneName}`, data.projectId, logDetails);
+            if (logDetails.length > 0) {
+                await createLogs('non-item', 'edit', `updated the task weights of milestone ${data.milestoneName}`, data.projectId, logDetails);
+            }
             updateWeightUrl = '/api/edit/tasks/weights';
         }
         
@@ -261,20 +265,33 @@ async function renderEditMilestone(projectId, milestoneId, updateUiFn, overlayBa
     );
     
     async function saveMilestone() {
+        const updatedMilestone = {};
+
         const milestoneName = document.getElementById('milestoneInputName').value;
+        if (milestoneName !== milestoneData.milestone_name) {
+            updatedMilestone.milestone_name = milestoneName;
+        }
+
         const milestoneDescription = document.getElementById('milestoneInputDescription').value;
-        const milestoneDue = document.getElementById('milestoneInputDue').value;
+        if (milestoneDescription !== milestoneData.milestone_description) {
+            updatedMilestone.milestone_description = milestoneDescription;
+        }
 
-        const updatedMilestone = {
-            milestone_name: milestoneName,
-            milestone_description: milestoneDescription,
-            duedate: milestoneDue,
-        };
+        const milestoneDueDateString = document.getElementById('milestoneInputDue').value;
+        const originalDateString = dateFormatting(milestoneData.duedate, 'calendar');
 
-        const response = await fetchPostJson(`/api/milestones/${milestoneId}`, 'PUT', updatedMilestone, 'Updating milestone...');
+        if (milestoneDueDateString !== originalDateString) {
+            updatedMilestone.duedate = milestoneDueDateString;
+        }
+        
+        if (Object.keys(updatedMilestone).length === 0) {
+            // No changes were made
+            return;
+        }
+
+        const response = await fetchPostJson(`/api/milestones/${milestoneId}`, 'PUT', updatedMilestone, null);
         if (response !== 'error') {
             alertPopup('success', 'Milestone updated successfully!');
-            await updateUiFn();
         }
     }
     
@@ -354,7 +371,7 @@ async function renderEditTask(projectId, milestoneId, milestoneName, taskId, upd
             task_progress: taskProgress,
         };
 
-        const response = await fetchPostJson(`/api/tasks/${taskId}`, 'PUT', updatedTask, 'Updating task...');
+        const response = await fetchPostJson(`/api/tasks/${taskId}`, 'PUT', updatedTask, null);
         if (response !== 'error') {
             alertPopup('success', 'Task updated successfully!');
         }
@@ -503,7 +520,7 @@ export function createMilestoneOl(projectId, updateUiFn) {
             weights: 0,
         };
 
-        const response = await fetchPostJson('/api/milestones', 'POST', newMilestone, 'Creating milestone...');
+        const response = await fetchPostJson('/api/milestones', 'POST', newMilestone, null);
         if (response !== 'error') {
             alertPopup('success', 'Milestone created successfully!');
             hideOverlayWithBg(overlayBackground);
@@ -563,7 +580,7 @@ export function createTaskOl(milestoneId, updateUiFn) {
             weights: 0,
         };
 
-        const response = await fetchPostJson('/api/tasks', 'POST', newTask, 'Creating task...');
+        const response = await fetchPostJson('/api/tasks', 'POST', newTask, null);
         if (response !== 'error') {
             alertPopup('success', 'Task created successfully!');
             hideOverlayWithBg(overlayBackground);
@@ -582,80 +599,91 @@ export function createTaskOl(milestoneId, updateUiFn) {
 }
 
 export async function showLogDetailsOverlay(logId) {
+    const { overlayBackground, overlayContainer, overlayHeader, overlayBody } = createOverlayWithBg();
+
     const logData = await fetchData(`/api/logs/${logId}/details`);
     if (logData === 'error') {
-        return alertPopup('error', 'Failed to fetch log details.');
+        alertPopup('error', 'Failed to fetch log details.');
+        hideOverlayWithBg(overlayBackground);
+        return;
     }
 
-    const { overlayBackground, overlayHeader, overlayBody } = createOverlayWithBg();
-    
-    // Header
-    const title = div('log-detail-title');
-    title.textContent = logData.log_name;
-    const subtitle = div('log-detail-subtitle');
+    overlayHeader.classList.add('log-details');
+    // --- Title & Subtitle ---
+    const title = div('log-detail-title', 'log-detail-title');
+    const formattedLogName = logData.log_name.charAt(0).toUpperCase() + logData.log_name.slice(1);
+    title.textContent = `"${formattedLogName}"`;
+    const subtitle = div('log-detail-subtitle', 'log-detail-subtitle');
     subtitle.textContent = logData.project_name;
-    const headerContent = div('log-detail-header-content');
-    headerContent.append(title, subtitle);
-    overlayHeader.append(headerContent);
+    overlayHeader.append(title, subtitle);
+
+    // --- By/Date Section ---
+    const byDateContainer = div('log-detail-by-date', 'log-detail-by-date');
     
-    // By/Date section
-    const byDateContainer = div('log-detail-by-date');
+    // For By field
+    const byInfoContainer = div('', 'log-detail-info-group'); // Group icon and text
+    const byIcon = span('', 'log-detail-icon'); // Common class for icons
+    byIcon.style.backgroundImage = `url('/assets/icons/person.png')`;
     const byText = span('log-detail-by');
-    byText.innerHTML = `<strong>By:</strong> ${logData.full_name}`;
+    byText.textContent = logData.full_name;
+    byInfoContainer.append(byIcon, byText);
+    byDateContainer.append(byInfoContainer);
+
+    // For Date field
+    const dateInfoContainer = div('', 'log-detail-info-group'); // Group icon and text
+    const dateIcon = span('', 'log-detail-icon'); // Common class for icons
+    dateIcon.style.backgroundImage = `url('/assets/icons/calendar.png')`;
     const dateText = span('log-detail-date');
-    dateText.innerHTML = `<strong>Date:</strong> ${dateFormatting(logData.created_at, 'datetime')}`;
-    byDateContainer.append(byText, dateText);
+    dateText.textContent = dateFormatting(logData.created_at, 'date');
+    dateInfoContainer.append(dateIcon, dateText);
+    byDateContainer.append(dateInfoContainer);
     
-    // Changes section
-    const changesContainer = div('log-detail-changes-container');
-    const changesHeader = div('log-detail-changes-header');
-    const changesTitle = span('log-detail-changes-title');
-    changesTitle.textContent = 'Changes:';
-    const showOldValuesToggle = span('log-detail-show-old-toggle');
-    showOldValuesToggle.textContent = 'Show old values';
-    changesHeader.append(changesTitle, showOldValuesToggle);
+    // Move byDateContainer to be directly under overlayContainer, before overlayBody
+    overlayContainer.insertBefore(byDateContainer, overlayBody);
 
-    const changesBody = div('log-detail-changes-body');
-
+    // --- Changes Section (edit only) ---
     if (logData.action === 'edit' && logData.details && logData.details.length > 0) {
-        logData.details.forEach(detail => {
-            const changeEntry = div('log-change-entry');
-            const newValueText = `Changes ${detail.label} to ${detail.new_value}`;
-            const oldValueText = `Changed ${detail.label} from ${detail.old_value} to ${detail.new_value}`;
-            
-            changeEntry.textContent = newValueText;
-            changeEntry.dataset.newValue = newValueText;
-            changeEntry.dataset.oldValue = oldValueText;
-            
-            changesBody.append(changeEntry);
-        });
-    } else if (logData.details && logData.details.length > 0) {
-        logData.details.forEach(detail => {
-            const changeEntry = div('log-change-entry');
-            changeEntry.textContent = detail.log_details;
-            changesBody.append(changeEntry);
-        });
-    } else {
-        changesBody.textContent = 'No detailed changes available for this log.';
-    }
+        const changesContainer = div('log-detail-changes-container', 'log-detail-changes-container');
+        const changesHeader = div('log-detail-changes-header', 'log-detail-changes-header');
+        const changesTitle = span('log-detail-changes-title');
+        changesTitle.textContent = 'Changes';
+        const showOldValuesToggle = span('log-detail-show-old-toggle', 'log-detail-show-old-toggle');
+        showOldValuesToggle.textContent = 'Show old values';
+        changesHeader.append(changesTitle, showOldValuesToggle);
 
-    showOldValuesToggle.addEventListener('click', () => {
-        const showingOld = showOldValuesToggle.classList.toggle('show-old');
-        showOldValuesToggle.textContent = showingOld ? 'Hide old values' : 'Show old values';
-        changesBody.querySelectorAll('.log-change-entry').forEach(entry => {
-            if (entry.dataset.oldValue) {
-                entry.textContent = showingOld ? entry.dataset.oldValue : entry.dataset.newValue;
+        const changesBody = div('log-detail-changes-body', 'log-detail-changes-body');
+
+        logData.details.forEach(detail => {
+            const changeEntry = div('log-change-entry', 'log-change-entry');
+            
+            const changeText = span('log-change-text');
+            changeText.textContent = `Changed ${detail.label} to ${detail.new_value}`;
+
+            const oldValText = span('log-change-old-val', 'log-change-old-val');
+            let formattedOldValue = detail.old_value;
+            // Check if it's a date string like "YYYY-MM-DD HH:MM:SS"
+            if (typeof detail.old_value === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(detail.old_value)) {
+                formattedOldValue = dateFormatting(detail.old_value, 'date');
             }
+            oldValText.textContent = `(was ${formattedOldValue})`;
+            oldValText.style.display = 'none'; // Initially hidden
+
+            changeEntry.append(changeText, oldValText);
+            changesBody.append(changeEntry);
         });
-    });
-    
-    // Hide toggle if there are no edit details
-    if (logData.action !== 'edit' || !logData.details || logData.details.length === 0) {
-        showOldValuesToggle.style.display = 'none';
+
+        showOldValuesToggle.addEventListener('click', () => {
+            const showingOld = showOldValuesToggle.classList.toggle('show-old');
+            showOldValuesToggle.textContent = showingOld ? 'Hide old values' : 'Show old values';
+            changesBody.querySelectorAll('.log-change-entry').forEach(entry => {
+                const oldVal = entry.querySelector('.log-change-old-val');
+                oldVal.style.display = showingOld ? 'inline' : 'none';
+            });
+        });
+
+        changesContainer.append(changesHeader, changesBody);
+        overlayBody.append(changesContainer);
     }
 
-    changesContainer.append(changesHeader, changesBody);
-    
-    overlayBody.append(byDateContainer, changesContainer);
     showOverlayWithBg(overlayBackground);
 }

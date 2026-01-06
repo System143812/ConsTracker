@@ -811,3 +811,98 @@ input[type='date'] {
     align-items: center;
     gap: 0.5rem;
 }
+
+/* Pagination Styles */
+.pagination-container {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 1rem;
+    padding: 1rem 0;
+}
+.page-buttons-container {
+    order: 1;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+}
+#prevButton { 
+    order: 2; 
+}
+#nextButton { 
+    order: 2; 
+}
+.items-per-page-container {
+    order: 3;
+}
+
+.pagination-nav-button {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--light-border);
+    border-radius: 5px;
+    background-color: transparent;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    font-size: 12px;
+}
+
+.page-button {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--light-border);
+    border-radius: 5px;
+    background-color: transparent;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    font-size: 12px;
+}
+
+.page-button:hover, .pagination-nav-button:hover:not(:disabled) {
+    background-color: var(--gray-low-opacity);
+}
+
+.page-button.active {
+    background-color: var(--blue-border);
+    color: var(--white-ishy-text);
+    border-color: var(--blue-border);
+}
+
+.pagination-nav-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.items-per-page-container {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 12px;
+}
+
+#itemsPerPageInput {
+    width: 50px;
+    padding: 0.25rem;
+    border: 1px solid var(--light-border);
+    border-radius: 3px;
+    font-size: 12px;
+}
+
+@media (min-width: 768px) {
+    .pagination-container {
+        flex-wrap: nowrap;
+        justify-content: space-between;
+    }
+    .page-buttons-container { 
+        order: 2; 
+        width: auto; 
+    }
+    #prevButton { 
+        order: 1; 
+    }
+    #nextButton { 
+        order: 3; 
+    }
+    .items-per-page-container { 
+        order: 4; 
+    }
+}
