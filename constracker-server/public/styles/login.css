@@ -32,7 +32,7 @@ body {
     content: "";
     height: 100%;
     width: 100%;
-    background-color: rgba(0, 0, 0, 0.75);
+    background: linear-gradient(to bottom, rgba(2, 11, 21, 0.75), rgba(11, 36, 67, 0.95));
 }
 
 #brandLogo {
@@ -97,7 +97,8 @@ body {
 
 #formHeader {
     text-align: center;
-    font-weight: 600;
+    font-weight: 700;
+    color: #3e3e3e;
 }
 
 #formHeaderContainer {
@@ -128,6 +129,12 @@ body {
     width: 100%;
 }
 
+.login-form input:focus {
+    outline: none;
+    border: solid var(--blue-border) 1px !important; 
+    box-shadow: 0 0 2px 2px #608abd;
+}
+
 #formFooterContainer {
     margin-top: 1rem;
 }
@@ -137,26 +144,22 @@ body {
     font-weight: 500;
     border-radius: 3px;
     color: #f0f0f0;
-    border: solid #1e1e1e 1px;
-    background-color: #1e1e1e;
+    border: solid #0b2443 1px;
+    background-color: #0b2443;
     width: 100%;
     /* margin-top: 1rem; */
     padding: 0.75rem 1.25rem;
-    transition: all 0.15s ease;
+    transform: scale(100%);
+    transition: all 0.5s ease;
 }
 
 #loginBtn:hover {
-    background-color: rgba(253, 253, 253, 0.5);
-    border: solid #1e1e1e 1px;
-    color: #1e1e1e;
-    
+    background-color: var(--blue-border);
 }
 
 #loginBtn:active {
-    opacity: 0.5;
-    background-color: #1e1e1e;
-    border: solid #1e1e1e 1px;
-    color: #fafafa;
+    opacity: 0.65;
+    transform: scale(96%);
 }
 
 #infoCard {
@@ -165,19 +168,19 @@ body {
     gap: 1rem;
     margin-top: 0.5rem;
     padding: 1rem 1rem;
-    border: solid #cccccc 0.1px;
+    background-color:rgba(23, 63, 112, 0.05);
     border-radius: 5px;
     transition: all 0.2s ease;
 }
 
 #infoCard:hover {
-    background-color: rgba(204, 204, 204, 0.2);
+    background-color:rgba(23, 63, 112, 0.1);
 }
 
 #warningIcon  {
     height: 25px;
     width: 25px;
-    background-image: url("../assets/icons/exclamation-black.png");
+    background-image: url("../assets/icons/warningBlue.png");
     background-position: center;
     background-repeat: no-repeat;
     background-size: cover;
@@ -193,7 +196,7 @@ body {
 
 #infoCardTextHeader, #infoCardTextBody {
     font-size: small;
-    color: #1e1e1e;
+    color: var(--blue-border);
 }
 
 #infoCardTextBody {
@@ -221,6 +224,8 @@ body {
     background-color: rgba(231, 42, 42, 0.1);
     transition: all 0.25s ease;
 }
+
+
 
 @media (max-width: 850px) {
     #loginImageContainer {

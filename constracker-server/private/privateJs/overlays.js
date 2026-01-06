@@ -1,24 +1,24 @@
-import { fetchData } from "/js/apiURL.js";
+import { fetchData, fetchPostJson } from "/js/apiURL.js";
 import { formatString, dateFormatting } from "/js/string.js";
 import { alertPopup, warnType, showEmptyPlaceholder } from "/js/popups.js";
-import { div, span, button, editFormButton, emptyPlaceholder, createInput, deleteFormButton, createButton } from "/js/components.js";
+import { div, span, button, editFormButton, createInput, deleteFormButton, createButton, createLogs } from "/js/components.js";
 
 
 function roundDecimal(number) {
     return Math.floor(number * 100) / 100;
 }
 
-function showOverlayWithBg(overlayDiv) {
+export function showOverlayWithBg(overlayDiv) {
     overlayDiv.style.display = 'flex';
     setTimeout(() => {overlayDiv.classList.add('show')}, 50);
 }
 
-function hideOverlayWithBg(overlayDiv) {
+export function hideOverlayWithBg(overlayDiv) {
     overlayDiv.classList.remove('show');
     setTimeout(() => {overlayDiv.remove()}, 520);
 }
 
-function createOverlayWithBg() {
+export function createOverlayWithBg() {
     const overlayBackground = div('overlayBackground', 'overlays');
     const overlayContainer = div('overlayContainer', 'overlay-containers');
     overlayBackground.append(overlayContainer);
@@ -35,8 +35,29 @@ function createOverlayWithBg() {
     return {overlayBackground, overlayHeader, overlayBody};
 }
 
-function hideContents(div) {
-    div.innerHTML = "";
+export function showDeleteConfirmation(itemName, onConfirm) {
+    const { overlayBackground, overlayHeader, overlayBody } = createOverlayWithBg();
+    overlayHeader.innerText = 'Confirm Deletion';
+    
+    const confirmationMessage = div('confirmation-message');
+    confirmationMessage.innerText = `Are you sure you want to delete "${itemName}"?`;
+    
+    const buttonContainer = div('confirmation-buttons');
+    const confirmBtn = createButton('confirm-delete-btn', 'solid-buttons', 'Confirm', 'confirm-delete-txt');
+    const cancelBtn = createButton('cancel-delete-btn', 'wide-buttons', 'Cancel', 'cancel-delete-txt');
+
+    confirmBtn.addEventListener('click', () => {
+        onConfirm();
+        hideOverlayWithBg(overlayBackground);
+    });
+
+    cancelBtn.addEventListener('click', () => {
+        hideOverlayWithBg(overlayBackground);
+    });
+
+    buttonContainer.append(cancelBtn, confirmBtn);
+    overlayBody.append(confirmationMessage, buttonContainer);
+    showOverlayWithBg(overlayBackground);
 }
 
 function removeSelectedChildren(parentDiv) {
@@ -45,12 +66,53 @@ function removeSelectedChildren(parentDiv) {
     }
 }
 
+function hideContents(div) {
+    div.innerHTML = "";
+}
+
 async function updateContents(divContainer, newContentFn) {
     hideContents(divContainer);
     divContainer.append(await newContentFn());
 }
 
 async function renderEditWeights(weightsData, type = null , data) {
+
+    async function saveEditWeights(form) {
+        const weightsKeyValue = []; 
+        const inputFields = form.querySelectorAll('input, textarea, select');
+        const logDetails = [];
+        for (const inputField of inputFields) {
+            weightsKeyValue.push({
+                id: Number(inputField.dataset.id),
+                originalVal: Number(inputField.dataset.original),
+                value: Number(inputField.value)
+            });          
+            //kunin yung name yung inputField gamit closest, nag vavary to sa layout ng forms, this is exclusive for weights lang
+            const label = inputField.closest('#weightContainer')?.querySelector("#weightName").innerText;            
+            if(Number(inputField.dataset.original) !== Number(inputField.value)) {
+                logDetails.push({
+                    label: label,
+                    varName: "weight",
+                    oldVal: Number(inputField.dataset.original),
+                    newVal: Number(inputField.value)
+                });
+            }
+            inputField.dataset.original = inputField.value; 
+        }
+        let updateWeightUrl;
+        if(type === "milestones") {    
+            createLogs('non-item', 'edit', 'updated the milestone weights', data.projectId, logDetails);
+            updateWeightUrl = '/api/edit/milestones/weights';
+        } else {
+            createLogs('non-item', 'edit', `updated the task weights of milestone ${data.milestoneName}`, data.projectId, logDetails);
+            updateWeightUrl = '/api/edit/tasks/weights';
+        }
+        
+        const response = await fetchPostJson(updateWeightUrl, 'POST', weightsKeyValue, 'Saved weights');
+        if(response === "error") return alertPopup("error", "Network Connection Error");
+        
+    }
+
     const weightEditContainer = div('weightEditContainer', 'form-edit-containers');
     const weightEditHeader = div('weightEditHeader','form-edit-headers');
 
@@ -59,13 +121,12 @@ async function renderEditWeights(weightsData, type = null , data) {
 
     const weightEditIntro = div('weightEditIntro', 'form-edit-intros');
     const weightEditTitle = span('weightEditTitle', 'form-edit-titles');
-    const weightEditSubtitle = span('weightEditSubtitle', 'form-edit-subtitles');
     const weightEditBody = div('weightEditBody', 'form-edit-bodies');
     const weightEditForm = document.createElement('form');
     weightEditForm.id = 'weightEditForm';
     weightEditForm.className = 'form-edit-forms';
     const weightFormHeader = div('weightFormHeader');
-    const weightTypeName = span('weightTypeName');
+    // const weightTypeName = span('weightTypeName');
     const weightTotalContainer = span('weightTotalContainer');
     const weightTotalLabel = span('weightTotalLabel');
     const weightTotalErr = span('weightTotalErr');
@@ -79,7 +140,7 @@ async function renderEditWeights(weightsData, type = null , data) {
         totalWeight = 0;
         for (const inputField of inputFields) {
             totalWeight += Number(inputField.value);
-            weightTotalLabel.innerText = `Total Weight: ${totalWeight}%`;
+            weightTotalLabel.innerText = `Total Weight: ${roundDecimal(totalWeight)}%`;
             if(totalWeight > 100) {
                 weightTotalErr.classList.add('error');
                 weightTotalErr.innerText = weightTotalErr.dataset.errorMsg;
@@ -103,8 +164,9 @@ async function renderEditWeights(weightsData, type = null , data) {
             weightName.innerText = weightData.task_name;
             weightInput = createInput('text', 'read', '', `taskWeightInput${count}`, 'task_weight', weightData.weights, 'Weight %', 0, 100, 'decimal', 'max: 100%');
         }
+        const input = weightInput.querySelector('input');
+        input.dataset.id = weightData.id;
         totalWeight += Number(weightData.weights);
-
         const weightInputField = weightInput.querySelector('input');
         weightInputField.addEventListener("input", () => {
             recheckWeightFields();
@@ -117,15 +179,11 @@ async function renderEditWeights(weightsData, type = null , data) {
     }
 
     if(type === "milestones") {
-        weightTypeName.innerText = 'Milestone\nNames';
         weightEditTitle.innerText = 'Milestone Weights';
-        weightEditSubtitle.innerText = '';
     } else {
-        weightTypeName.innerText = 'Task\nNames';
         weightEditTitle.innerText = 'Task Weights';
-        weightEditSubtitle.innerText = '';
     }
-    weightTotalLabel.innerText = `Total Weight: ${totalWeight}%`;
+    weightTotalLabel.innerText = `Total Weight: ${roundDecimal(totalWeight)}%`;
     if(totalWeight > 100) {
         weightTotalErr.classList.add('error');
         weightTotalErr.innerText = weightTotalErr.dataset.errorMsg;
@@ -134,16 +192,16 @@ async function renderEditWeights(weightsData, type = null , data) {
         weightTotalErr.innerText = `${roundDecimal(100 - totalWeight)}% remaining`;
     }
     weightTotalContainer.append(weightTotalLabel, weightTotalErr);
-    weightFormHeader.append(weightTypeName, weightTotalContainer);
+    weightFormHeader.append(weightTotalContainer);
     weightEditForm.append(weightFormHeader, weightFormBody);
     weightEditBody.append(weightEditForm);
     goBackBtn.append(goBackBtnIcon);
-    weightEditIntro.append(weightEditTitle, weightEditSubtitle);
+    weightEditIntro.append(weightEditTitle);
 
     weightEditHeader.append(
         goBackBtn,
         weightEditIntro,
-        data.role !== 'foreman' ? editFormButton(weightEditForm, () => alertPopup("success", "Saved Successfully"), data.updateUiFn, () => recheckWeightFields()) : ""
+        data.role !== 'foreman' ? editFormButton(weightEditForm, () => alertPopup("success", "Saved Successfully"), data.updateUiFn, () => recheckWeightFields(), () => saveEditWeights(weightEditForm)) : ""
     );
     weightEditContainer.append(weightEditHeader, weightEditBody);
 
@@ -151,7 +209,7 @@ async function renderEditWeights(weightsData, type = null , data) {
         if(type === 'milestones') {
             updateContents(overlayBody, () => renderEditMilestone(data.projectId, data.milestoneId, data.updateUiFn, data.overlayBackground, data.role));
         } else {
-            updateContents(overlayBody, () => renderEditTask(data.milestoneId, data.milestoneName, data.taskId, data.updateUiFn, data.overlayBody, data.role));
+            updateContents(overlayBody, () => renderEditTask(data.projectId, data.milestoneId, data.milestoneName, data.taskId, data.updateUiFn, data.overlayBody, data.role));
         }       
     });
 
@@ -162,14 +220,14 @@ async function renderEditMilestone(projectId, milestoneId, updateUiFn, overlayBa
     const milestoneEditContainer = div('milestoneEditContainer', 'form-edit-containers');
     const milestoneData = await fetchData(`/api/milestone/${milestoneId}`);
     if(milestoneData === "error") return alertPopup('error', 'Network Connection Error');
-    if(milestoneData.length === 0) {
-        emptyPlaceholder(milestoneEditContainer, "Failed to get milestone data");
+    if(!milestoneData) {
+        showEmptyPlaceholder(null, milestoneEditContainer, null, "Failed to get milestone data");
         return milestoneEditContainer;
     }
     const milestoneWeightData = await fetchData(`/api/milestones/${projectId}`);
     if(milestoneWeightData === "error") return alertPopup('error', 'Network Connection Error');
     if(milestoneWeightData.length === 0) {
-        emptyPlaceholder(milestoneEditContainer, "Failed to get milestone weights data");
+        showEmptyPlaceholder(null, milestoneEditContainer, null, "Failed to get milestone weights data");
         return milestoneEditContainer;
     }
     const milestoneEditHeader = div('milestoneEditHeader', 'form-edit-headers');
@@ -186,56 +244,79 @@ async function renderEditMilestone(projectId, milestoneId, updateUiFn, overlayBa
     const milestoneFormBody = div('milestoneFormBody');
     const milestoneFormFooter = div('milestoneFormFooter');
 
-    const weightsButton = createButton('weightsFormBtn', 'solid-buttons', 'Milestones Weights', 'weightsBtnText', '');
+    const weightsButton = createButton('weightsFormBtn', 'solid-buttons', 'Milestones Weights', 'weightsBtnText', '',
+        () => updateContents(overlayBody, () => renderEditWeights(milestoneWeightData, 'milestones', { projectId, milestoneId, updateUiFn, overlayBackground, role }))
+    );
     const spanArrowIcon = span('weightsBtnIcon', 'btn-icons');
     weightsButton.append(spanArrowIcon);
-    weightsButton.addEventListener("click", () => {
-        updateContents(overlayBody, () => renderEditWeights(milestoneWeightData, 'milestones', { projectId, milestoneId, updateUiFn, overlayBackground, role }));
-    });
+
     milestoneFormHeader.append(
         createInput('text', 'read', 'Milestone Name', 'milestoneInputName', 'milestone_name', milestoneData.milestone_name, 'Enter milestone name', '', '', '', ''),
         createInput('textarea', 'read', 'Description', 'milestoneInputDescription', 'milestone_description', milestoneData.milestone_description, 'Enter milestone description', '', '100', '', '100 characters max')
     );
     const duedate = dateFormatting(milestoneData.duedate, 'calendar');
     milestoneFormBody.append(
-        // createInput('text', 'read', 'Weights', 'milestoneInputWeights', 'milestone_weights', milestoneData.weights, 'Enter weight amount', 0, 100, 'decimal', 'maximum: 100%'),
         createInput('date', 'read', 'Due Date', 'milestoneInputDue', 'milestone_due', duedate, 'Select due date', '', '', '', `mm/dd/yyyy`),
         weightsButton
     );
     
+    async function saveMilestone() {
+        const milestoneName = document.getElementById('milestoneInputName').value;
+        const milestoneDescription = document.getElementById('milestoneInputDescription').value;
+        const milestoneDue = document.getElementById('milestoneInputDue').value;
+
+        const updatedMilestone = {
+            milestone_name: milestoneName,
+            milestone_description: milestoneDescription,
+            duedate: milestoneDue,
+        };
+
+        const response = await fetchPostJson(`/api/milestones/${milestoneId}`, 'PUT', updatedMilestone, 'Updating milestone...');
+        if (response !== 'error') {
+            alertPopup('success', 'Milestone updated successfully!');
+            await updateUiFn();
+        }
+    }
+    
     milestoneFormFooter.append(
-        role !== "foreman" ? deleteFormButton(milestoneData.id, 'Milestone', () => { alertPopup("success", "Milestone Deleted Successfully") }, updateUiFn, () => { hideOverlayWithBg(overlayBackground) }) : ""
+        role !== "foreman" ? deleteFormButton(milestoneData.id, 'Milestone', 
+            () => {
+                fetch(`/api/milestones/${milestoneData.id}`, { method: 'DELETE' });
+                alertPopup("success", "Milestone Deleted Successfully");
+            }, 
+            updateUiFn, 
+            () => { hideOverlayWithBg(overlayBackground) }
+        ) : ""
     );
 
     milestoneEditForm.append(milestoneFormHeader, milestoneFormBody, milestoneFormFooter);
     milestoneEditBody.append(milestoneEditForm);
     milestoneEditIntro.append(milestoneEditTitle, milestoneEditSubtitle);
-    milestoneEditHeader.append(milestoneEditIntro, role !== 'foreman' ? editFormButton(milestoneEditForm, () => { alertPopup('success', 'Saved Successfully') }, updateUiFn) : "");
+    milestoneEditHeader.append(milestoneEditIntro, role !== 'foreman' ? editFormButton(milestoneEditForm, () => { alertPopup('success', 'Saved Successfully') }, updateUiFn, '', saveMilestone) : "");
     milestoneEditContainer.append(milestoneEditHeader, milestoneEditBody);
 
     return milestoneEditContainer;
-
 }
 
-async function renderEditTask(milestoneId, milestoneName, taskId, updateUiFn, overlayBody, role) {
+async function renderEditTask(projectId, milestoneId, milestoneName, taskId, updateUiFn, overlayBody, role) {
     const taskEditContainer = div('taskEditContainer', 'form-edit-containers');
     const taskData = await fetchData(`/api/task/${taskId}`);
     if(taskData === "error") return alertPopup('error', 'Network Connection Error');
     if(taskData.length === 0) {
-        emptyPlaceholder(taskEditContainer, "Failed to get task data");
+        showEmptyPlaceholder(null, taskEditContainer, null, "Failed to get task data");
         return taskEditContainer;
     }
     const taskWeightData = await fetchData(`/api/tasks/${milestoneId}`);
     if(taskWeightData === "error") return alertPopup('error', 'Network Connection Error');
     if(taskWeightData.length === 0) {
-        emptyPlaceholder(taskEditContainer, "Failed to get task weights data");
+        showEmptyPlaceholder(null, taskEditContainer, null, "Failed to get task weights data");
         return taskEditContainer;
     }
     const taskEditHeader = div('taskEditHeader', 'form-edit-headers');
     const goBackBtn = button('goBackBtn');
     const goBackBtnIcon = div('goBackBtnIcon', 'icons');
     goBackBtn.addEventListener("click", () => {
-        updateContents(overlayBody, () => renderViewTask(milestoneId, milestoneName, updateUiFn, overlayBody, role));
+        updateContents(overlayBody, () => renderViewTask(projectId, milestoneId, milestoneName, updateUiFn, overlayBody, role));
     });
     const taskEditBody = div('taskEditBody', 'form-edit-bodies');
     const taskEditForm = document.createElement('form');
@@ -249,12 +330,11 @@ async function renderEditTask(milestoneId, milestoneName, taskId, updateUiFn, ov
     const taskFormBody = div('taskFormBody');
     const taskFormFooter = div('taskFormFooter');
 
-    const weightsButton = createButton('weightsFormBtn', 'solid-buttons', 'Tasks Weights', 'weightsBtnText', '');
+    const weightsButton = createButton('weightsFormBtn', 'solid-buttons', 'Tasks Weights', 'weightsBtnText', '',
+        () => updateContents(overlayBody, () => renderEditWeights(taskWeightData, "tasks", { projectId, milestoneId, milestoneName, taskId, updateUiFn, overlayBody, role }))
+     );
     const spanArrowIcon = span('weightsBtnIcon', 'btn-icons');
     weightsButton.append(spanArrowIcon);
-    weightsButton.addEventListener("click", () => {
-        updateContents(overlayBody, () => renderEditWeights(taskWeightData, "tasks", { milestoneId, milestoneName, taskId, updateUiFn, overlayBody, role }));
-    });
 
     taskFormHeader.append(
         createInput('text', 'read', 'Task Name', 'taskInputName', 'task_name', taskData.task_name, 'Enter task name')
@@ -265,31 +345,47 @@ async function renderEditTask(milestoneId, milestoneName, taskId, updateUiFn, ov
         // createInput('text', 'read', 'Weights', 'taskInputWeights', 'task_weights', taskData.weights, 'Enter weight amount', 0, 100, 'decimal', 'maximum: 100%')
     );
     
+    async function saveTask() {
+        const taskName = document.getElementById('taskInputName').value;
+        const taskProgress = document.getElementById('taskInputProgress').value;
+        
+        const updatedTask = {
+            task_name: taskName,
+            task_progress: taskProgress,
+        };
+
+        const response = await fetchPostJson(`/api/tasks/${taskId}`, 'PUT', updatedTask, 'Updating task...');
+        if (response !== 'error') {
+            alertPopup('success', 'Task updated successfully!');
+        }
+    }
+
     if(role !== 'foreman') {
-        taskFormFooter.append(
-            deleteFormButton(taskData.id, 'Task', () => { alertPopup("success", "Task Deleted Successfully") }, updateUiFn, () => updateContents(overlayBody, () => renderViewTask(milestoneId, milestoneName, updateUiFn, overlayBody)))
+        const deleteBtn = deleteFormButton(taskData.id, 'Task', () => alertPopup("success", "Task Deleted Successfully"), 
+            async () => {
+                await fetch(`/api/tasks/${taskData.id}`, { method: 'DELETE' });
+                updateContents(overlayBody, () => renderViewTask(projectId, milestoneId, milestoneName, updateUiFn, overlayBody, role));
+            }, 
+            () => {}
         );
+        taskFormFooter.append(deleteBtn);
     } else {
         taskFormFooter.append("");
     }
     taskEditForm.append(taskFormHeader, taskFormBody, taskFormFooter);
     taskEditBody.append(taskEditForm);
     goBackBtn.append(goBackBtnIcon);
-    taskEditHeader.append(goBackBtn, role !== 'foreman' ? editFormButton(taskEditForm, () => { alertPopup("success", "Saved Successfully") }, updateUiFn) : "");
+    taskEditHeader.append(goBackBtn, role !== 'foreman' ? editFormButton(taskEditForm, () => { alertPopup("success", "Saved Successfully") }, () => { updateContents(overlayBody, () => renderViewTask(projectId, milestoneId, milestoneName, updateUiFn, overlayBody, role)) }, '', saveTask) : "");
     taskEditContainer.append(taskEditHeader, taskEditBody);
 
     return taskEditContainer;
 }
 
-async function renderViewTask(milestoneId, milestoneName, updateUiFn, overlayBody, role) { //tasks tab content ng milestone edit ol
+async function renderViewTask(projectId, milestoneId, milestoneName, updateUiFn, overlayBody, role) { //tasks tab content ng milestone edit ol
     const taskViewContainer = div('taskViewContainer', 'form-edit-containers');
     const tasks = await fetchData(`/api/tasks/${milestoneId}`);
     if(tasks === "error") return alertPopup('error', 'Network Connection Error');
-    if(tasks.length === 0) {
-        emptyPlaceholder(taskViewContainer, "Failed to get tasks");
-        return taskViewContainer;
-    }
-
+    
     const taskViewHeader = div('taskViewHeader', 'form-edit-headers');
     const taskViewIntro = div('taskViewIntro', 'form-edit-intros');
     const taskViewTitle = span('taskViewTitle', 'form-edit-titles');
@@ -297,47 +393,57 @@ async function renderViewTask(milestoneId, milestoneName, updateUiFn, overlayBod
     taskViewTitle.innerText = `Tasks for ${milestoneName}`;
     taskViewSubtitle.innerText = "Click to view and manage tasks under this milestone";
     const taskViewBody = div('taskEditBody', 'form-edit-bodies');
-    let count = 1;
-    for (const task of tasks) {
-        const taskContainer = div('', 'task-containers');
-        const taskHeader = div('', 'task-headers');
-        const taskNumber = span('', 'task-numbers');
-        taskNumber.innerText = `Task ${count} : `;
-        const taskName =  span('', 'task-names');
-        taskName.innerText = task.task_name;
-        const taskStatus = div('taskStatus', 'status');
-        taskStatus.innerText = task.status;
-        if(task.status === 'completed') warnType(taskStatus, 'solid', 'green');
-        if(task.status === 'overdue') warnType(taskStatus, 'solid', 'red');
-        if(task.status === 'in progress') warnType(taskStatus, 'solid', 'yellow');
-        if(task.status === 'not started') warnType(taskStatus, 'solid', 'white');
-        const taskProgressBarContainer = div('', 'task-progress-bar-containers');
-        const taskProgressBar =  div('', 'task-progress-bars');
-        taskProgressBar.style.setProperty(`--progress`, `0%`);
-        setTimeout(() => {
-            requestAnimationFrame(() => {
-                taskProgressBar.style.setProperty(`--progress`, `${roundDecimal(task.task_progress)}%`);
-            });
-        }, 200);
-        const taskProgressBarData = div('', 'task-progress-bar-data');
-        const taskProgressLabel = span('', 'task-progress-labels');
-        taskProgressLabel.innerText = 'Progress';
-        const taskProgressPct = span('', 'task-progress-pct');
-        taskProgressPct.innerText = `${roundDecimal(task.task_progress)}%`;
 
-        taskProgressBarData.append(taskProgressLabel, taskProgressPct);
-        taskProgressBarContainer.append(taskProgressBar);
-        taskHeader.append(taskNumber, taskName, taskStatus);
-        taskContainer.append(taskHeader, taskProgressBarContainer, taskProgressBarData);
-        taskContainer.addEventListener("click", () => {
-            updateContents(overlayBody, () => renderEditTask(milestoneId, milestoneName, task.id, updateUiFn, overlayBody, role));
-        });
-        taskViewBody.append(taskContainer);
-        count++;
+    if(tasks.length === 0) {
+        showEmptyPlaceholder(null, taskViewBody, null, "No tasks found for this milestone.");
+    } else {
+        let count = 1;
+        for (const task of tasks) {
+            const taskContainer = div('', 'task-containers');
+            const taskHeader = div('', 'task-headers');
+            const taskNumber = span('', 'task-numbers');
+            taskNumber.innerText = `Task ${count} : `;
+            const taskName =  span('', 'task-names');
+            taskName.innerText = task.task_name;
+            const taskStatus = div('taskStatus', 'status');
+            taskStatus.innerText = task.status;
+            if(task.status === 'completed') warnType(taskStatus, 'solid', 'green');
+            if(task.status === 'overdue') warnType(taskStatus, 'solid', 'red');
+            if(task.status === 'in progress') warnType(taskStatus, 'solid', 'yellow');
+            if(task.status === 'not started') warnType(taskStatus, 'solid', 'white');
+            const taskProgressBarContainer = div('', 'task-progress-bar-containers');
+            const taskProgressBar =  div('', 'task-progress-bars');
+            taskProgressBar.style.setProperty(`--progress`, `0%`);
+            setTimeout(() => {
+                requestAnimationFrame(() => {
+                    taskProgressBar.style.setProperty(`--progress`, `${roundDecimal(task.task_progress)}%`);
+                });
+            }, 200);
+            const taskProgressBarData = div('', 'task-progress-bar-data');
+            const taskProgressLabel = span('', 'task-progress-labels');
+            taskProgressLabel.innerText = 'Progress';
+            const taskProgressPct = span('', 'task-progress-pct');
+            taskProgressPct.innerText = `${roundDecimal(task.task_progress)}%`;
+
+            taskProgressBarData.append(taskProgressLabel, taskProgressPct);
+            taskProgressBarContainer.append(taskProgressBar);
+            taskHeader.append(taskNumber, taskName, taskStatus);
+            taskContainer.append(taskHeader, taskProgressBarContainer, taskProgressBarData);
+            taskContainer.addEventListener("click", () => {
+                updateContents(overlayBody, () => renderEditTask(projectId, milestoneId, milestoneName, task.id, updateUiFn, overlayBody, role));
+            });
+            taskViewBody.append(taskContainer);
+            count++;
+        }
     }
+
+    const newTaskBtn = createButton('taskAddBtn', 'solid-buttons', 'New', 'taskAddText', 'taskAddIcon');
+    newTaskBtn.addEventListener("click", () => {
+        createTaskOl(milestoneId, () => updateContents(overlayBody, () => renderViewTask(projectId, milestoneId, milestoneName, updateUiFn, overlayBody, role)));
+    });
     
     taskViewIntro.append(taskViewTitle, taskViewSubtitle);
-    taskViewHeader.append(taskViewIntro, role !== 'foreman' ? createButton('taskAddBtn', 'solid-buttons', 'New', 'taskAddText', 'taskAddIcon') : "");
+    taskViewHeader.append(taskViewIntro, role !== 'foreman' ? newTaskBtn : "");
     taskViewContainer.append(taskViewHeader, taskViewBody);
 
     return taskViewContainer;
@@ -357,7 +463,7 @@ export async function milestoneFullOl(projectId, milestoneId, milestoneName, upd
     taskBar.addEventListener("click", () => {
         removeSelectedChildren(overlayHeader);
         taskBar.classList.add("selected");
-        updateContents(overlayBody, async() => await renderViewTask(milestoneId, milestoneName, updateUiFn, overlayBody, role));
+        updateContents(overlayBody, async() => await renderViewTask(projectId, milestoneId, milestoneName, updateUiFn, overlayBody, role));
     });
 
     overlayHeader.append(milestoneBar, taskBar);
@@ -366,8 +472,190 @@ export async function milestoneFullOl(projectId, milestoneId, milestoneName, upd
     showOverlayWithBg(overlayBackground);
 }
 
-export function createMilestoneOl(projectId) {
+export function createMilestoneOl(projectId, updateUiFn) {
     const {overlayBackground, overlayHeader, overlayBody} = createOverlayWithBg();
-    overlayBody.innerText = "Gawa na boii";
+    const overlayHeaderContainer = div('', 'overlay-header-containers');
+    overlayHeaderContainer.innerText = 'Create new milestone';
+    overlayHeader.append(overlayHeaderContainer);
+    const newMilestoneForm = document.createElement('form');
+    newMilestoneForm.className = 'form-edit-forms';
+    const newMilestoneFormHeader = div('newMilestoneFormHeader', 'create-form-headers');
+    const newMilestoneFormFooter =  div('newMilestoneFormFooter', 'create-form-footers');
+    const cancelBtn = createButton('cancelCreateBtn', 'wide-buttons', 'Cancel', 'cancelCreateText');
+    const createBtn = createButton('createBtn', 'wide-buttons', 'Create', 'createBtnText');
+    cancelBtn.addEventListener('click', () => { hideOverlayWithBg(overlayBackground) });
+
+    createBtn.addEventListener('click', async () => {
+        const milestoneNameInput = document.getElementById('milestoneInputName');
+        const milestoneDescriptionInput = document.getElementById('milestoneInputDescription');
+        const milestoneDueInput = document.getElementById('milestoneInputDue');
+
+        if (!milestoneNameInput.value || !milestoneDueInput.value) {
+            alertPopup('error', 'Milestone Name and Due Date are required.');
+            return;
+        }
+
+        const newMilestone = {
+            project_id: projectId,
+            milestone_name: milestoneNameInput.value,
+            milestone_description: milestoneDescriptionInput.value,
+            duedate: milestoneDueInput.value,
+            weights: 0,
+        };
+
+        const response = await fetchPostJson('/api/milestones', 'POST', newMilestone, 'Creating milestone...');
+        if (response !== 'error') {
+            alertPopup('success', 'Milestone created successfully!');
+            hideOverlayWithBg(overlayBackground);
+            await updateUiFn();
+        }
+    });
+
+    newMilestoneFormFooter.append(cancelBtn, createBtn);
+    newMilestoneFormHeader.append(
+        createInput('text', 'edit', 'Milestone Name', 'milestoneInputName', 'milestone_name', '', 'Enter milestone name', '', 50, '', '50 characters max'),
+        createInput('textarea', 'edit', 'Description', 'milestoneInputDescription', 'milestone_description', '', 'Enter milestone description', '', 100, '', '100 characters max'),
+        createInput('date', 'edit', 'Due Date', 'milestoneInputDue', 'milestone_due', '', 'Select due date', '', '', '', `mm/dd/yyyy`)       
+    );
+    newMilestoneForm.append(newMilestoneFormHeader, newMilestoneFormFooter);
+    overlayBody.append(newMilestoneForm);
+    showOverlayWithBg(overlayBackground);
+}
+
+export function createFilterOverlay(left = null, right = null, top = null, bottom = null) {
+    const filterOverlayContainer = div('filterOverlayContainer',  'filter-overlay-containers');
+    const filterOverlayHeader = div('filterOverlayHeader');
+    const filterOverlayBody = div('filterOverlayBody');
+    filterOverlayContainer.append(filterOverlayHeader, filterOverlayBody);
+    if(left !== null) filterOverlayContainer.style.left = left;
+    if(right !== null) filterOverlayContainer.style.right = right;
+    if(top !== null) filterOverlayContainer.style.top = top;
+    if(bottom !== null) filterOverlayContainer.style.bottom = bottom;
+    return {filterOverlayContainer, filterOverlayHeader, filterOverlayBody};
+}
+
+export function createTaskOl(milestoneId, updateUiFn) {
+    const {overlayBackground, overlayHeader, overlayBody} = createOverlayWithBg();
+    const overlayHeaderContainer = div('', 'overlay-header-containers');
+    overlayHeaderContainer.innerText = 'Create new task';
+    overlayHeader.append(overlayHeaderContainer);
+    const newTaskForm = document.createElement('form');
+    newTaskForm.className = 'form-edit-forms';
+    const newTaskFormHeader = div('newTaskFormHeader', 'create-form-headers');
+    const newTaskFormFooter =  div('newTaskFormFooter', 'create-form-footers');
+    const cancelBtn = createButton('cancelCreateBtn', 'wide-buttons', 'Cancel', 'cancelCreateText');
+    const createBtn = createButton('createBtn', 'wide-buttons', 'Create', 'createBtnText');
+    cancelBtn.addEventListener('click', () => { hideOverlayWithBg(overlayBackground) });
+
+    createBtn.addEventListener('click', async () => {
+        const taskNameInput = document.getElementById('taskInputName');
+        const taskDueInput = document.getElementById('taskInputDue');
+
+        if (!taskNameInput.value || !taskDueInput.value) {
+            alertPopup('error', 'Task Name and Due Date are required.');
+            return;
+        }
+
+        const newTask = {
+            milestone_id: milestoneId,
+            task_name: taskNameInput.value,
+            duedate: taskDueInput.value,
+            weights: 0,
+        };
+
+        const response = await fetchPostJson('/api/tasks', 'POST', newTask, 'Creating task...');
+        if (response !== 'error') {
+            alertPopup('success', 'Task created successfully!');
+            hideOverlayWithBg(overlayBackground);
+            await updateUiFn();
+        }
+    });
+
+    newTaskFormFooter.append(cancelBtn, createBtn);
+    newTaskFormHeader.append(
+        createInput('text', 'edit', 'Task Name', 'taskInputName', 'task_name', '', 'Enter task name', '', 50, '', '50 characters max'),
+        createInput('date', 'edit', 'Due Date', 'taskInputDue', 'task_due', '', 'Select due date', '', '', '', `mm/dd/yyyy`)
+    );
+    newTaskForm.append(newTaskFormHeader, newTaskFormFooter);
+    overlayBody.append(newTaskForm);
+    showOverlayWithBg(overlayBackground);
+}
+
+export async function showLogDetailsOverlay(logId) {
+    const logData = await fetchData(`/api/logs/${logId}/details`);
+    if (logData === 'error') {
+        return alertPopup('error', 'Failed to fetch log details.');
+    }
+
+    const { overlayBackground, overlayHeader, overlayBody } = createOverlayWithBg();
+    
+    // Header
+    const title = div('log-detail-title');
+    title.textContent = logData.log_name;
+    const subtitle = div('log-detail-subtitle');
+    subtitle.textContent = logData.project_name;
+    const headerContent = div('log-detail-header-content');
+    headerContent.append(title, subtitle);
+    overlayHeader.append(headerContent);
+    
+    // By/Date section
+    const byDateContainer = div('log-detail-by-date');
+    const byText = span('log-detail-by');
+    byText.innerHTML = `<strong>By:</strong> ${logData.full_name}`;
+    const dateText = span('log-detail-date');
+    dateText.innerHTML = `<strong>Date:</strong> ${dateFormatting(logData.created_at, 'datetime')}`;
+    byDateContainer.append(byText, dateText);
+    
+    // Changes section
+    const changesContainer = div('log-detail-changes-container');
+    const changesHeader = div('log-detail-changes-header');
+    const changesTitle = span('log-detail-changes-title');
+    changesTitle.textContent = 'Changes:';
+    const showOldValuesToggle = span('log-detail-show-old-toggle');
+    showOldValuesToggle.textContent = 'Show old values';
+    changesHeader.append(changesTitle, showOldValuesToggle);
+
+    const changesBody = div('log-detail-changes-body');
+
+    if (logData.action === 'edit' && logData.details && logData.details.length > 0) {
+        logData.details.forEach(detail => {
+            const changeEntry = div('log-change-entry');
+            const newValueText = `Changes ${detail.label} to ${detail.new_value}`;
+            const oldValueText = `Changed ${detail.label} from ${detail.old_value} to ${detail.new_value}`;
+            
+            changeEntry.textContent = newValueText;
+            changeEntry.dataset.newValue = newValueText;
+            changeEntry.dataset.oldValue = oldValueText;
+            
+            changesBody.append(changeEntry);
+        });
+    } else if (logData.details && logData.details.length > 0) {
+        logData.details.forEach(detail => {
+            const changeEntry = div('log-change-entry');
+            changeEntry.textContent = detail.log_details;
+            changesBody.append(changeEntry);
+        });
+    } else {
+        changesBody.textContent = 'No detailed changes available for this log.';
+    }
+
+    showOldValuesToggle.addEventListener('click', () => {
+        const showingOld = showOldValuesToggle.classList.toggle('show-old');
+        showOldValuesToggle.textContent = showingOld ? 'Hide old values' : 'Show old values';
+        changesBody.querySelectorAll('.log-change-entry').forEach(entry => {
+            if (entry.dataset.oldValue) {
+                entry.textContent = showingOld ? entry.dataset.oldValue : entry.dataset.newValue;
+            }
+        });
+    });
+    
+    // Hide toggle if there are no edit details
+    if (logData.action !== 'edit' || !logData.details || logData.details.length === 0) {
+        showOldValuesToggle.style.display = 'none';
+    }
+
+    changesContainer.append(changesHeader, changesBody);
+    
+    overlayBody.append(byDateContainer, changesContainer);
     showOverlayWithBg(overlayBackground);
 }

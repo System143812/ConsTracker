@@ -127,15 +127,24 @@ export function warnType(div, type, color, divIcon, divText) {
     } 
 }
 
+
+
 export function showEmptyPlaceholder(iconPath, contentContainer, popupOverlay = null, placeholderText, actionText = null, contentId) {
     const emptyContentPlaceholder = document.createElement('div');
     emptyContentPlaceholder.className = 'empty-content-placeholder';
-    const emptyContentIcon = document.createElement('div');
-    emptyContentIcon.classList.add('empty-placeholders');
-    emptyContentIcon.style.backgroundImage = `url(${iconPath})`;
+    
+    if (iconPath) {
+        const emptyContentIcon = document.createElement('div');
+        emptyContentIcon.classList.add('empty-placeholders');
+        emptyContentIcon.style.backgroundImage = `url(${iconPath})`;
+        emptyContentPlaceholder.append(emptyContentIcon);
+    }
+    
     const emptyContentText = document.createElement('div');
     emptyContentText.className = 'empty-content-text';
     emptyContentText.innerText = placeholderText;
+    emptyContentPlaceholder.append(emptyContentText);
+
     if(popupOverlay) {
         const emptyContentAction = document.createElement('div');
         emptyContentAction.innerText = actionText;
@@ -143,9 +152,7 @@ export function showEmptyPlaceholder(iconPath, contentContainer, popupOverlay = 
         emptyContentAction.addEventListener("click", () => {
             popupOverlay(contentId);
         });
-        emptyContentPlaceholder.append(emptyContentIcon, emptyContentText, emptyContentAction);
-    } else {
-        emptyContentPlaceholder.append(emptyContentIcon, emptyContentText);
+        emptyContentPlaceholder.append(emptyContentAction);
     }
     contentContainer.append(emptyContentPlaceholder);
 }

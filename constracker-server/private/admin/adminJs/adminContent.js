@@ -1,7 +1,85 @@
 import { fetchData } from "/js/apiURL.js";
 import { formatString, dateFormatting } from "/js/string.js";
-import { alertPopup, warnType } from "/js/popups.js";
+import { alertPopup, warnType, showDeleteConfirmation, showEmptyPlaceholder } from "/js/popups.js";
+import { createFilterContainer, createButton, div } from "/js/components.js";
+import { createMilestoneOl, milestoneFullOl, showLogDetailsOverlay, createOverlayWithBg, hideOverlayWithBg } from "/mainJs/overlays.js";
 
+
+async function generateLogsContent() {
+    const logsBodyContent = document.getElementById('logsBodyContent');
+    logsBodyContent.innerHTML = ''; // Clear existing content
+
+    const logsContainer = div('logs-main-container');
+    const filterContainer = div('logs-filter-container');
+    const scrollableLogListWrapper = div('scrollable-log-list-wrapper'); // New wrapper for scrolling
+    const logListContainer = div('logs-list-container');
+    
+    scrollableLogListWrapper.append(logListContainer); // logListContainer goes inside the wrapper
+    logsContainer.append(filterContainer, scrollableLogListWrapper); // Append filter and wrapper
+    logsBodyContent.append(logsContainer);
+    
+    function createLogCard(logData) {
+        const logCard = div('', 'log-cards');
+        const logCardHeader = div('', 'log-card-headers');
+        const logProjectName = span('', 'log-project-names');
+        logProjectName.innerText = logData.project_name;
+        const logDate = span('', 'log-dates');
+        logDate.innerText = dateFormatting(logData.created_at, 'date');
+        const logCardBody = div('', 'log-card-bodies');
+        const logCardIcon = span('', 'log-card-icons'); 
+        const logCardName = span('', 'log-card-names');
+        logCardName.innerText = `${logData.full_name} ${logData.log_name}`;
+        const logCardFooter = div('', 'log-card-footers');
+        const logDetailsBtn = createButton('logDetailsBtn', 'solid-buttons', 'Details', 'logDetailsText', '', () => {});
+        const logDetailsIcon  = span('logDetailsIcon', 'btn-icons');
+        
+        // Conditional clickability for the details button
+        if (logData.action === 'edit') {
+            logDetailsBtn.style.cursor = 'pointer';
+            logDetailsBtn.addEventListener('click', () => showLogDetailsOverlay(logData.log_id));
+        } else {
+            logDetailsBtn.style.display = 'none'; // Hide button if not editable
+        }
+    
+        logDetailsBtn.append(logDetailsIcon);
+        logCardFooter.append(logDetailsBtn);
+        logCardBody.append(logCardIcon, logCardName);
+        logCardHeader.append(logData.project_id !== 0 ? logProjectName : '', logDate);
+        logCard.append(logCardHeader,logCardBody, logCardFooter);
+        return logCard;
+    }
+
+    async function renderLogs(urlParams = new URLSearchParams()) {
+        logListContainer.innerHTML = '<div class="loading-spinner"></div>'; // Show a loading spinner
+        const logs = await fetchData(`/api/logs?${urlParams.toString()}`);
+        logListContainer.innerHTML = '';
+        
+        if (logs === 'error' || logs.length === 0) {
+            showEmptyPlaceholder('/assets/icons/emptyLogs.png', logListContainer, null, "No logs found for the selected filters.");
+            return;
+        }
+
+        logs.forEach(log => {
+            logListContainer.append(createLogCard(log));
+        });
+    }
+
+    // New function to be passed as the filter callback
+    async function applyFilterToLogs(filteredUrlParams) {
+        await renderLogs(filteredUrlParams);
+    }
+
+    const filters = await createFilterContainer(
+        applyFilterToLogs, // The new applyFilterCallback
+        'Search by user...', 
+        { name: true, project: true, dateFrom: true, dateTo: true, recent: true }, // Removed category
+        'username'
+    );
+    
+    filterContainer.append(filters);
+
+    await renderLogs(new URLSearchParams()); // Initial render without filters
+}
 
 const tabContents = {
     dashboard: {
@@ -22,6 +100,10 @@ const tabContents = {
     },
     personnel: {
         generateContent: async() => '',
+        generateGraphs: async() => ''
+    },
+    logs: {
+        generateContent: async() => await generateLogsContent(),
         generateGraphs: async() => ''
     },
     settings: {
@@ -62,7 +144,99 @@ async function generateDashboardContent() {
 
 async function generateProjectsContent() {
     const projectsBodyContent = document.getElementById('projectsBodyContent');
-    projectsBodyContent.append(await dashboardActiveProjects('all'));
+    projectsBodyContent.innerHTML = ''; // Clear existing content
+
+    const projectsContainer = div('projects-main-container');
+    const projectListContainer = div('project-list-container');
+    const projectDetailsContainer = div('project-details-container');
+
+    projectsContainer.append(projectListContainer, projectDetailsContainer);
+    projectsBodyContent.append(projectsContainer);
+
+    const projects = await fetchData('/api/allProjects');
+    if (projects === 'error' || projects.length === 0) {
+        showEmptyPlaceholder(null, projectListContainer, null, "No projects found.");
+        return;
+    }
+
+    const projectList = div('project-list');
+    projects.forEach(project => {
+        const projectItem = div(`project-item-${project.project_id}`, 'project-list-item');
+        projectItem.textContent = project.project_name;
+        projectItem.addEventListener('click', () => {
+            document.querySelectorAll('.project-list-item').forEach(item => item.classList.remove('selected'));
+            projectItem.classList.add('selected');
+            showProjectDetails(project.project_id, projectDetailsContainer);
+        });
+        projectList.append(projectItem);
+    });
+
+    projectListContainer.append(projectList);
+
+    // Show the first project's details by default
+    if (projects.length > 0) {
+        projectList.children[0].classList.add('selected');
+        showProjectDetails(projects[0].project_id, projectDetailsContainer);
+    }
+}
+
+async function showProjectDetails(projectId, container) {
+    container.innerHTML = ''; // Clear previous details
+    const milestonesContent = await generateMilestonesContent(projectId);
+    container.append(milestonesContent);
+}
+
+async function generateMilestonesContent(projectId) {
+    const milestonesContainer = div('milestones-container');
+    const milestonesHeader = div('milestones-header', 'content-card-header');
+    const milestonesTitle = div('milestones-title', 'content-card-title');
+    milestonesTitle.innerText = 'Milestones';
+    const createMilestoneBtn = createButton('create-milestone-btn', 'solid-buttons', 'Create Milestone', 'create-milestone-txt', 'addIcon');
+
+    createMilestoneBtn.addEventListener('click', () => {
+        createMilestoneOl(projectId, () => showProjectDetails(projectId, document.querySelector('.project-details-container')));
+    });
+
+    milestonesHeader.append(milestonesTitle, createMilestoneBtn);
+
+    const milestonesBody = div('milestones-body');
+    const milestones = await fetchData(`/api/milestones/${projectId}`);
+
+    if (milestones === 'error' || milestones.length === 0) {
+        showEmptyPlaceholder('/assets/icons/noMilestones.png', milestonesBody, () => createMilestoneOl(projectId, () => showProjectDetails(projectId, document.querySelector('.project-details-container'))), "No milestones found for this project.", "Create Milestones", projectId);
+    } else {
+        milestones.forEach(milestone => {
+            const milestoneCard = div(`milestone-card-${milestone.id}`, 'milestone-card');
+            const milestoneName = div('milestone-name');
+            milestoneName.textContent = milestone.milestone_name;
+            const milestoneActions = div('milestone-actions');
+            const deleteBtn = createButton(`delete-milestone-${milestone.id}`, 'icon-buttons', '', 'delete-milestone-txt', 'deleteIcon');
+            
+            milestoneCard.addEventListener('click', (e) => {
+                if (e.target.closest('.icon-buttons')) return;
+                milestoneFullOl(projectId, milestone.id, milestone.milestone_name, () => showProjectDetails(projectId, document.querySelector('.project-details-container')), 'admin');
+            });
+
+            deleteBtn.addEventListener('click', () => {
+                showDeleteConfirmation(milestone.milestone_name, async () => {
+                    const response = await fetch(`/api/milestones/${milestone.id}`, { method: 'DELETE' });
+                    if (response.ok) {
+                        alertPopup('success', 'Milestone deleted successfully!');
+                        await showProjectDetails(projectId, document.querySelector('.project-details-container'));
+                    } else {
+                        alertPopup('error', 'Failed to delete milestone.');
+                    }
+                });
+            });
+
+            milestoneActions.append(deleteBtn);
+            milestoneCard.append(milestoneName, milestoneActions);
+            milestonesBody.append(milestoneCard);
+        });
+    }
+
+    milestonesContainer.append(milestonesHeader, milestonesBody);
+    return milestonesContainer;
 }
 
 async function dashboardSummaryCards() {

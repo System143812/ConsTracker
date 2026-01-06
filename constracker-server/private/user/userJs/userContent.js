@@ -1,16 +1,29 @@
-import { fetchData } from "/js/apiURL.js";
+import { fetchData, fetchPostJson } from "/js/apiURL.js";
 import { formatString, dateFormatting } from "/js/string.js";
 import { alertPopup, warnType, showEmptyPlaceholder } from "/js/popups.js";
 import { hideContents } from "/mainJs/sidebar.js";
-import { createMilestoneOl, milestoneFullOl } from "/mainJs/overlays.js";
-import { div, span, button, createButton } from "/js/components.js";
+import { createMilestoneOl, milestoneFullOl, showLogDetailsOverlay, createOverlayWithBg, hideOverlayWithBg } from "/mainJs/overlays.js";
+import { div, span, button, createButton, createFilterContainer } from "/js/components.js";
 
 const requiredRoles = ['engineer', 'foreman', 'project manager'];
+
+function hideDivContents(div) {
+    div.innerHTML = "";
+}
+
+async function updateDivContents(divContainer, newContentFn) {
+    hideDivContents(divContainer);
+    divContainer.append(await newContentFn());
+}
 
 const tabContents = {
     dashboard: {
         generateContent: async(role) => await generateDashboardContent(role),
         generateGraphs: async() => await initDashboardGraphs()
+    },
+    logs: {
+        generateContent: async(role) => await generateLogsContent(role),
+        generateGraphs: async() => ''
     },
     project: {
         generateContent: async(tabName, role) => await generateProjectContent(tabName, role)
@@ -55,6 +68,33 @@ async function generateDashboardContent(role) {
         );
     }
 }
+
+function createLogCard(logData) {
+    const logCard = div('', 'log-cards');
+    const logCardHeader = div('', 'log-card-headers');
+    const logProjectName = span('', 'log-project-names');
+    logProjectName.innerText = logData.project_name;
+    const logDate = span('', 'log-dates');
+    logDate.innerText = dateFormatting(logData.created_at, 'date');
+    const logCardBody = div('', 'log-card-bodies');
+    const logCardIcon = span('', 'log-card-icons');
+    const logCardName = span('', 'log-card-names');
+    logCardName.innerText = `${logData.full_name} ${logData.log_name}`;
+    const logCardFooter = div('', 'log-card-footers');
+    const logDetailsBtn = createButton('logDetailsBtn', 'solid-buttons', 'Details', 'logDetailsText', '', () => {});
+    const logDetailsIcon  = span('logDetailsIcon', 'btn-icons');
+    
+    logDetailsBtn.append(logDetailsIcon);
+    logCardFooter.append(logDetailsBtn);
+    logCardBody.append(logCardIcon, logCardName);
+    logCardHeader.append(logData.project_id !== 0 ? logProjectName : '', logDate);
+    logCard.append(logCardHeader,logCardBody, logCardFooter);
+    return logCard;
+}
+
+
+
+
 
 async function generateProjectContent(projectTabName, role) { //project1
     const projectId = projectTabName.replace(/project/g, '');
@@ -157,16 +197,16 @@ async function renderMilestones(role, projectId) {
     let milestoneAddBtn = div('emptyDiv');
     if(role !== 'foreman') {
         milestoneAddBtn = createButton('milestoneAddBtn', 'solid-buttons', 'Create', 'milestoneAddText', 'milestoneAddIcon');
-        milestoneAddBtn.addEventListener("click", () => { createMilestoneOl(projectId) });
+        milestoneAddBtn.addEventListener("click", () => { createMilestoneOl(projectId, () => generateProjectContent(`project${projectId}`, role)) });
     }
     const milestoneSectionBody = div('milestoneSectionBody');
     const data = await fetchData(`/api/milestones/${projectId}`);
     if(data === "error") return alertPopup('error', 'Network Connection Error');
     if(data.length === 0) {
         if(role !== 'foreman') {
-            showEmptyPlaceholder('/assets/icons/noMilestones.png', milestoneSectionBody, createMilestoneOl(projectId), "There are no milestones yet", "Create Milestones", projectId);
+            showEmptyPlaceholder('/assets/icons/noMilestones.png', milestoneSectionBody, () => createMilestoneOl(projectId, () => generateProjectContent(`project${projectId}`, role)), "There are no milestones yet", "Create Milestones", projectId);
         } else {
-            showEmptyPlaceholder('/assets/icons/noMilestones.png', milestoneSectionBody, "", "There are no milestones yet", "", projectId);
+            showEmptyPlaceholder('/assets/icons/noMilestones.png', milestoneSectionBody, null, "There are no milestones yet", null, projectId);
         }
     } else {
         let counter = 1;
@@ -235,11 +275,11 @@ async function renderMilestones(role, projectId) {
             milestoneCardView.append(milestoneCardViewText, milestoneCardViewIcon);
             milestoneCardView.addEventListener("click", () => {
                 milestoneFullOl(projectId, milestone.id, milestone.milestone_name, async() => {
-                    const content = document.getElementById('selectionTabContent');
-                    const tab = document.getElementById('selectionTabMilestones');
-                    hideSelectionContents(content, tab.className);
-                    tab.classList.add('selected');
-                    content.append(await renderMilestones(role, projectId));
+                    const projectsOverallPercent = document.getElementById('projectsOverallPercent');
+                    const projectsBodyContent = document.getElementById('projectsBodyContent');
+                    projectsOverallPercent.innerHTML = "";
+                    projectsBodyContent.innerHTML = "";
+                    await generateProjectContent(`project${projectId}`, role);
                 }, role); //eto yung callback na ipapasa sa modal para pag ka save auto update ang ui
             });
 
@@ -277,4 +317,64 @@ async function renderAnalytics() {
     const analyticsSectionContainer = div('analyticsSectionContainer');
     analyticsSectionContainer.innerText = 'Analytics';
     return analyticsSectionContainer;
+}
+
+async function renderLogs(logListContainer, urlParams = new URLSearchParams()) {
+    logListContainer.innerHTML = '<div class="loading-spinner"></div>'; // Show a loading spinner
+    const logs = await fetchData(`/api/logs?${urlParams.toString()}`);
+    logListContainer.innerHTML = '';
+    
+    if (logs === 'error' || logs.length === 0) {
+        showEmptyPlaceholder('../assets/icons/emptyLogs.png', logListContainer, null, "No logs found for the selected filters.");
+        return;
+    }
+
+    logs.forEach(log => {
+        logListContainer.append(createLogCard(log));
+    });
+}
+
+async function generateLogsContent(role) {
+    const logsBodyContent = document.getElementById('logsBodyContent');
+    logsBodyContent.innerHTML = ''; // Clear existing content
+
+    const logsContainer = div('logs-main-container');
+    const filterContainer = div('logs-filter-container');
+    const scrollableLogListWrapper = div('scrollable-log-list-wrapper'); // New wrapper for scrolling
+    const logListContainer = div('logs-list-container');
+    
+    scrollableLogListWrapper.append(logListContainer); // logListContainer goes inside the wrapper
+    logsContainer.append(filterContainer, scrollableLogListWrapper); // Append filter and wrapper
+    logsBodyContent.append(logsContainer);
+    
+    async function renderLogs(urlParams = new URLSearchParams()) {
+        logListContainer.innerHTML = '<div class="loading-spinner"></div>'; // Show a loading spinner
+        const logs = await fetchData(`/api/logs?${urlParams.toString()}`);
+        logListContainer.innerHTML = '';
+        
+        if (logs === 'error' || logs.length === 0) {
+            showEmptyPlaceholder('/assets/icons/emptyLogs.png', logListContainer, null, "No logs found for the selected filters.");
+            return;
+        }
+
+        logs.forEach(log => {
+            logListContainer.append(createLogCard(log));
+        });
+    }
+
+    // New function to be passed as the filter callback
+    async function applyFilterToLogs(filteredUrlParams) {
+        await renderLogs(filteredUrlParams);
+    }
+    
+    const filters = await createFilterContainer(
+        applyFilterToLogs, // The new applyFilterCallback
+        'Search by user...', 
+        { name: true, project: true, dateFrom: true, dateTo: true, recent: true }, // Removed category
+        'username'
+    );
+    
+    filterContainer.append(filters);
+
+    await renderLogs(new URLSearchParams()); // Initial render without filters
 }
