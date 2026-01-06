@@ -11,7 +11,8 @@
     --yellow-text: rgb(217, 119, 6);
     --grayed-text: rgb(102, 102, 102);
     --gray-low-opacity: rgba(102, 102, 102, 0.1);
-    --default-black-color: rgb(50, 50, 50, 1);
+    --default-black-color: #2a2f3a;
+    --default-black-text: #3e3e3e;
     --gray-no-opacity: rgba(102, 102, 102, 0);
     --overlay-background:  rgba(30, 30, 30, 0.7);
     --light-border: rgba(204, 204, 204, 0.75);
@@ -21,8 +22,10 @@
     --white-background: rgba(240, 240, 240, 1);
     --white-transparent: rgba(240, 240, 240, 0.1);
     --light-blue-background: rgba(219, 223, 227, 0.75);
-    --blue-border: #173f70;
+    --blue-text: #173f70;
     --light-blue: #174e90;
+    --blue-border: #12345d;
+    --blue-bg: rgba(23, 63, 112, 0.075);
     --blue-border-invi: rgba(23, 63, 112, 0);
     --btn-shadow: 0px 2px 8px 1px rgba(30, 30, 30, 0.25);
     --input-border: rgba(100, 100, 100, 0.75);
@@ -123,7 +126,7 @@
     padding: 0;
     font-family: 'Inter', sans-serif;
     font-weight: 400;
-    color: var(--default-black-color);
+    color: var(--default-black-text);
     box-sizing: border-box;
     word-wrap: break-word;
 }
@@ -392,12 +395,64 @@
     background-image: url('/assets/icons/deleteWhite.png');
 }
 
-#deleteFormBtn {
+#weightsBtnIcon, #logDetailsIcon {
+    width: 11px;
+    height: 11px;
+    background-image: url('/assets/icons/nextBlue.png');
+}
+
+#logDetailsIcon, #selectOptionIcon {
+    min-width: 12px;
+    min-height: 12px;
+    width: 12px;
+    height: 12px;
+}
+
+#selectOptionIcon {
+    background-image: url('/assets/icons/nextBlack.png');
+    transform: rotateZ(90deg);
+}
+
+.option-card-icons {
+    display: none;
+    opacity: 0;
+    min-width: 14px;
+    min-height: 14px;
+    width: 14px;
+    height: 14px;
+    background-image: url('/assets/icons/checkedGreen.png');
+    transition: all 0.1s ease;
+}
+
+.option-card-icons.show {
+    opacity: 1;
+}
+
+#milestoneCardViewIcon {
+    background-image: url('/assets/icons/nextBlue.png');
+}
+
+#deleteFormBtn, #weightsFormBtn, #logDetailsBtn {
     border: none;
     border-radius: 5px;
     font-size: 12px;
     padding: 0.5rem 0.75rem;
     background-color: var(--red-border);
+    transition: all 0.15s ease;
+}
+
+#weightsFormBtn, #logDetailsBtn {
+    display: grid;
+    grid-template-columns: 0fr 0fr;
+    justify-content: end;
+    width: 100%;
+    border-radius: 0px;
+    padding: 0;
+    background-color: var(--gray-no-opacity);
+}
+
+#weightsFormBtn:hover, #logDetailsBtn:hover {
+    opacity: 0.8;
 }
 
 #editFormBtn, #saveFormBtn, #cancelFormBtn {
@@ -411,7 +466,13 @@
     transition: all 0.15s ease;
 }
 
-#editFormBtn {
+#createBtn, #cancelCreateBtn {
+    border: none;
+    border-radius: 5px;
+    width: 50%;
+}
+
+#editFormBtn, #createBtn {
     background-color: var(--blue-border);
 }
 
@@ -419,16 +480,30 @@
     background-color: var(--green-border);
 }
 
-#cancelFormBtn {
+#cancelFormBtn, #cancelCreateBtn {
     background-color: var(--gray-low-opacity);
 }
 
-#editBtnText, #saveBtnText, #deleteBtnText {
+#editBtnText, #saveBtnText, #deleteBtnText, #weightsBtnText, #createBtnText {
     color: var(--white-ishy-text);
 }
 
-#cancelBtnText {
-    color: var(--default-black-color);
+#weightsBtnText, #logDetailsText {
+    font-size: 11px;
+    color: var(--blue-border);
+}
+
+#logDetailsText {
+    font-size: 11px;
+}
+
+#milestoneCardViewText {
+    color: var(--blue-border);
+    font-weight: 600;
+}
+
+#cancelBtnText, #cancelCreateText {
+    color: var(--grayed-text);
 }
 
 .input-box-containers {
@@ -454,6 +529,7 @@ textarea {
 .input-fields {
     display: flex;
     width: 100%;
+    min-width: fit-content;
     padding: 0.25rem 0.5rem;
     pointer-events: auto;
     border-radius: 3px;
@@ -476,6 +552,7 @@ textarea {
 }
 
 .input-fields.error {
+    color: var(--red-text);
     border: solid var(--red-border) 1px;
     background-color: var(--red-background);
 }
@@ -484,11 +561,211 @@ textarea {
     display: flex;
     color: var(--grayed-text);
     pointer-events: none;
+    font-size: 11px;
     transition: all 0.5s ease;
 }
 
 .error-messages.show {
     color: var(--red-text);
+}
+
+input, textarea {
+    transition: all 0.15s ease;
+}
+
+input:focus, textarea:focus {
+    outline: none;
+    border: solid var(--blue-border) 1px !important;
+    box-shadow: 0 0 1px 1px #608abd; 
+}
+
+/* puro filters banda dito */
+
+#filterContainer {
+    display: flex;
+    gap: 0.5rem;
+    /* justify-content: space-between; */
+    align-items: center;
+    padding: 0 0.5rem;
+}
+
+#searchBarContainer {
+    display: flex;
+    align-items: center;
+    position: relative;
+    min-width: 8rem;
+    max-width: 700px;
+    flex: 1;
+    height: fit-content;
+}
+
+#searchBarIcon {
+    display: flex;
+    width: 15px;
+    height: 15px;
+    position: absolute;
+    left: 1rem;
+    background-image: url('/assets/icons/searchBlack.png');
+}
+
+#filterByName {
+    display: flex;
+    flex: 1;
+    width: 100%;
+    border-radius: 20px;
+    border: solid var(--light-border) 1px;
+    background-color: var(--gray-no-opacity);
+    color: var(--grayed-text);
+    font-size: 12px;
+    padding: 0.5rem 1rem;
+    padding-left: 2.5rem;
+}
+
+#filterBtnIcon {
+    background-image: url('/assets/icons/filterBlue.png');
+    /* transition: all 0.5s ease; */
+}
+
+#filterBtnIcon.hide {
+    background-size: 10px 10px;
+    background-image: url('/assets/icons/xBlue.png');
+}
+
+#filterBtn {
+    background-color: var(--gray-no-opacity);
+    border: none;
+}
+
+#filterBtn:hover {
+    background-color: var(--blue-bg);
+}
+
+#filterBtnText {
+    color: var(--blue-border);
+    font-weight: 500;
+    font-size: 12px;
+}
+
+#filterByProject {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+}
+
+input[type='date'] {
+    padding: 0.25rem 1rem;
+    background-color: var(--gray-no-opacity);
+    border: solid #999999 1px;
+    border-radius: 3px;
+    font-size: 12px;
+    font-weight: 400;
+}
+
+.select-option-dropdowns {
+    display: flex;
+    max-width: 200px;
+    position: relative;
+    align-items: center;
+    padding: 0.25rem 1rem;
+    border: solid #999999 1px;
+    border-radius: 3px;
+    gap: 0.5rem;
+}
+
+#selectOptionText {
+    min-width: 0;
+    font-size: 12px;
+    font-weight: 400;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.selection-overlays {
+    display: none;
+    opacity: 0;
+    top: 130%;
+    max-height: 40vh;
+    width: 110%;
+    right: 50%;
+    gap: 0.1rem;
+    transform: translateX(50%);
+    pointer-events: none;
+    background-color: #f0f0f0;
+    box-shadow: var(--btn-shadow);
+    border-bottom-left-radius: 5px;
+    border-bottom-right-radius: 5px;
+    flex-direction: column;
+    position: absolute;
+    overflow-y: auto;
+    overflow: hidden;
+    transition: all 0.15s ease;
+
+}
+
+.selection-overlays.show {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.option-cards {
+    display: flex;
+    align-items: center;
+    padding: 1rem;
+    gap: 1rem;
+    background-color: var(--gray-no-opacity);
+    transition: all 0.15s ease;
+}
+
+.option-cards.selected {    
+    background-color: #e2e2e2;
+}
+/* 
+.option-cards.selected:hover {
+    opacity: 0.75;
+}
+
+.option-cards.selected:active {
+    opacity: 1;
+} */
+
+.option-cards:hover {
+    background-color: var(--gray-low-opacity);
+}
+
+.option-card-titles {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.option-card-names {
+    display: flex;
+    flex: 1;
+    text-align: center;
+    font-size: 11px;
+}
+
+.option-card-labels {
+    color: var(--grayed-text);
+}
+
+.select-option-radios {
+    display: flex;
+    padding: 1rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.option-radio-containers {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    min-width: 0;
+    gap: 0.5rem;
 }
 
 @keyframes slightUpwardPush {
@@ -499,4 +776,133 @@ textarea {
 @keyframes fadeIn {
     0% {opacity: 0;}
     100% {opacity: 1;}
+}
+
+.filter-overlay-containers {
+    position: absolute;
+    top: 110%;
+    right: 0;
+    background-color: #ffffff;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 10;
+    padding: 1rem;
+    display: none;
+    flex-direction: column;
+    gap: 1rem;
+    min-width: 300px;
+}
+
+.filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.filter-title {
+    font-weight: 600;
+    font-size: 12px;
+    color: var(--grayed-text);
+    margin-bottom: 0.25rem;
+}
+
+.radio-container {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Pagination Styles */
+.pagination-container {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 1rem;
+    padding: 1rem 0;
+}
+.page-buttons-container {
+    order: 1;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+}
+#prevButton { 
+    order: 2; 
+}
+#nextButton { 
+    order: 2; 
+}
+.items-per-page-container {
+    order: 3;
+}
+
+.pagination-nav-button {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--light-border);
+    border-radius: 5px;
+    background-color: transparent;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    font-size: 12px;
+}
+
+.page-button {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--light-border);
+    border-radius: 5px;
+    background-color: transparent;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    font-size: 12px;
+}
+
+.page-button:hover, .pagination-nav-button:hover:not(:disabled) {
+    background-color: var(--gray-low-opacity);
+}
+
+.page-button.active {
+    background-color: var(--blue-border);
+    color: var(--white-ishy-text);
+    border-color: var(--blue-border);
+}
+
+.pagination-nav-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.items-per-page-container {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 12px;
+}
+
+#itemsPerPageInput {
+    width: 50px;
+    padding: 0.25rem;
+    border: 1px solid var(--light-border);
+    border-radius: 3px;
+    font-size: 12px;
+}
+
+@media (min-width: 768px) {
+    .pagination-container {
+        flex-wrap: nowrap;
+        justify-content: space-between;
+    }
+    .page-buttons-container { 
+        order: 2; 
+        width: auto; 
+    }
+    #prevButton { 
+        order: 1; 
+    }
+    #nextButton { 
+        order: 3; 
+    }
+    .items-per-page-container { 
+        order: 4; 
+    }
 }

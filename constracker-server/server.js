@@ -1,7 +1,7 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
-import path from 'path';
+import path, { join } from 'path';
 import { fileURLToPath } from 'url';
 import { pool } from './db.js';
 import jwt from 'jsonwebtoken';
@@ -135,10 +135,10 @@ function failed(res, status, message) {
 }
 function dashboardRoleAccess(req, res) {
     const roles = [
-        {role: 'admin', access: ['dashboard', 'projects', 'inventory', 'materialsRequest', 'personnel']},
-        {role: 'engineer', access: ['dashboard']},
-        {role: 'foreman', access: ['dashboard']},
-        {role: 'project manager', access: ['dashboard']}
+        {role: 'admin', access: ['dashboard', 'projects', 'inventory', 'materialsRequest', 'personnel', 'logs']},
+        {role: 'engineer', access: ['dashboard', 'logs']},
+        {role: 'foreman', access: ['dashboard', 'logs']},
+        {role: 'project manager', access: ['dashboard', 'logs']}
     ];
     const userRole = roles.find(obj => obj.role === req.user.role);
     if(userRole) return res.status(200).json(userRole.access);
@@ -157,7 +157,7 @@ async function isUserExist(email) {
 
 async function getAllMilestones(res, projectId) {
     try {
-        const [result] = await pool.execute('SELECT pm.*, SUM(t.weights / 100 * t.task_progress) AS milestone_progress FROM tasks t JOIN project_milestones pm ON pm.id = t.milestone_id WHERE pm.project_id = ? GROUP BY pm.id;', [projectId]);
+        const [result] = await pool.execute('SELECT pm.*, IFNULL(SUM(t.weights / 100 * t.task_progress), 0) AS milestone_progress FROM project_milestones pm LEFT JOIN tasks t ON pm.id = t.milestone_id WHERE pm.project_id = ? GROUP BY pm.id;', [projectId]);
         return result;
     } catch (error) {
         failed(res, 500, `Database Error: ${error}`);
@@ -166,7 +166,7 @@ async function getAllMilestones(res, projectId) {
 
 async function getMilestone(res, milestoneId) {
     try {
-        const [result] = await pool.execute('SELECT pm.*, SUM(t.weights / 100 * t.task_progress) AS milestone_progress FROM tasks t JOIN project_milestones pm ON pm.id = t.milestone_id WHERE pm.id = ? GROUP BY pm.id;', [milestoneId]);
+        const [result] = await pool.execute('SELECT pm.*, IFNULL(SUM(t.weights / 100 * t.task_progress), 0) AS milestone_progress FROM project_milestones pm LEFT JOIN tasks t ON pm.id = t.milestone_id WHERE pm.id = ? GROUP BY pm.id;', [milestoneId]);
         return result[0];
     } catch (error) {
         failed(res, 500, `Database Error: ${error}`);
@@ -277,6 +277,268 @@ async function recentMaterialsRequest(res) {
     }
 }
 
+async function createLogDetails(res, type, action, logId, logDetailsObj) {
+    try {
+        let logDetailQuery;
+        let logDetailParams = [];
+        if(type === 'non-item') {
+            if(action === 'edit') {
+                for (const logDetailObj of logDetailsObj) {
+                    logDetailQuery = "INSERT INTO log_edit_details (log_id, var_name, old_value, new_value, label) VALUES (?, ?, ?, ?, ?)"
+                    logDetailParams = [logId, logDetailObj.varName, logDetailObj.oldVal, logDetailObj.newVal, logDetailObj.label];
+                    const [result] = await pool.execute(logDetailQuery, logDetailParams);    
+                }          
+            } else {
+
+            }
+        } else {
+            if(action === 'edit') {
+
+            } else {
+
+            }
+        }
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+}
+
+async function createLogs(res, req, body) {
+    try {
+        const [result] = await pool.execute("INSERT INTO logs (log_name, project_id, type, action, created_by) VALUES (?, ?, ?, ?, ?)", [body.logName, body.projectId, body.type, body.action, req.user.id]);
+        await createLogDetails(res, body.type, body.action, result.insertId, body.logDetails);
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+}
+
+function filterQuery(defaultQuery, role, assignedProjects, filters, joinAbr = null) {
+    let filteredQuery = defaultQuery;
+    let filterParams = [];
+    
+    // Normalize project and category filters to arrays if they are single strings
+    let projectsFilter = filters.project;
+    if (projectsFilter && projectsFilter !== "all" && !Array.isArray(projectsFilter)) {
+        projectsFilter = [projectsFilter];
+    }
+    let categoryFilter = filters.category;
+    if (categoryFilter && categoryFilter !== "all" && !Array.isArray(categoryFilter)) {
+        categoryFilter = [categoryFilter];
+    }
+
+    if(assignedProjects.length === 0 && role !== "admin") {
+        filteredQuery += ` WHERE ${joinAbr}project_id = 'NULL'`;
+        return { filteredQuery, filterParams };
+    }
+    if(assignedProjects) filterParams = assignedProjects;
+    if(role !== 'admin') {
+        const placeholders = filterParams.map(() => "?").join(",");
+        filteredQuery += ` WHERE ${joinAbr}project_id IN(${placeholders})`;
+    } else {
+        filteredQuery += ` WHERE ${joinAbr}project_id IN (SELECT project_id FROM projects)`;
+        filterParams = [];
+    }
+    
+    if(filters.name && filters.name !== "all") {
+        if(filters.searchType === 'username') {
+            filteredQuery += (` AND u.full_name LIKE ?`);
+            filterParams.push(`${filters.name}%`);
+        } else if(filters.searchType === 'itemName') {
+            filteredQuery += (` AND i.item_name LIKE ?`);
+            filterParams.push(`${filters.name}%`);
+        }
+    }
+    
+    if(projectsFilter && projectsFilter !== "all") {
+        const projectPlaceholders = projectsFilter.map(() => "?").join(",");
+        for (const project of projectsFilter) {
+            filterParams.push(project);
+        }
+        filteredQuery += (` AND ${joinAbr}project_id IN(${projectPlaceholders})`);
+    }
+    
+    if(filters.dateFrom && filters.dateFrom !== "all") {
+        filteredQuery += (` AND ${joinAbr}created_at >= ?`);
+        filterParams.push(filters.dateFrom);
+    }
+    if(filters.dateTo && filters.dateTo !== "all") {
+        filteredQuery += (` AND ${joinAbr}created_at <= ?`);
+        filterParams.push(filters.dateTo);
+    }
+    
+    if(categoryFilter && categoryFilter !== "all") {
+        const categoryPlaceholders = categoryFilter.map(() => "?").join(",");
+        for (const category of categoryFilter) {
+            filterParams.push(category);
+        }
+        filteredQuery += (` AND i.item_category IN(${categoryPlaceholders})`);
+    }
+
+    if(filters.recent) {
+        if(filters.recent === "newest") {
+            filteredQuery += (` ORDER BY ${joinAbr}created_at DESC`);
+        } else {
+            filteredQuery += (` ORDER BY ${joinAbr}created_at ASC`);
+        }
+    } else {
+        filteredQuery += (` ORDER BY ${joinAbr}created_at DESC`);
+    }
+
+    return {filteredQuery, filterParams};
+}
+
+async function getLogs(res, role, assignedProjects, filters) {
+    const {filteredQuery, filterParams} = filterQuery("SELECT l.*, p.project_name, u.full_name FROM logs l JOIN projects p ON l.project_id = p.project_id JOIN users u ON l.created_by = u.user_id", role, assignedProjects, filters, 'l.');
+    // console.log(`Eto query: ${filteredQuery}`);
+    // console.log(`Eto params: ${filterParams}`);
+    try {
+        const [result] = await pool.execute(filteredQuery, filterParams);
+        // console.log(`eto pool query: ${filteredQuery}`);
+        // console.log(`eto result: `, result);
+        return result;
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+}
+
+async function updateTaskWeights(res, body) {
+    try {
+        let allUpdated = true;
+        for (const task of body) {
+            const [result] =  await pool.execute("UPDATE tasks SET weights = ? WHERE id = ?", [task.value, task.id]);
+            if(!result.affectedRows > 0) allUpdated = false;
+        }
+        if(allUpdated) return; 
+        return res.status(500).json({message: "Failed to update all the weights"});
+        
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+}
+
+async function updateMilestoneWeights(res, body) {
+    try {
+        let allUpdated = true;
+        for (const milestone of body) {
+            const [result] =  await pool.execute("UPDATE project_milestones SET weights = ? WHERE id = ?", [milestone.value, milestone.id]);
+            if(!result.affectedRows > 0) allUpdated = false;
+        }
+        if(allUpdated) return; 
+        return res.status(500).json({message: "Failed to update all the weights"});
+        
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+}
+
+async function updateMilestone(res, body) {
+    try {
+        const [result] = await pool.execute("UPDATE project_milestones SET milestone_name = ?, milestone_description = ?, duedate = ?", [body.name, body.description, body.duedate]);
+        return result;
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+}
+
+async function updateTask(res, body) {
+    try {
+        const [result] = await pool.execute("UPDATE tasks SET task_name = ?, task_progress = ?", [body.name, body.progress]);
+        return result;
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+}
+
+async function getSelection(res, req, type) {
+    try {
+        let selectionQuery;
+        if(type === 'project') {
+            if(req.user.role === 'admin') {
+                selectionQuery = 'SELECT project_id AS id, project_name AS name FROM projects';
+                const [result] = await pool.execute(selectionQuery);
+                return result;
+            } else {
+                const projectPlaceholders = req.user.projects.map(() => "?").join(",");
+                selectionQuery = `SELECT project_id AS id, project_name AS name FROM projects WHERE project_id IN(${projectPlaceholders})`;
+                const [result] = await pool.execute(selectionQuery, req.user.projects);
+                return result;
+            }
+        }
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+}
+
+async function getCategories(res) {
+    try {
+        const [result] = await pool.execute('SELECT DISTINCT item_category AS id, item_category AS name FROM items');
+        return result;
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+}
+
+app.get('/api/selection/:type', authMiddleware(['all']), async(req, res) => {
+    if (req.params.type === 'category') {
+        res.status(200).json(await getCategories(res));
+    } else {
+        res.status(200).json(await getSelection(res, req, req.params.type));    
+    }
+});
+
+app.post('/api/edit/tasks', authMiddleware(['admin', 'engineer', 'project manager']), async(req, res) => {
+    await updateTask(res, req.body);
+    res.status(200).json({message: 'Saved successfully'});
+});
+
+app.post('/api/edit/milestones', authMiddleware(['admin', 'engineer', 'project manager']), async(req, res) => {
+    await updateMilestone(res, req.body);
+    res.status(200).json({message: 'Saved successfully'});
+}); 
+
+app.post('/api/edit/milestones/weights', authMiddleware(['admin', 'engineer', 'project manager']), async(req, res) => {
+    await updateMilestoneWeights(res, req.body);
+    res.status(200).json({message: 'Saved weights successfully'});
+});
+
+app.post('/api/edit/tasks/weights', authMiddleware(['admin', 'engineer', 'project manager']), async(req, res) => {
+    await updateTaskWeights(res, req.body);
+    res.status(200).json({message: 'Saved weights successfully'});
+});
+
+app.get('/api/logs', authMiddleware(['all']), async(req, res) => {
+    const filters = req.query;
+    //console.log(`These are the filters`, filters);
+    res.status(200).json(await getLogs(res, req.user.role, req.user.projects, filters));
+});
+
+app.post('/api/logs', authMiddleware(['all']), async(req, res) => {
+    await createLogs(res, req, req.body)
+    res.status(200).json({message: 'success'});
+})
+
+app.get('/api/logs/:logId/details', authMiddleware(['all']), async(req, res) => {
+    const { logId } = req.params;
+    try {
+        const [logResult] = await pool.execute("SELECT l.*, p.project_name, u.full_name FROM logs l JOIN projects p ON l.project_id = p.project_id JOIN users u ON l.created_by = u.user_id WHERE l.log_id = ?", [logId]);
+        if (logResult.length === 0) {
+            return failed(res, 404, 'Log not found');
+        }
+        const log = logResult[0];
+
+        if (log.action === 'edit') {
+            const [detailsResult] = await pool.execute("SELECT * FROM log_edit_details WHERE log_id = ?", [logId]);
+            log.details = detailsResult;
+        } else {
+            const [detailsResult] = await pool.execute("SELECT * FROM log_details WHERE log_id = ?", [logId]);
+            log.details = detailsResult;
+        }
+        
+        res.status(200).json(log);
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+});
 
 app.get('/admin/dashboard', authMiddleware(['admin']), (req, res) => {
     if(req.user.role !== "admin") return failed(res, 401, "Authorization Failed");
@@ -325,7 +587,7 @@ app.post('/registerUser', limitRegistration, async(req, res) => {
 });
 
 app.post('/login', async(req, res) => {
-    if(!req.body) return showNotFound(res);;
+    if(!req.body) return showNotFound(res);
     const { email, password } = req.body;
     try {
         const [result] = await pool.execute(
@@ -334,10 +596,15 @@ app.post('/login', async(req, res) => {
         );
         if(result.length === 0) return failed(res, 401, "Invalid Credentials");
         const user = result[0];
+        const projects = [];
+        const [assignedProjects] = await pool.execute('SELECT project_id FROM assigned_projects WHERE user_id = ?', [user.user_id]);
+        for (const assigned of assignedProjects) {
+            projects.push(assigned.project_id);
+        }
         const match = await bcrypt.compare(password, user.password);
         if(!match) return failed(res, 401, "Invalid Credentials");
         const isProduction = process.env.DEV_ENV === "production";
-        const token = jwt.sign({id: user.user_id, role: user.role}, JWT_KEY, {expiresIn: "15m"});
+        const token = jwt.sign({id: user.user_id, role: user.role, projects: user.role !== "admin" ? projects : []}, JWT_KEY, {expiresIn: "15m"});
         res.cookie("token", token, {
             httpOnly: true,
             secure: isProduction,
@@ -375,6 +642,243 @@ app.get('/api/tasks/:milestoneId', authMiddleware(['all']), async(req, res) => {
 
 app.get('/api/task/:taskId', authMiddleware(['all']), async(req, res) => {
     res.status(200).json(await getTask(res, req.params.taskId));
+});
+
+// Milestones
+app.post('/api/milestones', authMiddleware(['admin', 'engineer', 'project manager']), async (req, res) => {
+    const { milestone_name, milestone_description, project_id, duedate, weights } = req.body;
+    const { id: userId } = req.user;
+
+    if (!milestone_name || !project_id || !duedate) {
+        return failed(res, 400, 'Missing required fields: milestone_name, project_id, and duedate are required.');
+    }
+
+    try {
+        const [result] = await pool.execute(
+            'INSERT INTO project_milestones (milestone_name, milestone_description, project_id, duedate, weights, updated_by) VALUES (?, ?, ?, ?, ?, ?)',
+            [milestone_name, milestone_description, project_id, duedate, weights || 0, userId]
+        );
+        const milestoneId = result.insertId;
+
+        // Create a log entry
+        const logData = {
+            logName: `created milestone ${milestone_name}`,
+            projectId: project_id,
+            type: 'non-item',
+            action: 'create',
+        };
+        await createLogs(res, req, logData);
+
+        const newMilestone = await getMilestone(res, milestoneId);
+        res.status(201).json(newMilestone);
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+});
+
+app.put('/api/milestones/:milestoneId', authMiddleware(['admin', 'engineer', 'project manager']), async (req, res) => {
+    const { milestoneId } = req.params;
+    const { milestone_name, milestone_description, duedate, weights, status } = req.body;
+    const { id: userId } = req.user;
+
+    try {
+        const oldMilestone = await getMilestone(res, milestoneId);
+        if (!oldMilestone) {
+            return failed(res, 404, 'Milestone not found.');
+        }
+
+        const updatedFields = {
+            milestone_name: milestone_name !== undefined ? milestone_name : oldMilestone.milestone_name,
+            milestone_description: milestone_description !== undefined ? milestone_description : oldMilestone.milestone_description,
+            duedate: duedate !== undefined ? duedate : oldMilestone.duedate,
+            weights: weights !== undefined ? weights : oldMilestone.weights,
+            status: status !== undefined ? status : oldMilestone.status,
+        };
+
+        await pool.execute(
+            'UPDATE project_milestones SET milestone_name = ?, milestone_description = ?, duedate = ?, weights = ?, status = ?, updated_by = ? WHERE id = ?',
+            [updatedFields.milestone_name, updatedFields.milestone_description, updatedFields.duedate, updatedFields.weights, updatedFields.status, userId, milestoneId]
+        );
+
+        const logDetails = [];
+        if (milestone_name !== undefined && milestone_name !== oldMilestone.milestone_name) {
+            logDetails.push({ varName: 'milestone_name', oldVal: oldMilestone.milestone_name, newVal: milestone_name, label: 'Milestone Name' });
+        }
+        if (milestone_description !== undefined && milestone_description !== oldMilestone.milestone_description) {
+            logDetails.push({ varName: 'milestone_description', oldVal: oldMilestone.milestone_description, newVal: milestone_description, label: 'Milestone Description' });
+        }
+        if (duedate !== undefined && duedate !== oldMilestone.duedate) {
+            logDetails.push({ varName: 'duedate', oldVal: oldMilestone.duedate, newVal: duedate, label: 'Due Date' });
+        }
+        if (weights !== undefined && weights !== oldMilestone.weights) {
+            logDetails.push({ varName: 'weights', oldVal: oldMilestone.weights, newVal: weights, label: 'Weights' });
+        }
+        if (status !== undefined && status !== oldMilestone.status) {
+            logDetails.push({ varName: 'status', oldVal: oldMilestone.status, newVal: status, label: 'Status' });
+        }
+
+        if (logDetails.length > 0) {
+            const logData = {
+                logName: `updated milestone ${oldMilestone.milestone_name}`,
+                projectId: oldMilestone.project_id,
+                type: 'non-item',
+                action: 'edit',
+                logDetails: logDetails
+            };
+            await createLogs(res, req, logData);
+        }
+
+        const updatedMilestone = await getMilestone(res, milestoneId);
+        res.status(200).json(updatedMilestone);
+
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+});
+
+app.delete('/api/milestones/:milestoneId', authMiddleware(['admin', 'engineer', 'project manager']), async (req, res) => {
+    const { milestoneId } = req.params;
+
+    try {
+        const milestone = await getMilestone(res, milestoneId);
+        if (!milestone) {
+            return failed(res, 404, 'Milestone not found.');
+        }
+
+        await pool.execute('DELETE FROM project_milestones WHERE id = ?', [milestoneId]);
+
+        const logData = {
+            logName: `deleted milestone ${milestone.milestone_name}`,
+            projectId: milestone.project_id,
+            type: 'non-item',
+            action: 'delete',
+        };
+        await createLogs(res, req, logData);
+
+        res.status(200).json({ status: 'success', message: 'Milestone deleted successfully.' });
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+});
+
+// Tasks
+app.post('/api/tasks', authMiddleware(['admin', 'engineer', 'project manager']), async (req, res) => {
+    const { milestone_id, task_name, duedate, weights } = req.body;
+    const { id: userId } = req.user;
+
+    if (!milestone_id || !task_name || !duedate) {
+        return failed(res, 400, 'Missing required fields: milestone_id, task_name, and duedate are required.');
+    }
+
+    try {
+        const [result] = await pool.execute(
+            'INSERT INTO tasks (milestone_id, task_name, duedate, weights, updated_by) VALUES (?, ?, ?, ?, ?)',
+            [milestone_id, task_name, duedate, weights || 0, userId]
+        );
+        const taskId = result.insertId;
+
+        const milestone = await getMilestone(res, milestone_id);
+
+        const logData = {
+            logName: `created task ${task_name} for milestone ${milestone.milestone_name}`,
+            projectId: milestone.project_id,
+            type: 'non-item',
+            action: 'create',
+        };
+        await createLogs(res, req, logData);
+
+        const newTask = await getTask(res, taskId);
+        res.status(201).json(newTask);
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+});
+
+app.put('/api/tasks/:taskId', authMiddleware(['admin', 'engineer', 'project manager']), async (req, res) => {
+    const { taskId } = req.params;
+    const { task_name, task_progress, status, duedate, weights } = req.body;
+    const { id: userId } = req.user;
+
+    try {
+        const oldTask = await getTask(res, taskId);
+        if (!oldTask) {
+            return failed(res, 404, 'Task not found.');
+        }
+
+        const updatedFields = {
+            task_name: task_name !== undefined ? task_name : oldTask.task_name,
+            task_progress: task_progress !== undefined ? task_progress : oldTask.task_progress,
+            status: status !== undefined ? status : oldTask.status,
+            duedate: duedate !== undefined ? duedate : oldTask.duedate,
+            weights: weights !== undefined ? weights : oldTask.weights,
+        };
+
+        await pool.execute(
+            'UPDATE tasks SET task_name = ?, task_progress = ?, status = ?, duedate = ?, weights = ?, updated_by = ? WHERE id = ?',
+            [updatedFields.task_name, updatedFields.task_progress, updatedFields.status, updatedFields.duedate, updatedFields.weights, userId, taskId]
+        );
+
+        const milestone = await getMilestone(res, oldTask.milestone_id);
+        const logDetails = [];
+        if (task_name !== undefined && task_name !== oldTask.task_name) {
+            logDetails.push({ varName: 'task_name', oldVal: oldTask.task_name, newVal: task_name, label: 'Task Name' });
+        }
+        if (task_progress !== undefined && task_progress !== oldTask.task_progress) {
+            logDetails.push({ varName: 'task_progress', oldVal: oldTask.task_progress, newVal: task_progress, label: 'Task Progress' });
+        }
+        if (status !== undefined && status !== oldTask.status) {
+            logDetails.push({ varName: 'status', oldVal: oldTask.status, newVal: status, label: 'Status' });
+        }
+        if (duedate !== undefined && duedate !== oldTask.duedate) {
+            logDetails.push({ varName: 'duedate', oldVal: oldTask.duedate, newVal: duedate, label: 'Due Date' });
+        }
+        if (weights !== undefined && weights !== oldTask.weights) {
+            logDetails.push({ varName: 'weights', oldVal: oldTask.weights, newVal: weights, label: 'Weights' });
+        }
+
+        if (logDetails.length > 0) {
+            const logData = {
+                logName: `updated task ${oldTask.task_name} from milestone ${milestone.milestone_name}`,
+                projectId: milestone.project_id,
+                type: 'non-item',
+                action: 'edit',
+                logDetails: logDetails
+            };
+            await createLogs(res, req, logData);
+        }
+
+        const updatedTask = await getTask(res, taskId);
+        res.status(200).json(updatedTask);
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+});
+
+app.delete('/api/tasks/:taskId', authMiddleware(['admin', 'engineer', 'project manager']), async (req, res) => {
+    const { taskId } = req.params;
+
+    try {
+        const task = await getTask(res, taskId);
+        if (!task) {
+            return failed(res, 404, 'Task not found.');
+        }
+
+        const milestone = await getMilestone(res, task.milestone_id);
+
+        await pool.execute('DELETE FROM tasks WHERE id = ?', [taskId]);
+
+        const logData = {
+            logName: `deleted task ${task.task_name} from milestone ${milestone.milestone_name}`,
+            projectId: milestone.project_id,
+            type: 'non-item',
+            action: 'delete',
+        };
+        await createLogs(res, req, logData);
+
+        res.status(200).json({ status: 'success', message: 'Task deleted successfully.' });
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
 });
 
 app.get('/api/getProjectCard/:projectId', authMiddleware(['all']), async(req, res) => {

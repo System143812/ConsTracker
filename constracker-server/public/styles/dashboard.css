@@ -219,7 +219,7 @@ body {
     padding: 1rem 1rem;
     margin: 1rem;
     gap: 1rem;
-    background-color: rgba(23, 63, 112, 0.15);
+    background-color: var(--blue-bg);
     border-radius: 5px;
 }
 
@@ -290,7 +290,7 @@ body {
 
 .sidebar-tabs, .sidebar-project-tabs {
     display: flex;
-    gap: 0.5rem;
+    gap: 0.75rem;
     align-items: center;
     padding: 0.75rem 1.5rem;
     padding-right: 2rem;
@@ -317,6 +317,7 @@ body {
 
 .tab-names {
     display: flex;
+    /* font-weight: 500; */
     min-width: 0;
     align-items: center;
     flex: 1; 
@@ -325,6 +326,7 @@ body {
 .tab-text {
     flex: 1;
     min-width: 0;
+    /* font-weight: 500; */
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -542,6 +544,82 @@ body {
     /* overflow-y: auto; */
 }
 
+#logsBodyContent {
+    display: flex;
+    padding-top: 0.25rem;
+    padding-bottom: 0;
+    flex: 1;
+    overflow-y: visible;
+}
+
+#logs-main-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    overflow-y: visible;
+}
+
+#logs-list-container {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    height: fit-content;
+    padding: 0 0.5rem;
+    gap: 0.5rem;
+}
+
+.log-cards {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    padding: 1rem;
+    gap: 1rem;
+    border-radius: 5px;
+    border: solid var(--light-border) 1px;
+}
+
+.log-card-headers {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+}
+
+.log-project-names, .log-dates {
+    font-size: 11px;
+    color: var(--grayed-text);
+}
+
+.log-card-bodies {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.5rem 0.5rem;
+    border-top: solid var(--light-border) 1px;
+    border-bottom: solid var(--light-border) 1px;
+}
+
+.log-card-names {
+    font-size: 12px;
+    font-weight: 600;
+    color: #4e4e4e;
+}
+
+.log-card-icons {
+    min-width: 32px;
+    min-height: 32px;
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+    background-color: var(--blue-border);
+    background-image: url('../assets/icons/editWhite.png'); /* Default edit icon */
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: 12px 12px;
+}
+
+
+
 #noProjectBodyContainer {
     display: flex;
     flex-direction: column;
@@ -600,11 +678,11 @@ body {
 }
 
 .selection-tabs:hover {
-    background-color: rgba(204, 204, 204, 0.2);
+    background-color: var(--blue-bg);
 }
 
 .selection-tabs.selected {
-    color: var(--default-black-color);
+    color: var(--blue-border);
     box-shadow: inset 0 -2px 0 0 var(--blue-border);
 }
 
@@ -637,6 +715,7 @@ body {
 #milestoneHeaderTitle {
     display: flex;
     gap: 0.25rem;
+    max-width: 50%;
     flex-direction: column;
 }
 
@@ -651,17 +730,29 @@ body {
     font-size: 12px;
 }
 
-#milestoneAddBtn {
+#milestoneAddBtn, #taskAddBtn {
     background-color: var(--blue-border);
     color: var(--white-ishy-text);
     font-size: 12px;
 }
 
-#milestoneAddIcon {
+#taskAddBtn {
+    padding: 0.5rem 0.75rem;
+    border-radius: 5px;
+    font-size: 10px;
+    border: none;
+}
+
+#milestoneAddIcon, #taskAddIcon {
     background-image: url('/assets/icons/addWhite.png');
 }
 
-#milestoneAddText {
+#taskAddIcon {
+    width: 10px;
+    height: 10px;
+}
+
+#milestoneAddText, #taskAddText {
     color: var(--white-ishy-text);
 }
 
@@ -669,7 +760,7 @@ body {
     display: flex;
     flex-direction: column;
     flex: 1;
-    padding: 0 2rem;
+    padding: 1rem 2rem;
     /* overflow-y: auto; */
 }
 
@@ -733,7 +824,7 @@ body {
     border-radius: 10px;
     border-top-right-radius: 0px;
     padding: 0.5rem;
-    box-shadow: var(--btn-shadow);
+    box-shadow: none;
     transform: scale(100%);
     pointer-events: auto;
     cursor: pointer;
@@ -742,7 +833,7 @@ body {
 
 .milestone-cards:hover {
     transform: scale(90%);
-    box-shadow: none;
+    box-shadow: var(--btn-shadow);
 }
 
 .milestone-cards.lefty {
@@ -791,23 +882,29 @@ body {
 }
 
 .milestone-card-view {
+    display: flex;
+    width: fit-content;
+    margin-left: auto;
     cursor: pointer;
-    font-weight: 600;
+    gap: 0.25rem;
     padding: 0.25rem 0;
-    color: var(--blue-border);
-    border-bottom: solid var(--gray-no-opacity) 1px;
-    transform: scale(100%);
+    opacity: 1;
+    transform: scale(90%);
     transition: all 0.15s ease;
 }
 
 .milestone-card-view:hover {
-    transform: scale(90%);
-    border-bottom: solid var(--blue-border) 1px;
+    transform: scale(85%);
+    opacity: 0.9;
 }
 
 .empty-content-placeholder {
     display: flex;
     flex-direction: column;
+    flex: 1;
+    padding: 2rem 0;
+    align-self: center;
+    justify-self: center;
     height: 100%;
     width: 100%;
     align-items: center;
@@ -1207,4 +1304,139 @@ body {
     #profileName {
         display: none;
     }
+}
+
+.log-cards {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    padding: 0.5rem 1rem; /* Thinner padding */
+    gap: 0.5rem; /* Thinner gap */
+    border-radius: 5px;
+    border: solid var(--light-border) 1px;
+    margin-bottom: 0.5rem; /* Separator between cards */
+}
+
+.log-card-headers {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem; /* Thinner gap */
+    font-size: 10px; /* Thinner font */
+}
+
+.log-project-names, .log-dates {
+    font-size: 10px; /* Thinner font */
+    color: var(--grayed-text);
+}
+
+.log-card-bodies {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem; /* Thinner gap */
+    padding: 0.5rem 0.5rem; /* Thinner padding */
+    border-top: solid var(--light-border) 1px;
+    border-bottom: solid var(--light-border) 1px;
+}
+
+.log-card-icons {
+    min-width: 24px; /* Thinner icon size */
+    min-height: 24px; /* Thinner icon size */
+    width: 24px;
+    height: 24px;
+    border-radius: 5px;
+    background-color: var(--blue-border);
+    background-image: url('../assets/icons/editWhite.png'); /* Default edit icon */
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: 10px 10px; /* Thinner icon size */
+}
+
+.log-card-names {
+    font-size: 11px; /* Thinner font */
+    font-weight: 600;
+    color: #4e4e4e;
+    flex: 1; /* Allow to take space */
+}
+
+.log-card-footers {
+    display: flex;
+    justify-content: flex-end; /* Align button to right */
+}
+
+.log-details-btn { /* Specific class for the details button if needed */
+    padding: 0.25rem 0.5rem; /* Thinner button padding */
+    font-size: 10px; /* Thinner button font */
+    border-radius: 3px;
+}
+
+.log-details-btn .btn-texts {
+    font-size: 10px; /* Thinner button font */
+}
+
+/* Styles for scrolling log list */
+.scrollable-log-list-wrapper {
+    flex: 1; /* Take up remaining vertical space */
+    overflow-y: auto; /* Enable vertical scrolling */
+    padding-top: 0.5rem; /* Add some padding above the logs */
+}
+
+.log-detail-header-content {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem; /* Thinner gap */
+    padding: 0.5rem 1rem; /* Thinner padding */
+    border-bottom: 1px solid var(--light-border);
+}
+
+.log-detail-title {
+    font-size: 16px; /* Thinner font */
+    font-weight: 600;
+}
+
+.log-detail-subtitle {
+    color: var(--grayed-text);
+    font-size: 12px; /* Thinner font */
+}
+
+.log-detail-by-date {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.5rem 1rem; /* Thinner padding */
+    font-size: 11px; /* Thinner font */
+    color: var(--grayed-text);
+}
+
+.log-detail-changes-container {
+    padding: 0.5rem 1rem; /* Thinner padding */
+    border-top: 1px solid var(--light-border);
+}
+
+.log-detail-changes-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem; /* Thinner margin */
+}
+
+.log-detail-changes-title {
+    font-weight: 600;
+    font-size: 12px; /* Thinner font */
+}
+
+.log-detail-show-old-toggle {
+    color: var(--blue-border);
+    cursor: pointer;
+    font-size: 11px; /* Thinner font */
+    font-weight: 600;
+}
+
+.log-detail-changes-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem; /* Thinner gap */
+}
+
+.log-change-entry {
+    font-size: 12px; /* Thinner font */
 }
