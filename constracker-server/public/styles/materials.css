@@ -181,6 +181,14 @@
     font-size: 1rem;
 }
 
+/* Filter Overlay Radio Button Gaps */
+.radio-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem; /* Adjust as needed */
+}
+
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
     .materials-list-container {

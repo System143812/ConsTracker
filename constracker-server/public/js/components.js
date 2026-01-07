@@ -93,6 +93,10 @@ function filterByName(applyFilterCallback, filtersForm, searchType) {
 }
 
 async function filterByProject(applyFilterCallback, filtersForm) {
+    const filterProjectGroup = div('filterProjectGroup', 'filter-group');
+    const title = span('filterProjectTitle', 'filter-title');
+    title.textContent = 'Project';
+
     const projectOptionData = await fetchData(`/api/selection/project`);
     if(projectOptionData === 'error') return;
     
@@ -106,7 +110,9 @@ async function filterByProject(applyFilterCallback, filtersForm) {
             applyFilterCallback(filteredUrlParams);
         });
     }
-    return filterProjectContainer;
+
+    filterProjectGroup.append(title, filterProjectContainer);
+    return filterProjectGroup;
 }
 
 async function createSortFilter(applyFilterCallback, filtersForm, defaultSort = 'newest') {
@@ -188,6 +194,10 @@ async function filterByDateTo(applyFilterCallback, filtersForm) {
 }
 
 async function filterByCategory(applyFilterCallback, filtersForm) {
+    const filterCategoryGroup = div('filterCategoryGroup', 'filter-group');
+    const title = span('filterCategoryTitle', 'filter-title');
+    title.textContent = 'Category';
+
     const categoryOptionData = await fetchData(`/api/selection/category`);
     if(categoryOptionData === 'error') return;
     
@@ -208,7 +218,9 @@ async function filterByCategory(applyFilterCallback, filtersForm) {
             applyFilterCallback(filteredUrlParams);
         });
     }
-    return filterCategoryContainer;
+
+    filterCategoryGroup.append(title, filterCategoryContainer);
+    return filterCategoryGroup;
 }
 
 export async function createFilterContainer(applyFilterCallback, searchBarPlaceholder = null, defaultFilterList, searchBarType = null, defaultSort = 'newest') {
@@ -253,33 +265,19 @@ export async function createFilterContainer(applyFilterCallback, searchBarPlaceh
     
     filtersForm.append(filterBtnContainer);
 
-    // Create sort section
-    const sortSectionHeader = span('filterSortSectionHeader', 'filter-section-header');
-    sortSectionHeader.innerText = 'Sort';
-    filterOverlayBody.append(sortSectionHeader);
+    // Defined Order
+    const orderedFilters = ['project', 'category', 'dateFrom', 'dateTo', 'sort'];
 
-    // Append sort filters
-    if (defaultFilterList.sort) { // Assuming 'sort' is part of defaultFilterList for this section
-        const sortElement = await filtersObj['sort'].filterFunction(applyFilterCallback, filtersForm);
-        if (sortElement) {
-            filterOverlayBody.append(sortElement);
-        }
-    }
-
-
-    // Create filter section
-    const filterSectionHeader = span('filterFilterSectionHeader', 'filter-section-header');
-    filterSectionHeader.innerText = 'Filters';
-    filterOverlayBody.append(filterSectionHeader);
-
-    for (const filterName of filterList) {
-        if(filterName !== 'name' && filterName !== 'sort') { // Exclude 'name' and 'sort' filters here
+    for (const filterName of orderedFilters) {
+        if (defaultFilterList[filterName]) {
             const filterElement = await filtersObj[filterName].filterFunction(applyFilterCallback, filtersForm);
-            if (filterElement) { // Only append if the filter function returned an element
-                 filterOverlayBody.append(filterElement);
+            if (filterElement) {
+
+                filterOverlayBody.append(filterElement);
             }
         }
     }
+
 
     const filterBtnIcon = filterBtn.querySelector("#filterBtnIcon");
     filterBtn.addEventListener('click', () => {
