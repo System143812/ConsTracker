@@ -25,12 +25,13 @@
 /* Materials List Container (Grid for Cards) */
 .materials-list-container {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(280px, 320px)); /* Fixed max-width */
     gap: 1.5rem;
     width: 100%;
+    justify-content: center; /* Center the cards */
 }
 
-/* Material Card */
+/* Material Card - Modernized */
 .material-card {
     background-color: var(--card-background);
     border-radius: 10px;
@@ -38,92 +39,93 @@
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     display: flex;
     flex-direction: column;
-    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
-    height: 100%; /* Ensure cards take full height of their grid cell */
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    border: 1px solid var(--border-color);
 }
 
 .material-card:hover {
     transform: translateY(-5px);
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
 }
 
+/* Image Container */
 .material-image-container {
     width: 100%;
-    height: 180px; /* Fixed height for images */
+    height: 180px;
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    position: relative;
-    border-bottom: 1px solid var(--border-color);
+    background-color: #f0f2f5;
 }
 
 .material-image-container.default-image-bg {
-    background-size: 80%; /* Adjust size for default SVG */
-    background-color: var(--medium-gray); /* Fallback default bg color */
+    background-size: 50%;
 }
 
-
+/* Info Container */
 .material-info-container {
     padding: 1rem;
     display: flex;
     flex-direction: column;
-    flex-grow: 1; /* Allows info container to take up remaining space */
+    flex-grow: 1;
+    gap: 0.75rem; 
+}
+
+.material-title-status {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
     gap: 0.5rem;
+    margin-bottom: 0.5rem;
 }
 
 .material-name {
-    font-size: 1.25rem;
+    font-size: 1.2rem;
     font-weight: 600;
     color: var(--text-color);
-    margin-bottom: 0.25rem;
-    display: -webkit-box;
-    -webkit-line-clamp: 2; /* Limit to 2 lines */
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    line-height: 1.4;
 }
 
-.material-category,
-.material-supplier {
+.material-details {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
     font-size: 0.9rem;
     color: var(--text-color-light);
 }
 
-.material-size-price {
+.material-detail-item {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    margin-top: 0.5rem;
-    border-top: 1px solid var(--border-color);
-    padding-top: 0.5rem;
 }
 
-.material-size {
-    font-size: 0.9rem;
-    color: var(--text-color-light);
+.material-detail-item .label {
+    font-weight: 500;
+    color: var(--text-color);
 }
 
 .material-price {
-    font-size: 1.1rem;
+    font-size: 1.2rem;
     font-weight: 700;
     color: var(--blue-accent);
+    text-align: right;
+    margin-top: 0.5rem;
 }
 
+
+/* Status & Actions */
 .material-status-actions {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-top: 0.75rem;
-    padding-top: 0.75rem;
+    padding-top: 1rem;
+    margin-top: auto;
     border-top: 1px solid var(--border-color);
 }
 
 .material-status {
-    font-size: 0.85rem;
-    padding: 0.3em 0.6em;
+    font-size: 0.8rem;
+    padding: 0.3em 0.7em;
     border-radius: 5px;
     font-weight: 500;
 }
@@ -136,78 +138,12 @@
 .material-actions-container .solid-buttons {
     padding: 0.5rem 1rem;
     font-size: 0.8rem;
-    height: auto;
+    border-radius: 5px;
 }
 
 .material-actions-container .icon-buttons {
     width: 32px;
     height: 32px;
-    padding: 0;
+    border-radius: 5px;
     background-size: 50%;
-}
-
-/* Empty Placeholder Styling */
-.empty-placeholder-container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    padding: 2rem;
-    background-color: var(--card-background);
-    border-radius: 8px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-    width: 100%;
-    min-height: 200px;
-    gap: 1rem;
-}
-
-.empty-placeholder-container .empty-icon {
-    width: 80px;
-    height: 80px;
-    background-size: contain;
-    background-repeat: no-repeat;
-    background-position: center;
-    opacity: 0.6;
-}
-
-.empty-placeholder-container .empty-message {
-    font-size: 1.1rem;
-    color: var(--text-color-light);
-}
-
-.empty-placeholder-container .solid-buttons {
-    padding: 0.75rem 1.5rem;
-    font-size: 1rem;
-}
-
-/* Filter Overlay Radio Button Gaps */
-.radio-group {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem; /* Adjust as needed */
-}
-
-
-/* Responsive adjustments */
-@media (max-width: 768px) {
-    .materials-list-container {
-        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-    }
-
-    .materials-header-container {
-        flex-direction: column;
-        align-items: stretch;
-    }
-
-    .materials-header-container .solid-buttons,
-    .materials-filter-container {
-        width: 100%;
-    }
-}
-
-@media (max-width: 480px) {
-    .materials-list-container {
-        grid-template-columns: 1fr;
-    }
 }

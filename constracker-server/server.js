@@ -277,7 +277,7 @@ async function getAllProjects(res) {
 
 async function recentMaterialsRequest(res) {
     try {
-        const [result] = await pool.execute("SELECT mr.id AS request_id, p.project_name, mr.priority_level, u.full_name AS requested_by, COUNT(mri.id) AS item_count, SUM(mri.quantity * i.item_price) AS cost, mr.status, mr.created_at AS request_date FROM material_requests mr JOIN material_request_items mri ON mr.id = mri.mr_id JOIN projects p ON mr.project_id = p.project_id JOIN users u ON mr.user_id = u.user_id JOIN items i ON mri.item_id = i.item_id GROUP BY mr.id;");
+        const [result] = await pool.execute("SELECT mr.id AS request_id, p.project_name, mr.priority_level, u.full_name AS requested_by, COUNT(mri.id) AS item_count, SUM(mri.quantity * i.price) AS cost, mr.status, mr.created_at AS request_date FROM material_requests mr JOIN material_request_items mri ON mr.id = mri.mr_id JOIN projects p ON mr.project_id = p.project_id JOIN users u ON mr.user_id = u.user_id JOIN items i ON mri.item_id = i.item_id GROUP BY mr.id;");
         return result;
     } catch (error) {
         failed(res, 500, `Database Error: ${error}`);
@@ -322,6 +322,7 @@ async function getAllMaterials(res, role, assignedProjects, filters) {
             i.status, 
             i.image_url, 
             i.created_at,
+            i.created_by,
             mc.category_name,
             s.supplier_name,
             s.supplier_email,
@@ -398,12 +399,13 @@ async function getAllMaterials(res, role, assignedProjects, filters) {
 }
 
 
-async function createMaterial(res, materialData, userId) {
+async function createMaterial(res, materialData, userId, userRole) {
     const { item_name, item_description, price, unit_id, category_id, supplier_id, size, image_url } = materialData;
+    const status = userRole === 'engineer' ? 'approved' : 'pending';
     try {
         const [result] = await pool.execute(
-            'INSERT INTO items (item_name, item_description, price, unit_id, category_id, supplier_id, size, status, created_by, image_url) VALUES (?, ?, ?, ?, ?, ?, ?, "pending", ?, ?)',
-            [item_name, item_description, price, unit_id, category_id, supplier_id, size, userId, image_url || 'constrackerWhite.svg']
+            'INSERT INTO items (item_name, item_description, price, unit_id, category_id, supplier_id, size, status, created_by, image_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [item_name, item_description, price, unit_id, category_id, supplier_id, size, status, userId, image_url || 'constrackerWhite.svg']
         );
         return result.insertId;
     } catch (error) {
@@ -474,147 +476,98 @@ async function createLogDetails(res, type, action, logId, logDetailsObj) {
     }
 }
 
-async function createLogs(res, req, body) {
-    try {
-        const [result] = await pool.execute("INSERT INTO logs (log_name, project_id, type, action, created_by) VALUES (?, ?, ?, ?, ?)", [body.logName, body.projectId, body.type, body.action, req.user.id]);
-        await createLogDetails(res, body.type, body.action, result.insertId, body.logDetails);
-    } catch (error) {
-        failed(res, 500, `Database Error: ${error}`);
-    }
-}
-
-function filterQuery(defaultQuery, role, assignedProjects, filters, joinAbr = null) {
+function filterLogsQuery(defaultQuery, role, assignedProjects, filters, joinAbr = null) {
     let filteredQuery = defaultQuery;
     let filterParams = [];
-    
-    // Normalize project and category filters to arrays if they are single strings
+
     let projectsFilter = filters.project;
     if (projectsFilter && projectsFilter !== "all" && !Array.isArray(projectsFilter)) {
         projectsFilter = [projectsFilter];
     }
-    let categoryFilter = filters.category;
-    if (categoryFilter && categoryFilter !== "all" && !Array.isArray(categoryFilter)) {
-        categoryFilter = [categoryFilter];
-    }
 
-    if(assignedProjects.length === 0 && role !== "admin") {
-        filteredQuery += ` WHERE ${joinAbr}project_id = 'NULL'`;
+    if (assignedProjects.length === 0 && role !== "admin") {
+        filteredQuery += ` WHERE ${joinAbr}project_id IS NULL`;
         return { filteredQuery, filterParams };
     }
-    if(assignedProjects) filterParams = assignedProjects;
-    if(role !== 'admin') {
-        const placeholders = filterParams.map(() => "?").join(",");
-        filteredQuery += ` WHERE ${joinAbr}project_id IN(${placeholders})`;
+
+    if (role !== 'admin') {
+        const placeholders = assignedProjects.map(() => "?").join(",");
+        filteredQuery += ` WHERE ${joinAbr}project_id IN (${placeholders})`;
+        filterParams.push(...assignedProjects);
     } else {
-        filteredQuery += ` WHERE ${joinAbr}project_id IN (SELECT project_id FROM projects)`;
-        filterParams = [];
+        // No initial WHERE clause for admin, they can see all projects.
+        // A WHERE clause will be added if there are other filters.
     }
-    
-    if(filters.name && filters.name !== "all") {
-        if(filters.searchType === 'username') {
-            filteredQuery += (` AND u.full_name LIKE ?`);
-            filterParams.push(`${filters.name}%`);
-        } else if(filters.searchType === 'itemName') {
-            filteredQuery += (` AND i.item_name LIKE ?`);
-            filterParams.push(`${filters.name}%`);
-        }
+
+    let whereClauses = [];
+    if (role !== 'admin') {
+        // The initial WHERE clause is already added for non-admins
+    } else {
+        // For admin, we start adding WHERE clauses if filters exist
     }
-    
-    if(projectsFilter && projectsFilter !== "all") {
+
+    if (filters.name && filters.name !== "all") {
+        whereClauses.push(`u.full_name LIKE ?`);
+        filterParams.push(`${filters.name}%`);
+    }
+
+    if (projectsFilter && projectsFilter !== "all") {
         const projectPlaceholders = projectsFilter.map(() => "?").join(",");
-        for (const project of projectsFilter) {
-            filterParams.push(project);
-        }
-        filteredQuery += (` AND ${joinAbr}project_id IN(${projectPlaceholders})`);
+        whereClauses.push(`${joinAbr}project_id IN (${projectPlaceholders})`);
+        filterParams.push(...projectsFilter);
     }
-    
-    if(filters.dateFrom && filters.dateFrom !== "all") {
-        filteredQuery += (` AND ${joinAbr}created_at >= ?`);
+
+    if (filters.dateFrom && filters.dateFrom !== "all") {
+        whereClauses.push(`${joinAbr}created_at >= ?`);
         filterParams.push(filters.dateFrom);
     }
-    if(filters.dateTo && filters.dateTo !== "all") {
-        filteredQuery += (` AND ${joinAbr}created_at <= ?`);
+
+    if (filters.dateTo && filters.dateTo !== "all") {
+        whereClauses.push(`${joinAbr}created_at <= ?`);
         filterParams.push(filters.dateTo);
     }
     
-    if(categoryFilter && categoryFilter !== "all") {
-        const categoryPlaceholders = categoryFilter.map(() => "?").join(",");
-        for (const category of categoryFilter) {
-            filterParams.push(category);
+    if (whereClauses.length > 0) {
+        if (filteredQuery.includes('WHERE')) {
+            filteredQuery += ' AND ' + whereClauses.join(' AND ');
+        } else {
+            filteredQuery += ' WHERE ' + whereClauses.join(' AND ');
         }
-        filteredQuery += (` AND i.item_category IN(${categoryPlaceholders})`);
     }
 
-    if(filters.recent) {
-        if(filters.recent === "newest") {
-            filteredQuery += (` ORDER BY ${joinAbr}created_at DESC`);
+    if (filters.sort) {
+        if (filters.sort === "newest") {
+            filteredQuery += ` ORDER BY ${joinAbr}created_at DESC`;
         } else {
-            filteredQuery += (` ORDER BY ${joinAbr}created_at ASC`);
+            filteredQuery += ` ORDER BY ${joinAbr}created_at ASC`;
         }
     } else {
-        filteredQuery += (` ORDER BY ${joinAbr}created_at DESC`);
+        filteredQuery += ` ORDER BY ${joinAbr}created_at DESC`;
     }
 
-    return {filteredQuery, filterParams};
+    return { filteredQuery, filterParams };
 }
 
 async function getLogs(res, role, assignedProjects, filters) {
-    const {filteredQuery, filterParams} = filterQuery("SELECT l.*, p.project_name, u.full_name FROM logs l JOIN projects p ON l.project_id = p.project_id JOIN users u ON l.created_by = u.user_id", role, assignedProjects, filters, 'l.');
-    // console.log(`Eto query: ${filteredQuery}`);
-    // console.log(`Eto params: ${filterParams}`);
+    const { filteredQuery, filterParams } = filterLogsQuery(
+        "SELECT l.*, p.project_name, u.full_name FROM logs l LEFT JOIN projects p ON l.project_id = p.project_id JOIN users u ON l.created_by = u.user_id",
+        role,
+        assignedProjects,
+        filters,
+        'l.'
+    );
     try {
         const [result] = await pool.execute(filteredQuery, filterParams);
-        // console.log(`eto pool query: ${filteredQuery}`);
-        // console.log(`eto result: `, result);
         return result;
     } catch (error) {
         failed(res, 500, `Database Error: ${error}`);
     }
 }
 
-async function updateTaskWeights(res, body) {
+async function createLogs(res, req, body) {
     try {
-        let allUpdated = true;
-        for (const task of body) {
-            const [result] =  await pool.execute("UPDATE tasks SET weights = ? WHERE id = ?", [task.value, task.id]);
-            if(!result.affectedRows > 0) allUpdated = false;
-        }
-        if(allUpdated) return; 
-        return res.status(500).json({message: "Failed to update all the weights"});
-        
-    } catch (error) {
-        failed(res, 500, `Database Error: ${error}`);
-    }
-}
-
-async function updateMilestoneWeights(res, body) {
-    try {
-        let allUpdated = true;
-        for (const milestone of body) {
-            const [result] =  await pool.execute("UPDATE project_milestones SET weights = ? WHERE id = ?", [milestone.value, milestone.id]);
-            if(!result.affectedRows > 0) allUpdated = false;
-        }
-        if(allUpdated) return; 
-        return res.status(500).json({message: "Failed to update all the weights"});
-        
-    } catch (error) {
-        failed(res, 500, `Database Error: ${error}`);
-    }
-}
-
-async function updateMilestone(res, body) {
-    try {
-        const [result] = await pool.execute("UPDATE project_milestones SET milestone_name = ?, milestone_description = ?, duedate = ?", [body.name, body.description, body.duedate]);
-        return result;
-    } catch (error) {
-        failed(res, 500, `Database Error: ${error}`);
-    }
-}
-
-async function updateTask(res, body) {
-    try {
-        const [result] = await pool.execute("UPDATE tasks SET task_name = ?, task_progress = ?", [body.name, body.progress]);
-        return result;
+        const [result] = await pool.execute("INSERT INTO logs (log_name, project_id, type, action, created_by) VALUES (?, ?, ?, ?, ?)", [body.logName, body.projectId, body.type, body.action, req.user.id]);
+        await createLogDetails(res, body.type, body.action, result.insertId, body.logDetails);
     } catch (error) {
         failed(res, 500, `Database Error: ${error}`);
     }
@@ -642,7 +595,7 @@ async function getSelection(res, req, type) {
 
 async function getCategories(res) {
     try {
-        const [result] = await pool.execute('SELECT DISTINCT item_category AS id, item_category AS name FROM items');
+        const [result] = await pool.execute('SELECT category_id AS id, category_name AS name FROM material_categories ORDER BY name ASC');
         return result;
     } catch (error) {
         failed(res, 500, `Database Error: ${error}`);
@@ -1098,15 +1051,15 @@ app.get('/api/materials', authMiddleware(['all']), async(req, res) => {
 });
 
 app.post('/api/materials', authMiddleware(['admin', 'engineer', 'project manager', 'foreman']), async(req, res) => {
-    const { item_name, item_description, price, unit_id, category_id, supplier_id, size, image_url } = req.body;
-    const { id: userId } = req.user;
+    const { item_name } = req.body;
+    const { id: userId, role: userRole } = req.user;
 
-    if (!item_name || !price || !category_id || !supplier_id || !unit_id) {
+    if (!req.body.item_name || !req.body.price || !req.body.category_id || !req.body.supplier_id || !req.body.unit_id) {
         return failed(res, 400, 'Missing required fields: item_name, price, unit, category, and supplier are required.');
     }
 
     try {
-        const materialId = await createMaterial(res, req.body, userId);
+        const materialId = await createMaterial(res, req.body, userId, userRole);
         const logData = {
             logName: `created material ${item_name}`,
             projectId: 0, // Materials are not project-specific, using 0 or null as placeholder
@@ -1114,7 +1067,8 @@ app.post('/api/materials', authMiddleware(['admin', 'engineer', 'project manager
             action: 'create',
         };
         await createLogs(res, req, logData);
-        res.status(201).json({ status: 'success', message: 'Material created successfully, awaiting approval.', materialId });
+        const message = userRole === 'engineer' ? 'Material created and approved successfully.' : 'Material created successfully, awaiting approval.';
+        res.status(201).json({ status: 'success', message, materialId });
     } catch (error) {
         failed(res, 500, `Database Error: ${error}`);
     }

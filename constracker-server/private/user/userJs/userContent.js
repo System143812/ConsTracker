@@ -12,15 +12,13 @@ const defaultImageBackgroundColors = [
     '#F48FB1', '#81D4FA', '#FFF59D', '#A7FFEB', '#FFAB91'
 ];
 
-function createMaterialCard(material, role, refreshMaterialsContentFn) {
+function createMaterialCard(material, role, currentUserId, refreshMaterialsContentFn) {
     const card = div(`material-card-${material.item_id}`, 'material-card');
-    
-    // Determine image URL and background color
-    const imageUrl = material.image_url && material.image_url !== 'constrackerWhite.svg' 
-        ? `/image/${material.image_url}` 
+
+    const imageUrl = material.image_url && material.image_url !== 'constrackerWhite.svg'
+        ? `/image/${material.image_url}`
         : `/assets/pictures/constrackerWhite.svg`;
 
-    // Generate a consistent random-like color based on material ID for default image background
     const colorIndex = material.item_id % defaultImageBackgroundColors.length;
     const backgroundColor = defaultImageBackgroundColors[colorIndex];
 
@@ -28,26 +26,14 @@ function createMaterialCard(material, role, refreshMaterialsContentFn) {
     imageContainer.style.backgroundImage = `url(${imageUrl})`;
     if (material.image_url === 'constrackerWhite.svg' || !material.image_url) {
         imageContainer.style.backgroundColor = backgroundColor;
-        imageContainer.classList.add('default-image-bg'); // Add a class to style default image backgrounds
+        imageContainer.classList.add('default-image-bg');
     }
 
     const infoContainer = div('materialInfoContainer', 'material-info-container');
+    
+    const titleStatusContainer = div('material-title-status');
     const name = span('materialName', 'material-name');
     name.innerText = material.item_name;
-    
-    const category = span('materialCategory', 'material-category');
-    category.innerText = material.category_name;
-
-    const supplier = span('materialSupplier', 'material-supplier');
-    supplier.innerText = material.supplier_name;
-
-    const sizePrice = div('materialSizePrice', 'material-size-price');
-    const size = span('materialSize', 'material-size');
-    size.innerText = material.size || 'N/A';
-    const price = span('materialPrice', 'material-price');
-    price.innerText = `₱${material.price.toLocaleString()}`; // Format price
-
-    const statusActions = div('materialStatusActions', 'material-status-actions');
     const status = span('materialStatus', 'material-status');
     status.innerText = material.status;
     if (material.status === 'pending') {
@@ -55,14 +41,35 @@ function createMaterialCard(material, role, refreshMaterialsContentFn) {
     } else if (material.status === 'approved') {
         warnType(status, 'solid', 'green');
     }
+    titleStatusContainer.append(name, status);
 
+    const detailsContainer = div('material-details');
+    const createDetailItem = (label, value) => {
+        const item = div('', 'material-detail-item');
+        const labelSpan = span('', 'label');
+        labelSpan.innerText = label;
+        const valueSpan = span('', 'value');
+        valueSpan.innerText = value;
+        item.append(labelSpan, valueSpan);
+        return item;
+    };
+
+    detailsContainer.append(
+        createDetailItem('Category:', material.category_name || 'N/A'),
+        createDetailItem('Unit:', material.unit_name || 'N/A'),
+        createDetailItem('Size:', material.size || 'N/A'),
+        createDetailItem('Supplier:', material.supplier_name || 'N/A')
+    );
+
+    const price = div('materialPrice', 'material-price');
+    price.innerText = `₱${material.price.toLocaleString()}`;
+
+    const statusActions = div('materialStatusActions', 'material-status-actions');
     const actionsContainer = div('materialActionsContainer', 'material-actions-container');
 
-    // Approve Button (Engineer only, for pending items)
     if (role === 'engineer' && material.status === 'pending') {
         const approveBtn = createButton('approveMaterialBtn', 'solid-buttons', 'Approve', 'approveBtnText', 'checkWhite.png');
         approveBtn.addEventListener('click', async () => {
-            // Confirmation for approval?
             const response = await fetch(`/api/materials/${material.item_id}/approve`, { method: 'PUT' });
             if (response.ok) {
                 alertPopup('success', `${material.item_name} approved successfully!`);
@@ -74,16 +81,23 @@ function createMaterialCard(material, role, refreshMaterialsContentFn) {
         actionsContainer.append(approveBtn);
     }
 
-    // Edit Button (Admin or Engineer only)
-    if (role === 'admin' || role === 'engineer') {
+    const isCreator = material.created_by === currentUserId;
+    const isEngineer = role === 'engineer';
+    const isAdmin = role === 'admin';
+    let canEdit = false;
+
+    if (material.status === 'pending') {
+        if (isEngineer || isCreator) canEdit = true;
+    } else {
+        if (isAdmin || isEngineer) canEdit = true;
+    }
+
+    if (canEdit) {
         const editBtn = createButton('editMaterialBtn', 'solid-buttons', 'Edit', 'editBtnText', 'editWhite.png');
-        editBtn.addEventListener('click', () => {
-            createMaterialOverlay(material, refreshMaterialsContentFn);
-        });
+        editBtn.addEventListener('click', () => createMaterialOverlay(material, refreshMaterialsContentFn));
         actionsContainer.append(editBtn);
     }
 
-    // Delete Button (Admin or Engineer only)
     if (role === 'admin' || role === 'engineer') {
         const deleteBtn = createButton('deleteMaterialBtn', 'icon-buttons', '', 'deleteBtnText', 'deleteRed.png');
         deleteBtn.addEventListener('click', () => {
@@ -100,10 +114,8 @@ function createMaterialCard(material, role, refreshMaterialsContentFn) {
         actionsContainer.append(deleteBtn);
     }
     
-    infoContainer.append(name, category, supplier, sizePrice, statusActions, actionsContainer);
-    sizePrice.append(size, price);
-    statusActions.append(status); // actionsContainer appended separately for layout flexibility
-
+    statusActions.append(actionsContainer);
+    infoContainer.append(titleStatusContainer, detailsContainer, price, statusActions);
     card.append(imageContainer, infoContainer);
     return card;
 }
@@ -263,13 +275,18 @@ async function generateMaterialsContent(role) {
     const materialsListContainer = div('materials-list-container');
     const paginationContainer = div('materialsPaginationContainer', 'pagination-container');
     
+    const user = await fetchData('/profile');
+    if (user === 'error') {
+        return alertPopup('error', 'Could not fetch user profile. Please reload the page.');
+    }
+    const currentUserId = user.user_id;
+
     // Add Material Button (Admin, PM, Engineer, Foreman)
-    // Only show add button if user has project manager, admin, engineer, or foreman role
     const allowedRolesForAdd = ['admin', 'engineer', 'project manager', 'foreman'];
     if (allowedRolesForAdd.includes(role)) {
         const addMaterialBtn = createButton('addMaterialBtn', 'solid-buttons', 'Add Material', 'addMaterialBtnText', 'addWhite.png');
         addMaterialBtn.addEventListener('click', () => {
-            createMaterialOverlay(null, () => renderMaterials(new URLSearchParams(), role));
+            createMaterialOverlay(null, () => renderMaterials(new URLSearchParams(), role, currentUserId));
         });
         headerContainer.append(addMaterialBtn);
     }
@@ -281,8 +298,8 @@ async function generateMaterialsContent(role) {
     let currentPage = 1;
     let itemsPerPage = 10;
     
-    async function renderMaterials(urlParams = new URLSearchParams(), currentRole) {
-        materialsListContainer.innerHTML = '<div class="loading-spinner"></div>'; // Show a loading spinner
+    async function renderMaterials(urlParams = new URLSearchParams(), currentRole, currentUserId) {
+        materialsListContainer.innerHTML = '<div class="loading-spinner"></div>';
         paginationContainer.innerHTML = '';
 
         urlParams.set('page', currentPage);
@@ -297,47 +314,26 @@ async function generateMaterialsContent(role) {
         }
 
         data.forEach(material => {
-            materialsListContainer.append(createMaterialCard(material, currentRole, () => renderMaterials(urlParams, currentRole)));
+            materialsListContainer.append(createMaterialCard(material, currentRole, currentUserId, () => renderMaterials(urlParams, currentRole, currentUserId)));
         });
-
-        // Pagination not implemented in current backend. Assuming total count needed for this.
-        // For now, I'll just render all items and remove pagination or simulate it.
-        // If the backend returns total count, this can be uncommented/modified.
-        /*
-        const paginationControls = createPaginationControls({
-            currentPage,
-            totalItems: data.total, // Assuming data.total exists from API
-            itemsPerPage,
-            onPageChange: (page) => {
-                currentPage = page;
-                renderMaterials(urlParams, currentRole);
-            },
-            onItemsPerPageChange: (limit) => {
-                itemsPerPage = limit;
-                currentPage = 1; // Reset to first page
-                renderMaterials(urlParams, currentRole);
-            }
-        });
-        paginationContainer.append(paginationControls);
-        */
     }
 
     async function applyFilterToMaterials(filteredUrlParams) {
         currentPage = 1;
-        await renderMaterials(filteredUrlParams, role);
+        await renderMaterials(filteredUrlParams, role, currentUserId);
     }
 
     const filters = await createFilterContainer(
         applyFilterToMaterials,
         'Search by material name...', 
-        { name: true, sort: true, category: true }, // Filter by name, sort, and category
-        'itemName', // searchType for materials
-        'atoz' // Default sort for materials
+        { name: true, sort: true, category: true },
+        'itemName',
+        'atoz'
     );
     
     filterContainer.append(filters);
 
-    await renderMaterials(new URLSearchParams(), role); // Initial render
+    await renderMaterials(new URLSearchParams(), role, currentUserId); // Initial render
 }
 
 
