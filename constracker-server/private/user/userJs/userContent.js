@@ -25,6 +25,10 @@ const tabContents = {
         generateContent: async(role) => await generateLogsContent(role),
         generateGraphs: async() => ''
     },
+    materials: {
+        generateContent: async(role) => await generateMaterialsContent(role),
+        generateGraphs: async() => '' 
+    },
     project: {
         generateContent: async(tabName, role) => await generateProjectContent(tabName, role)
     },
