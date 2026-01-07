@@ -1,16 +1,8 @@
 import { fetchData } from "/js/apiURL.js";
 import { formatString, dateFormatting } from "/js/string.js";
-import { alertPopup, warnType, showDeleteConfirmation, showEmptyPlaceholder } from "/js/popups.js";
+import { alertPopup, warnType, showEmptyPlaceholder } from "/js/popups.js";
 import { createFilterContainer, createButton, createPaginationControls, div, span, createInput, createFilterInput } from "/js/components.js";
-import { createMilestoneOl, milestoneFullOl, showLogDetailsOverlay, createOverlayWithBg, hideOverlayWithBg } from "/mainJs/overlays.js";
-
-
-import { fetchData } from "/js/apiURL.js";
-import { formatString, dateFormatting } from "/js/string.js";
-import { alertPopup, warnType, showDeleteConfirmation, showEmptyPlaceholder } from "/js/popups.js";
-import { createFilterContainer, createButton, createPaginationControls, div, span, createInput, createFilterInput } from "/js/components.js";
-import { createMilestoneOl, milestoneFullOl, showLogDetailsOverlay, createOverlayWithBg, hideOverlayWithBg } from "/mainJs/overlays.js";
-
+import { createMilestoneOl, milestoneFullOl, showLogDetailsOverlay, createOverlayWithBg, hideOverlayWithBg, showDeleteConfirmation } from "/mainJs/overlays.js";
 
 const defaultImageBackgroundColors = [
     '#B388EB', '#FFD180', '#80CBC4', '#E1BEE7', '#C5E1A5',
@@ -344,6 +336,7 @@ async function generateMaterialsContent(role) {
 
     await renderMaterials(new URLSearchParams(), role); // Initial render
 }
+
 
 async function generateLogsContent() {
     const logsBodyContent = document.getElementById('logsBodyContent');
@@ -1027,5 +1020,3 @@ async function recentMaterialsRequest() {
     }
     return recentRequestContainer;
 }
-
-
