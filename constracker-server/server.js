@@ -135,13 +135,20 @@ function failed(res, status, message) {
 }
 function dashboardRoleAccess(req, res) {
     const roles = [
-        {role: 'admin', access: ['dashboard', 'projects', 'inventory', 'materialsRequest', 'personnel', 'logs']},
-        {role: 'engineer', access: ['dashboard', 'logs']},
-        {role: 'foreman', access: ['dashboard', 'logs']},
-        {role: 'project manager', access: ['dashboard', 'logs']}
+        {role: 'admin', access: ['dashboard', 'projects', 'inventory', 'materialsRequest', 'personnel', 'logs', 'materials']},
+        {role: 'engineer', access: ['dashboard', 'logs', 'materials']},
+        {role: 'foreman', access: ['dashboard', 'logs', 'materials']},
+        {role: 'project manager', access: ['dashboard', 'logs', 'materials']}
     ];
     const userRole = roles.find(obj => obj.role === req.user.role);
-    if(userRole) return res.status(200).json(userRole.access);
+    if(userRole) {
+        // Check if user has no assigned projects and if 'materials' is in their access
+        if (req.user.projects && req.user.projects.length === 0 && userRole.access.includes('materials')) {
+            // Remove 'materials' from their access list
+            userRole.access = userRole.access.filter(item => item !== 'materials');
+        }
+        return res.status(200).json(userRole.access);
+    }
     return failed(res, 401, "Unauthorized Role");
 }
 
@@ -272,6 +279,170 @@ async function recentMaterialsRequest(res) {
     try {
         const [result] = await pool.execute("SELECT mr.id AS request_id, p.project_name, mr.priority_level, u.full_name AS requested_by, COUNT(mri.id) AS item_count, SUM(mri.quantity * i.item_price) AS cost, mr.status, mr.created_at AS request_date FROM material_requests mr JOIN material_request_items mri ON mr.id = mri.mr_id JOIN projects p ON mr.project_id = p.project_id JOIN users u ON mr.user_id = u.user_id JOIN items i ON mri.item_id = i.item_id GROUP BY mr.id;");
         return result;
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+}
+
+async function getAllMaterialCategories(res) {
+    try {
+        const [result] = await pool.execute('SELECT category_id AS id, category_name AS name FROM material_categories ORDER BY category_name ASC');
+        return result;
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+}
+
+async function getAllSuppliers(res) {
+    try {
+        const [result] = await pool.execute('SELECT supplier_id AS id, supplier_name AS name FROM suppliers ORDER BY supplier_name ASC');
+        return result;
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+}
+
+async function getAllUnits(res) {
+    try {
+        const [result] = await pool.execute('SELECT unit_id AS id, unit_name AS name FROM units ORDER BY unit_name ASC');
+        return result;
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+}
+
+async function getAllMaterials(res, role, assignedProjects, filters) {
+    let defaultQuery = `
+        SELECT 
+            i.item_id, 
+            i.item_name, 
+            i.item_description, 
+            i.price, 
+            i.size, 
+            i.status, 
+            i.image_url, 
+            i.created_at,
+            mc.category_name,
+            s.supplier_name,
+            s.supplier_email,
+            s.supplier_address,
+            u.unit_name
+        FROM 
+            items i
+        LEFT JOIN 
+            material_categories mc ON i.category_id = mc.category_id
+        LEFT JOIN 
+            suppliers s ON i.supplier_id = s.supplier_id
+        LEFT JOIN 
+            units u ON i.unit_id = u.unit_id
+    `;
+    let filterParams = [];
+    let whereClauses = [];
+    let orderByClause = '';
+
+    // Project filtering (materials are not project-specific, but the user's project association might still be relevant for future extensions)
+    // For now, materials are available to all users with the tab, regardless of project context.
+    // If we want to restrict materials by project later, we would need a junction table.
+    // The user said: "this materials is available to all users no matter what project you are holding"
+    // So, no project filtering for now, but keep the \`role\` and \`assignedProjects\` parameters for consistency if needed later.
+
+    // Search by item_name
+    if (filters.name && filters.name !== "all") {
+        whereClauses.push(`i.item_name LIKE ?`);
+        filterParams.push(`${filters.name}%`);
+    }
+
+    // Filter by category
+    if (filters.category && filters.category !== "all") {
+        const categories = Array.isArray(filters.category) ? filters.category : [filters.category];
+        const placeholders = categories.map(() => "?").join(",");
+        whereClauses.push(`mc.category_name IN (${placeholders})`);
+        filterParams.push(...categories);
+    }
+
+    // Sorting
+    if (filters.sort) {
+        switch (filters.sort) {
+            case 'newest':
+                orderByClause = 'ORDER BY i.created_at DESC';
+                break;
+            case 'oldest':
+                orderByClause = 'ORDER BY i.created_at ASC';
+                break;
+            case 'atoz':
+                orderByClause = 'ORDER BY i.item_name ASC';
+                break;
+            case 'ztoa':
+                orderByClause = 'ORDER BY i.item_name DESC';
+                break;
+            default:
+                orderByClause = 'ORDER BY i.created_at DESC'; // Default sort
+                break;
+        }
+    } else {
+        orderByClause = 'ORDER BY i.created_at DESC'; // Default sort
+    }
+
+    let finalQuery = defaultQuery;
+    if (whereClauses.length > 0) {
+        finalQuery += ` WHERE ` + whereClauses.join(' AND ');
+    }
+    finalQuery += ` ${orderByClause}`;
+
+    try {
+        const [result] = await pool.execute(finalQuery, filterParams);
+        return result;
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+}
+
+
+async function createMaterial(res, materialData, userId) {
+    const { item_name, item_description, price, unit_id, category_id, supplier_id, size, image_url } = materialData;
+    try {
+        const [result] = await pool.execute(
+            'INSERT INTO items (item_name, item_description, price, unit_id, category_id, supplier_id, size, status, created_by, image_url) VALUES (?, ?, ?, ?, ?, ?, ?, "pending", ?, ?)',
+            [item_name, item_description, price, unit_id, category_id, supplier_id, size, userId, image_url || 'constrackerWhite.svg']
+        );
+        return result.insertId;
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+}
+
+async function approveMaterial(res, materialId, userId) {
+    try {
+        const [result] = await pool.execute(
+            'UPDATE items SET status = "approved", approved_by = ? WHERE item_id = ?',
+            [userId, materialId]
+        );
+        return result.affectedRows > 0;
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+}
+
+async function updateMaterial(res, materialId, materialData, userId) {
+    const { item_name, item_description, price, unit_id, category_id, supplier_id, size, image_url } = materialData;
+    try {
+        const [result] = await pool.execute(
+            'UPDATE items SET item_name = ?, item_description = ?, price = ?, unit_id = ?, category_id = ?, supplier_id = ?, size = ?, updated_by = ?, image_url = ? WHERE item_id = ?',
+            [item_name, item_description, price, unit_id, category_id, supplier_id, size, userId, image_url || 'constrackerWhite.svg', materialId]
+        );
+        return result.affectedRows > 0;
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+}
+
+async function deleteMaterial(res, materialId) {
+    try {
+        const [result] = await pool.execute(
+            'DELETE FROM items WHERE item_id = ?',
+            [materialId]
+        );
+        return result.affectedRows > 0;
     } catch (error) {
         failed(res, 500, `Database Error: ${error}`);
     }
@@ -907,6 +1078,174 @@ app.get('/api/inprogressProjects', authMiddleware(['admin']), async(req, res) =>
 
 app.get('/api/recentMatReqs', authMiddleware(['all']), async(req, res) => {
     res.status(200).json(await recentMaterialsRequest(res));
+});
+
+app.get('/api/materials/categories', authMiddleware(['all']), async(req, res) => {
+    res.status(200).json(await getAllMaterialCategories(res));
+});
+
+app.get('/api/materials/suppliers', authMiddleware(['all']), async(req, res) => {
+    res.status(200).json(await getAllSuppliers(res));
+});
+
+app.get('/api/materials/units', authMiddleware(['all']), async(req, res) => {
+    res.status(200).json(await getAllUnits(res));
+});
+
+app.get('/api/materials', authMiddleware(['all']), async(req, res) => {
+    const filters = req.query;
+    res.status(200).json(await getAllMaterials(res, req.user.role, req.user.projects, filters));
+});
+
+app.post('/api/materials', authMiddleware(['admin', 'engineer', 'project manager', 'foreman']), async(req, res) => {
+    const { item_name, item_description, price, unit_id, category_id, supplier_id, size, image_url } = req.body;
+    const { id: userId } = req.user;
+
+    if (!item_name || !price || !category_id || !supplier_id || !unit_id) {
+        return failed(res, 400, 'Missing required fields: item_name, price, unit, category, and supplier are required.');
+    }
+
+    try {
+        const materialId = await createMaterial(res, req.body, userId);
+        const logData = {
+            logName: `created material ${item_name}`,
+            projectId: 0, // Materials are not project-specific, using 0 or null as placeholder
+            type: 'item',
+            action: 'create',
+        };
+        await createLogs(res, req, logData);
+        res.status(201).json({ status: 'success', message: 'Material created successfully, awaiting approval.', materialId });
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+});
+
+app.put('/api/materials/:materialId/approve', authMiddleware(['engineer']), async(req, res) => {
+    const { materialId } = req.params;
+    const { id: userId } = req.user;
+
+    try {
+        // Fetch material to get its name for logging and to check existence
+        const [materialResult] = await pool.execute('SELECT item_name, category_id, supplier_id, unit_id FROM items WHERE item_id = ?', [materialId]);
+        if (materialResult.length === 0) {
+            return failed(res, 404, 'Material not found.');
+        }
+        const material = materialResult[0];
+
+        const success = await approveMaterial(res, materialId, userId);
+        if (success) {
+            const logData = {
+                logName: `approved material ${material.item_name}`,
+                projectId: 0,
+                type: 'item',
+                action: 'approved',
+            };
+            await createLogs(res, req, logData);
+            res.status(200).json({ status: 'success', message: 'Material approved successfully.' });
+        } else {
+            failed(res, 400, 'Failed to approve material.');
+        }
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+});
+
+app.put('/api/materials/:materialId', authMiddleware(['admin', 'engineer']), async(req, res) => {
+    const { materialId } = req.params;
+    const { id: userId } = req.user;
+    const { item_name, item_description, price, unit_id, category_id, supplier_id, size, image_url } = req.body;
+
+    try {
+        // Fetch old material data for logging changes
+        const [oldMaterialResult] = await pool.execute('SELECT item_name, item_description, price, unit_id, category_id, supplier_id, size, image_url FROM items WHERE item_id = ?', [materialId]);
+        if (oldMaterialResult.length === 0) {
+            return failed(res, 404, 'Material not found.');
+        }
+        const oldMaterial = oldMaterialResult[0];
+
+        const success = await updateMaterial(res, materialId, req.body, userId);
+        if (success) {
+            const logDetails = [];
+            // Compare fields and add to logDetails if changed
+            if (item_name !== undefined && item_name !== oldMaterial.item_name) {
+                logDetails.push({ varName: 'item_name', oldVal: oldMaterial.item_name, newVal: item_name, label: 'Material Name' });
+            }
+            if (item_description !== undefined && item_description !== oldMaterial.item_description) {
+                logDetails.push({ varName: 'item_description', oldVal: oldMaterial.item_description, newVal: item_description, label: 'Description' });
+            }
+            if (price !== undefined && price !== oldMaterial.price) {
+                logDetails.push({ varName: 'price', oldVal: oldMaterial.price, newVal: price, label: 'Base Price' });
+            }
+            if (unit_id !== undefined && unit_id !== oldMaterial.unit_id) { 
+                const units = await getAllUnits(res);
+                const oldUnit = units.find(u => u.id === oldMaterial.unit_id)?.name || oldMaterial.unit_id;
+                const newUnit = units.find(u => u.id === unit_id)?.name || unit_id;
+                logDetails.push({ varName: 'unit_id', oldVal: oldUnit, newVal: newUnit, label: 'Unit' });
+            }
+            if (category_id !== undefined && category_id !== oldMaterial.category_id) {
+                const categories = await getAllMaterialCategories(res);
+                const oldCategory = categories.find(c => c.id === oldMaterial.category_id)?.name || oldMaterial.category_id;
+                const newCategory = categories.find(c => c.id === category_id)?.name || category_id;
+                logDetails.push({ varName: 'category_id', oldVal: oldCategory, newVal: newCategory, label: 'Category' });
+            }
+            if (supplier_id !== undefined && supplier_id !== oldMaterial.supplier_id) {
+                const suppliers = await getAllSuppliers(res);
+                const oldSupplier = suppliers.find(s => s.id === oldMaterial.supplier_id)?.name || oldMaterial.supplier_id;
+                const newSupplier = suppliers.find(s => s.id === supplier_id)?.name || supplier_id;
+                logDetails.push({ varName: 'supplier_id', oldVal: oldSupplier, newVal: newSupplier, label: 'Supplier' });
+            }
+            if (size !== undefined && size !== oldMaterial.size) {
+                logDetails.push({ varName: 'size', oldVal: oldMaterial.size, newVal: size, label: 'Size' });
+            }
+            if (image_url !== undefined && image_url !== oldMaterial.image_url) {
+                logDetails.push({ varName: 'image_url', oldVal: oldMaterial.image_url, newVal: image_url, label: 'Image URL' });
+            }
+
+            if (logDetails.length > 0) {
+                const logData = {
+                    logName: `updated material ${oldMaterial.item_name}`,
+                    projectId: 0,
+                    type: 'item',
+                    action: 'edit',
+                    logDetails: logDetails
+                };
+                await createLogs(res, req, logData);
+            }
+            res.status(200).json({ status: 'success', message: 'Material updated successfully.' });
+        } else {
+            failed(res, 400, 'Failed to update material.');
+        }
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+});
+
+app.delete('/api/materials/:materialId', authMiddleware(['admin', 'engineer']), async(req, res) => {
+    const { materialId } = req.params;
+
+    try {
+        const [materialResult] = await pool.execute('SELECT item_name FROM items WHERE item_id = ?', [materialId]);
+        if (materialResult.length === 0) {
+            return failed(res, 404, 'Material not found.');
+        }
+        const material = materialResult[0];
+
+        const success = await deleteMaterial(res, materialId);
+        if (success) {
+            const logData = {
+                logName: `deleted material ${material.item_name}`,
+                projectId: 0,
+                type: 'item',
+                action: 'delete',
+            };
+            await createLogs(res, req, logData);
+            res.status(200).json({ status: 'success', message: 'Material deleted successfully.' });
+        } else {
+            failed(res, 400, 'Failed to delete material.');
+        }
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
 });
 
 app.get('/access', authMiddleware(['all']), (req, res) => {

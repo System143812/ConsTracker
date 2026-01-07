@@ -73,8 +73,8 @@ function getFilteredValues(filtersForm) {
     return filteredUrlParams;
 }
 
-function filterByName(applyFilterCallback, filtersForm) {
-    const filterNameContainer = createFilterInput('text', '', 'filterByName', 'name', 'all', 'Search name', 'username');
+function filterByName(applyFilterCallback, filtersForm, searchType) {
+    const filterNameContainer = createFilterInput('text', '', 'filterByName', 'name', 'all', 'Search name', searchType);
     let debounceTimer;
 
     filterNameContainer.addEventListener("input", () => {
@@ -109,57 +109,50 @@ async function filterByProject(applyFilterCallback, filtersForm) {
     return filterProjectContainer;
 }
 
-async function filterByRecent(applyFilterCallback, filtersForm) {
-    const filterRecentContainer = div('filterByRecent', 'filter-group');
-    const title = span('filterRecentTitle', 'filter-title');
+async function createSortFilter(applyFilterCallback, filtersForm, defaultSort = 'newest') {
+    const sortContainer = div('sortFilterContainer', 'filter-group');
+    const title = span('sortFilterTitle', 'filter-title');
     title.textContent = 'Sort by';
     
-    const recentHidden = createFilterInput('hidden', '', 'filterRecentHidden', 'recent', 'newest');
+    const sortHidden = createFilterInput('hidden', '', 'sortFilterHidden', 'sort', defaultSort);
     
-    const newestRadio = div('newestRadioContainer', 'radio-container');
-    const newestInput = document.createElement('input');
-    newestInput.type = 'radio';
-    newestInput.name = 'recent';
-    newestInput.id = 'newest';
-    newestInput.checked = true;
-    const newestLabel = document.createElement('label');
-    newestLabel.htmlFor = 'newest';
-    newestLabel.textContent = 'Newest';
-    
-    newestRadio.append(newestInput, newestLabel);
+    const sortOptions = [
+        { id: 'newest', label: 'Newest' },
+        { id: 'oldest', label: 'Oldest' },
+        { id: 'atoz', label: 'Alphabetical (A-Z)' },
+        { id: 'ztoa', label: 'Alphabetical (Z-A)' }
+    ];
 
-    const oldestRadio = div('oldestRadioContainer', 'radio-container');
-    const oldestInput = document.createElement('input');
-    oldestInput.type = 'radio';
-    oldestInput.name = 'recent';
-    oldestInput.id = 'oldest';
-    const oldestLabel = document.createElement('label');
-    oldestLabel.htmlFor = 'oldest';
-    oldestLabel.textContent = 'Oldest';
-    
-    oldestRadio.append(oldestInput, oldestLabel);
-    
+    const radioGroup = div('sortRadioGroup', 'radio-group');
+
     function triggerUpdate() {
         const filteredUrlParams = getFilteredValues(filtersForm);
         applyFilterCallback(filteredUrlParams);
     }
 
-    newestInput.addEventListener('change', () => {
-        if(newestInput.checked) {
-            recentHidden.dataset.value = 'newest';
-            triggerUpdate();
-        }
-    });
-    
-    oldestInput.addEventListener('change', () => {
-        if(oldestInput.checked) {
-            recentHidden.dataset.value = 'oldest';
-            triggerUpdate();
-        }
+    sortOptions.forEach(option => {
+        const radioContainer = div(`${option.id}RadioContainer`, 'radio-container');
+        const input = document.createElement('input');
+        input.type = 'radio';
+        input.name = 'sort';
+        input.id = option.id;
+        input.checked = option.id === defaultSort;
+        const label = document.createElement('label');
+        label.htmlFor = option.id;
+        label.textContent = option.label;
+        
+        input.addEventListener('change', () => {
+            if (input.checked) {
+                sortHidden.dataset.value = option.id;
+                triggerUpdate();
+            }
+        });
+        radioContainer.append(input, label);
+        radioGroup.append(radioContainer);
     });
 
-    filterRecentContainer.append(title, recentHidden, newestRadio, oldestRadio);
-    return filterRecentContainer;
+    sortContainer.append(title, sortHidden, radioGroup);
+    return sortContainer;
 }
 
 async function filterByDateFrom(applyFilterCallback, filtersForm) {
@@ -218,14 +211,14 @@ async function filterByCategory(applyFilterCallback, filtersForm) {
     return filterCategoryContainer;
 }
 
-export async function createFilterContainer(applyFilterCallback, searchBar = null, defaultFilterList, searchType = null) {
+export async function createFilterContainer(applyFilterCallback, searchBarPlaceholder = null, defaultFilterList, searchBarType = null, defaultSort = 'newest') {
     const filterList = Object.keys(defaultFilterList);
     const filtersObj = {
         name: {
-            filterFunction: (applyFilterCallback, filtersForm) => filterByName(applyFilterCallback, filtersForm)
+            filterFunction: (applyFilterCallback, filtersForm) => filterByName(applyFilterCallback, filtersForm, searchBarType)
         },
-        recent: {
-            filterFunction: async(applyFilterCallback, filtersForm) => await filterByRecent(applyFilterCallback, filtersForm)
+        sort: { // Renamed from recent to sort
+            filterFunction: async(applyFilterCallback, filtersForm) => await createSortFilter(applyFilterCallback, filtersForm, defaultSort)
         },
         project: {
             filterFunction: async(applyFilterCallback, filtersForm) => await filterByProject(applyFilterCallback, filtersForm)
@@ -244,23 +237,48 @@ export async function createFilterContainer(applyFilterCallback, searchBar = nul
     const filtersForm = document.createElement('form');
     filtersForm.id = "filterContainer";
     const filterBtn = createButton('filterBtn', 'solid-buttons', 'Filter by',  'filterBtnText', 'filterBtnIcon');
-    const { filterOverlayContainer, filterOverlayHeader, filterOverlayBody } = createFilterOverlay(searchBar ? '' : '0', searchBar ? '0' : '', '120%', '');
+    const { filterOverlayContainer, filterOverlayHeader, filterOverlayBody } = createFilterOverlay(searchBarPlaceholder ? '' : '0', searchBarPlaceholder ? '0' : '', '120%', '');
     filterOverlayHeader.innerText = 'Filters';
     const filterBtnContainer = div('filterBtnContainer');
     filterBtnContainer.append(filterBtn, filterOverlayContainer);
     let searchBarDiv;
     const searchBarContainer = div('searchBarContainer');
     const searchBarIcon = span("searchBarIcon", "icons");
-    if(searchBar) {
+    if(searchBarPlaceholder) {
         searchBarDiv = filtersObj['name'].filterFunction(applyFilterCallback, filtersForm);
+        searchBarDiv.placeholder = searchBarPlaceholder; // Set the placeholder here
         searchBarContainer.append(searchBarIcon, searchBarDiv);
         filtersForm.append(searchBarContainer);
     }
     
     filtersForm.append(filterBtnContainer);
 
+    // Create sort section
+    const sortSectionHeader = span('filterSortSectionHeader', 'filter-section-header');
+    sortSectionHeader.innerText = 'Sort';
+    filterOverlayBody.append(sortSectionHeader);
+
+    // Append sort filters
+    if (defaultFilterList.sort) { // Assuming 'sort' is part of defaultFilterList for this section
+        const sortElement = await filtersObj['sort'].filterFunction(applyFilterCallback, filtersForm);
+        if (sortElement) {
+            filterOverlayBody.append(sortElement);
+        }
+    }
+
+
+    // Create filter section
+    const filterSectionHeader = span('filterFilterSectionHeader', 'filter-section-header');
+    filterSectionHeader.innerText = 'Filters';
+    filterOverlayBody.append(filterSectionHeader);
+
     for (const filterName of filterList) {
-        if(filterName !== 'name') filterOverlayBody.append(await filtersObj[filterName].filterFunction(applyFilterCallback, filtersForm));   
+        if(filterName !== 'name' && filterName !== 'sort') { // Exclude 'name' and 'sort' filters here
+            const filterElement = await filtersObj[filterName].filterFunction(applyFilterCallback, filtersForm);
+            if (filterElement) { // Only append if the filter function returned an element
+                 filterOverlayBody.append(filterElement);
+            }
+        }
     }
 
     const filterBtnIcon = filterBtn.querySelector("#filterBtnIcon");
@@ -422,7 +440,7 @@ export function limitNumberInput(input, min = 0, max = 100, numType = "whole", d
 }
 
 
-function createFilterInput(inputType, inputVariant = null,  inputId, name, defaultVal, placeholder, searchType = null, selectType = null, selectLimit = null, selectOptionObj = null, optionLabel = null) {
+export function createFilterInput(inputType, inputVariant = null,  inputId, name, defaultVal, placeholder, searchType = null, selectType = null, selectLimit = null, selectOptionObj = null, optionLabel = null) {
     let filterInput;
     if(inputType === 'select') {
         if(inputVariant && inputVariant === 'dropdown') {

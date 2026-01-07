@@ -1,0 +1,205 @@
+/* Materials Main Container */
+.materials-main-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    padding: 1.5rem;
+    background-color: var(--dashboard-background);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.materials-header-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.materials-header-container .solid-buttons {
+    min-width: 150px;
+    justify-content: center;
+}
+
+/* Materials List Container (Grid for Cards) */
+.materials-list-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.5rem;
+    width: 100%;
+}
+
+/* Material Card */
+.material-card {
+    background-color: var(--card-background);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    display: flex;
+    flex-direction: column;
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+    height: 100%; /* Ensure cards take full height of their grid cell */
+}
+
+.material-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+}
+
+.material-image-container {
+    width: 100%;
+    height: 180px; /* Fixed height for images */
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.material-image-container.default-image-bg {
+    background-size: 80%; /* Adjust size for default SVG */
+    background-color: var(--medium-gray); /* Fallback default bg color */
+}
+
+
+.material-info-container {
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1; /* Allows info container to take up remaining space */
+    gap: 0.5rem;
+}
+
+.material-name {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text-color);
+    margin-bottom: 0.25rem;
+    display: -webkit-box;
+    -webkit-line-clamp: 2; /* Limit to 2 lines */
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.material-category,
+.material-supplier {
+    font-size: 0.9rem;
+    color: var(--text-color-light);
+}
+
+.material-size-price {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 0.5rem;
+    border-top: 1px solid var(--border-color);
+    padding-top: 0.5rem;
+}
+
+.material-size {
+    font-size: 0.9rem;
+    color: var(--text-color-light);
+}
+
+.material-price {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--blue-accent);
+}
+
+.material-status-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.material-status {
+    font-size: 0.85rem;
+    padding: 0.3em 0.6em;
+    border-radius: 5px;
+    font-weight: 500;
+}
+
+.material-actions-container {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.material-actions-container .solid-buttons {
+    padding: 0.5rem 1rem;
+    font-size: 0.8rem;
+    height: auto;
+}
+
+.material-actions-container .icon-buttons {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    background-size: 50%;
+}
+
+/* Empty Placeholder Styling */
+.empty-placeholder-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 2rem;
+    background-color: var(--card-background);
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    width: 100%;
+    min-height: 200px;
+    gap: 1rem;
+}
+
+.empty-placeholder-container .empty-icon {
+    width: 80px;
+    height: 80px;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    opacity: 0.6;
+}
+
+.empty-placeholder-container .empty-message {
+    font-size: 1.1rem;
+    color: var(--text-color-light);
+}
+
+.empty-placeholder-container .solid-buttons {
+    padding: 0.75rem 1.5rem;
+    font-size: 1rem;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .materials-list-container {
+        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    }
+
+    .materials-header-container {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .materials-header-container .solid-buttons,
+    .materials-filter-container {
+        width: 100%;
+    }
+}
+
+@media (max-width: 480px) {
+    .materials-list-container {
+        grid-template-columns: 1fr;
+    }
+}
