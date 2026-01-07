@@ -392,7 +392,10 @@ async function renderEditTask(projectId, milestoneId, milestoneName, taskId, upd
     taskEditForm.append(taskFormHeader, taskFormBody, taskFormFooter);
     taskEditBody.append(taskEditForm);
     goBackBtn.append(goBackBtnIcon);
-    taskEditHeader.append(goBackBtn, role !== 'foreman' ? editFormButton(taskEditForm, () => { alertPopup("success", "Saved Successfully") }, () => { updateContents(overlayBody, () => renderViewTask(projectId, milestoneId, milestoneName, updateUiFn, overlayBody, role)) }, '', saveTask) : "");
+    taskEditHeader.append(goBackBtn, role !== 'foreman' ? editFormButton(taskEditForm, () => { alertPopup("success", "Saved Successfully") }, async () => { 
+        await updateUiFn(); 
+        await updateContents(overlayBody, () => renderViewTask(projectId, milestoneId, milestoneName, updateUiFn, overlayBody, role)); 
+    }, '', saveTask) : "");
     taskEditContainer.append(taskEditHeader, taskEditBody);
 
     return taskEditContainer;
