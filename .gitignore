@@ -139,11 +139,3 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
 
-# mga schema
-constrackerSchema.txt
-*.sql
-.sql.*
-
-# mds
-gemini.md
-
