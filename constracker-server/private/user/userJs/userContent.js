@@ -1,8 +1,8 @@
 import { fetchData, fetchPostJson } from "/js/apiURL.js";
 import { formatString, dateFormatting } from "/js/string.js";
-import { alertPopup, warnType, showEmptyPlaceholder } from "/js/popups.js";
+import { alertPopup, warnType, showEmptyPlaceholder, showDeleteConfirmation } from "/js/popups.js";
 import { hideContents } from "/mainJs/sidebar.js";
-import { createMilestoneOl, milestoneFullOl, showLogDetailsOverlay, createOverlayWithBg, hideOverlayWithBg, showDeleteConfirmation } from "/mainJs/overlays.js";
+import { createMilestoneOl, milestoneFullOl, showLogDetailsOverlay, createOverlayWithBg, hideOverlayWithBg } from "/mainJs/overlays.js";
 import { div, span, button, createButton, createFilterContainer, createPaginationControls, createInput, createFilterInput } from "/js/components.js";
 
 const requiredRoles = ['engineer', 'foreman', 'project manager'];
