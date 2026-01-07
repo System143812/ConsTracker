@@ -138,12 +138,6 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
-
-# mga schema
-constrackerSchema.txt
+# sql
 *.sql
-.sql.*
-
-# mds
-gemini.md
-
+sql.*
