@@ -141,3 +141,7 @@ vite.config.ts.timestamp-*
 # sql
 *.sql
 sql.*
+
+#gemini.md 
+gemini.md 
+
