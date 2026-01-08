@@ -5,7 +5,7 @@
     import { createTab, sidebarInitEvents } from "/mainJs/sidebar.js";
     import { formatString } from "/js/string.js";
     import { alertPopup } from "/js/popups.js";
-    import { displayContents } from "/admin/adminContent.js";
+    import { displayContents } from "./adminContent.js";
 
     const dateTime = new Date();
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -81,12 +81,18 @@
     async function getAccessLevel(role) {
         const data = await fetchData('/access');
         if(data === 'error') return;
+
+        // 1. Create all tabs first
         for await(const element of data) {
             createTab(element);
         }
+
+        // 2. Initialize Sidebar Events immediately so buttons are clickable
+        sidebarInitEvents(displayContents, role); 
+
+        // 3. Set default selection and load content
         document.getElementById('dashboardTab').classList.add('selected');
         await displayContents(currentTab, 'upperTabs', role);
-        sidebarInitEvents(displayContents, role);
     }
 
 window.onload =  async() => {
