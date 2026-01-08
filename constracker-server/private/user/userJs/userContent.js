@@ -2,7 +2,7 @@ import { fetchData, fetchPostJson } from "/js/apiURL.js";
 import { formatString, dateFormatting } from "/js/string.js";
 import { alertPopup, warnType, showEmptyPlaceholder } from "/js/popups.js";
 import { hideContents } from "/mainJs/sidebar.js";
-import { createMilestoneOl, milestoneFullOl, showLogDetailsOverlay, createOverlayWithBg, hideOverlayWithBg, showDeleteConfirmation } from "/mainJs/overlays.js";
+import { createMilestoneOl, milestoneFullOl, showLogDetailsOverlay, createOverlayWithBg, hideOverlayWithBg, showDeleteConfirmation, showOverlayWithBg } from "/mainJs/overlays.js";
 import { div, span, button, createButton, createFilterContainer, createPaginationControls, createInput, createFilterInput } from "/js/components.js";
 
 const requiredRoles = ['engineer', 'foreman', 'project manager'];
@@ -68,8 +68,10 @@ function createMaterialCard(material, role, currentUserId, refreshMaterialsConte
     const actionsContainer = div('materialActionsContainer', 'material-actions-container');
 
     if (role === 'engineer' && material.status === 'pending') {
-        const approveBtn = createButton('approveMaterialBtn', 'solid-buttons', 'Approve', 'approveBtnText', 'checkWhite.png');
-        approveBtn.addEventListener('click', async () => {
+        // Approve Button
+        const approveSpan = span('approveMaterialAction', 'material-action-btn green-text');
+        approveSpan.innerText = 'Approve';
+        approveSpan.addEventListener('click', async () => {
             const response = await fetch(`/api/materials/${material.item_id}/approve`, { method: 'PUT' });
             if (response.ok) {
                 alertPopup('success', `${material.item_name} approved successfully!`);
@@ -78,7 +80,20 @@ function createMaterialCard(material, role, currentUserId, refreshMaterialsConte
                 alertPopup('error', `Failed to approve ${material.item_name}.`);
             }
         });
-        actionsContainer.append(approveBtn);
+
+        // Decline Button
+        const declineSpan = span('declineMaterialAction', 'material-action-btn red-text');
+        declineSpan.innerText = 'Decline';
+        declineSpan.addEventListener('click', async () => {
+            const response = await fetch(`/api/materials/${material.item_id}/decline`, { method: 'PUT' });
+            if (response.ok) {
+                alertPopup('success', `${material.item_name} declined.`);
+                refreshMaterialsContentFn();
+            } else {
+                alertPopup('error', `Failed to decline ${material.item_name}.`);
+            }
+        });
+        actionsContainer.append(approveSpan, declineSpan);
     }
 
     const isCreator = material.created_by === currentUserId;
@@ -93,25 +108,12 @@ function createMaterialCard(material, role, currentUserId, refreshMaterialsConte
     }
 
     if (canEdit) {
-        const editBtn = createButton('editMaterialBtn', 'solid-buttons', 'Edit', 'editBtnText', 'editWhite.png');
-        editBtn.addEventListener('click', () => createMaterialOverlay(material, refreshMaterialsContentFn));
-        actionsContainer.append(editBtn);
-    }
-
-    if (role === 'admin' || role === 'engineer') {
-        const deleteBtn = createButton('deleteMaterialBtn', 'icon-buttons', '', 'deleteBtnText', 'deleteRed.png');
-        deleteBtn.addEventListener('click', () => {
-            showDeleteConfirmation(material.item_name, async () => {
-                const response = await fetch(`/api/materials/${material.item_id}`, { method: 'DELETE' });
-                if (response.ok) {
-                    alertPopup('success', `${material.item_name} deleted successfully!`);
-                    refreshMaterialsContentFn();
-                } else {
-                    alertPopup('error', `Failed to delete ${material.item_name}.`);
-                }
-            });
+        const editIcon = div('editMaterialIcon', 'edit-material-icon');
+        editIcon.addEventListener('click', (e) => {
+            e.stopPropagation(); // Prevent card click event if any
+            createMaterialOverlay(material, refreshMaterialsContentFn);
         });
-        actionsContainer.append(deleteBtn);
+        imageContainer.append(editIcon);
     }
     
     statusActions.append(actionsContainer);
@@ -152,11 +154,11 @@ async function createMaterialOverlay(material = null, refreshMaterialsContentFn)
     if (isEditMode && material?.category_id) {
         const selectedCategory = categories.find(cat => cat.id === material.category_id);
         if (selectedCategory) {
-            categorySelect.querySelector('.select-option-dropdowns .selectOptionText').innerText = selectedCategory.name;
+            categorySelect.querySelector('#selectOptionText').innerText = selectedCategory.name;
             categorySelect.dataset.value = material.category_id;
         }
     } else {
-        categorySelect.querySelector('.select-option-dropdowns .selectOptionText').innerText = 'Select a category';
+        categorySelect.querySelector('#selectOptionText').innerText = 'Select a category';
     }
     categorySelectContainer.append(categoryLabel, categorySelect);
 
@@ -170,11 +172,11 @@ async function createMaterialOverlay(material = null, refreshMaterialsContentFn)
     if (isEditMode && material?.supplier_id) {
         const selectedSupplier = suppliers.find(sup => sup.id === material.supplier_id);
         if (selectedSupplier) {
-            supplierSelect.querySelector('.select-option-dropdowns .selectOptionText').innerText = selectedSupplier.name;
+            supplierSelect.querySelector('#selectOptionText').innerText = selectedSupplier.name;
             supplierSelect.dataset.value = material.supplier_id;
         }
     } else {
-        supplierSelect.querySelector('.select-option-dropdowns .selectOptionText').innerText = 'Select a supplier';
+        supplierSelect.querySelector('#selectOptionText').innerText = 'Select a supplier';
     }
     supplierSelectContainer.append(supplierLabel, supplierSelect);
 
@@ -188,11 +190,11 @@ async function createMaterialOverlay(material = null, refreshMaterialsContentFn)
     if (isEditMode && material?.unit_id) {
         const selectedUnit = units.find(u => u.id === material.unit_id);
         if (selectedUnit) {
-            unitSelect.querySelector('.select-option-dropdowns .selectOptionText').innerText = selectedUnit.name;
+            unitSelect.querySelector('#selectOptionText').innerText = selectedUnit.name;
             unitSelect.dataset.value = material.unit_id;
         }
     } else {
-        unitSelect.querySelector('.select-option-dropdowns .selectOptionText').innerText = 'Select a unit';
+        unitSelect.querySelector('#selectOptionText').innerText = 'Select a unit';
     }
     unitSelectContainer.append(unitLabel, unitSelect);
 
@@ -259,21 +261,26 @@ async function createMaterialOverlay(material = null, refreshMaterialsContentFn)
 
     actionButtonsContainer.append(cancelButton, saveButton);
 
-    const { overlay, overlayBody } = createOverlayWithBg(overlayTitle, form, actionButtonsContainer);
+    const { overlayBackground, overlayHeader, overlayBody } = createOverlayWithBg();
+    overlayHeader.innerText = overlayTitle;
     overlayBody.append(form, actionButtonsContainer);
 
-    showOverlayWithBg(overlay);
+    showOverlayWithBg(overlayBackground);
 }
 
 async function generateMaterialsContent(role) {
     const materialsBodyContent = document.getElementById('materialsBodyContainer'); // Assuming a div with this ID in the HTML
     materialsBodyContent.innerHTML = ''; // Clear existing content
 
-    const materialsContainer = div('materials-main-container');
-    const headerContainer = div('materials-header-container');
-    const filterContainer = div('materials-filter-container');
-    const materialsListContainer = div('materials-list-container');
-    const paginationContainer = div('materialsPaginationContainer', 'pagination-container');
+    // New Header
+    const bodyHeader = div('', 'body-header');
+    const bodyHeaderContainer = div('', 'body-header-container');
+    const title = span('', 'body-header-title');
+    title.innerText = 'Materials';
+    const subtitle = span('', 'body-header-subtitle');
+    subtitle.innerText = 'Manage and track all construction materials.';
+    bodyHeaderContainer.append(title, subtitle);
+    bodyHeader.append(bodyHeaderContainer);
     
     const user = await fetchData('/profile');
     if (user === 'error') {
@@ -284,16 +291,20 @@ async function generateMaterialsContent(role) {
     // Add Material Button (Admin, PM, Engineer, Foreman)
     const allowedRolesForAdd = ['admin', 'engineer', 'project manager', 'foreman'];
     if (allowedRolesForAdd.includes(role)) {
-        const addMaterialBtn = createButton('addMaterialBtn', 'solid-buttons', 'Add Material', 'addMaterialBtnText', 'addWhite.png');
+        const addMaterialBtn = createButton('addMaterialBtn', 'solid-buttons', 'Add Material', 'addMaterialBtnText', 'addMaterialBtnIcon');
         addMaterialBtn.addEventListener('click', () => {
             createMaterialOverlay(null, () => renderMaterials(new URLSearchParams(), role, currentUserId));
         });
-        headerContainer.append(addMaterialBtn);
+        bodyHeader.append(addMaterialBtn);
     }
 
-    headerContainer.append(filterContainer);
-    materialsContainer.append(headerContainer, materialsListContainer, paginationContainer);
-    materialsBodyContent.append(materialsContainer);
+    const materialsContainer = div('materials-main-container');
+    const filterContainer = div('materials-filter-container');
+    const materialsListContainer = div('materials-list-container');
+    const paginationContainer = div('materialsPaginationContainer', 'pagination-container');
+    
+    materialsContainer.append(filterContainer, materialsListContainer, paginationContainer);
+    materialsBodyContent.append(bodyHeader, materialsContainer);
 
     let currentPage = 1;
     let itemsPerPage = 10;
@@ -308,14 +319,30 @@ async function generateMaterialsContent(role) {
         const data = await fetchData(`/api/materials?${urlParams.toString()}`);
         materialsListContainer.innerHTML = '';
         
-        if (data === 'error' || data.length === 0) {
+        if (data === 'error' || data.materials.length === 0) {
             showEmptyPlaceholder('/assets/icons/materials.png', materialsListContainer, null, "No materials found.");
             return;
         }
 
-        data.forEach(material => {
+        data.materials.forEach(material => {
             materialsListContainer.append(createMaterialCard(material, currentRole, currentUserId, () => renderMaterials(urlParams, currentRole, currentUserId)));
         });
+
+        const paginationControls = createPaginationControls({
+            currentPage,
+            totalItems: data.total,
+            itemsPerPage,
+            onPageChange: (page) => {
+                currentPage = page;
+                renderMaterials(urlParams, currentRole, currentUserId);
+            },
+            onItemsPerPageChange: (limit) => {
+                itemsPerPage = limit;
+                currentPage = 1;
+                renderMaterials(urlParams, currentRole, currentUserId);
+            }
+        });
+        paginationContainer.append(paginationControls);
     }
 
     async function applyFilterToMaterials(filteredUrlParams) {
@@ -326,9 +353,9 @@ async function generateMaterialsContent(role) {
     const filters = await createFilterContainer(
         applyFilterToMaterials,
         'Search by material name...', 
-        { name: true, sort: true, category: true },
+        { name: true, sort: true, category: true, status: true },
         'itemName',
-        'atoz'
+        'newest'
     );
     
     filterContainer.append(filters);
@@ -800,7 +827,8 @@ async function generateLogsContent(role) {
         fetchAndRender, // The new applyFilterCallback
         'Search by user...', 
         { name: true, project: true, dateFrom: true, dateTo: true, sort: true }, // Updated 'recent' to 'sort'
-        'username'
+        'username',
+        'newest'
     );
     
     filterContainer.append(filters);

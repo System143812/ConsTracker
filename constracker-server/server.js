@@ -8,6 +8,8 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt'
 import rateLimit from 'express-rate-limit';
 import cookieParser from 'cookie-parser';
+import multer from 'multer'; // Import multer
+import fs from 'fs'; // Import fs module
 
 dotenv.config();
 const PORT = process.env.PORT;
@@ -20,6 +22,18 @@ const __dirName = path.dirname(__fileName);
 const indexDir = path.join(__dirName, "public");
 const privDir = path.join(__dirName, "private");
 const JWT_KEY = process.env.JWT_SECRET_KEY;
+
+// Multer configuration for file uploads
+const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        cb(null, path.join(__dirName, 'private', 'privateAssets', 'pictures'));
+    },
+    filename: function (req, file, cb) {
+        cb(null, Date.now() + '-' + file.originalname);
+    }
+});
+
+const upload = multer({ storage: storage });
 
 const limitRegistration = rateLimit({
     windowMs: 1000 * 60 * 20,
@@ -312,22 +326,12 @@ async function getAllUnits(res) {
 }
 
 async function getAllMaterials(res, role, assignedProjects, filters) {
-    let defaultQuery = `
-        SELECT 
-            i.item_id, 
-            i.item_name, 
-            i.item_description, 
-            i.price, 
-            i.size, 
-            i.status, 
-            i.image_url, 
-            i.created_at,
-            i.created_by,
-            mc.category_name,
-            s.supplier_name,
-            s.supplier_email,
-            s.supplier_address,
-            u.unit_name
+    const { page = 1, limit = 10, name, category, sort, status } = filters;
+    const pageInt = parseInt(page);
+    const limitInt = parseInt(limit);
+    const offset = (pageInt - 1) * limitInt;
+
+    let baseQuery = `
         FROM 
             items i
         LEFT JOIN 
@@ -339,31 +343,38 @@ async function getAllMaterials(res, role, assignedProjects, filters) {
     `;
     let filterParams = [];
     let whereClauses = [];
-    let orderByClause = '';
 
-    // Project filtering (materials are not project-specific, but the user's project association might still be relevant for future extensions)
-    // For now, materials are available to all users with the tab, regardless of project context.
-    // If we want to restrict materials by project later, we would need a junction table.
-    // The user said: "this materials is available to all users no matter what project you are holding"
-    // So, no project filtering for now, but keep the \`role\` and \`assignedProjects\` parameters for consistency if needed later.
-
-    // Search by item_name
-    if (filters.name && filters.name !== "all") {
+    if (name && name !== "all") {
         whereClauses.push(`i.item_name LIKE ?`);
-        filterParams.push(`${filters.name}%`);
+        filterParams.push(`${name}%`);
     }
 
-    // Filter by category
-    if (filters.category && filters.category !== "all") {
-        const categories = Array.isArray(filters.category) ? filters.category : [filters.category];
-        const placeholders = categories.map(() => "?").join(",");
-        whereClauses.push(`mc.category_name IN (${placeholders})`);
-        filterParams.push(...categories);
+    if (category && category !== "all") {
+        const categories = Array.isArray(category) ? category : [category];
+        if (categories.length > 0) {
+            const placeholders = categories.map(() => "?").join(",");
+            whereClauses.push(`i.category_id IN (${placeholders})`);
+            filterParams.push(...categories);
+        }
     }
 
-    // Sorting
-    if (filters.sort) {
-        switch (filters.sort) {
+    if (status && status !== "all") {
+        const statuses = status.split(',');
+        if (statuses.length > 0) {
+            const placeholders = statuses.map(() => "?").join(",");
+            whereClauses.push(`i.status IN (${placeholders})`);
+            filterParams.push(...statuses);
+        }
+    }
+    
+    let whereClause = '';
+    if (whereClauses.length > 0) {
+        whereClause = ` WHERE ` + whereClauses.join(' AND ');
+    }
+
+    let orderByClause = '';
+    if (sort) {
+        switch (sort) {
             case 'newest':
                 orderByClause = 'ORDER BY i.created_at DESC';
                 break;
@@ -377,22 +388,35 @@ async function getAllMaterials(res, role, assignedProjects, filters) {
                 orderByClause = 'ORDER BY i.item_name DESC';
                 break;
             default:
-                orderByClause = 'ORDER BY i.created_at DESC'; // Default sort
+                orderByClause = 'ORDER BY i.created_at DESC';
                 break;
         }
     } else {
-        orderByClause = 'ORDER BY i.created_at DESC'; // Default sort
+        orderByClause = 'ORDER BY i.created_at DESC';
     }
 
-    let finalQuery = defaultQuery;
-    if (whereClauses.length > 0) {
-        finalQuery += ` WHERE ` + whereClauses.join(' AND ');
-    }
-    finalQuery += ` ${orderByClause}`;
+    const countQuery = `SELECT COUNT(i.item_id) AS total ${baseQuery} ${whereClause}`;
+    
+    const dataQuery = `
+        SELECT 
+            i.item_id, i.item_name, i.item_description, i.price, i.size, 
+            i.status, i.image_url, i.created_at, i.created_by,
+            mc.category_name, s.supplier_name, s.supplier_email,
+            s.supplier_address, u.unit_name
+        ${baseQuery}
+        ${whereClause}
+        ${orderByClause}
+        LIMIT ${limitInt}
+        OFFSET ${offset}
+    `;
 
     try {
-        const [result] = await pool.execute(finalQuery, filterParams);
-        return result;
+        const [countResult] = await pool.execute(countQuery, filterParams);
+        const total = countResult[0].total;
+
+        const [materials] = await pool.execute(dataQuery, filterParams);
+        
+        return { materials, total };
     } catch (error) {
         failed(res, 500, `Database Error: ${error}`);
     }
@@ -1050,16 +1074,25 @@ app.get('/api/materials', authMiddleware(['all']), async(req, res) => {
     res.status(200).json(await getAllMaterials(res, req.user.role, req.user.projects, filters));
 });
 
-app.post('/api/materials', authMiddleware(['admin', 'engineer', 'project manager', 'foreman']), async(req, res) => {
-    const { item_name } = req.body;
+app.post('/api/materials', authMiddleware(['admin', 'engineer', 'project manager', 'foreman']), upload.single('image'), async(req, res) => {
+    const { item_name, item_description, price, unit_id, category_id, supplier_id, size } = req.body;
+    const image_url = req.file ? req.file.filename : 'constrackerWhite.svg'; // Get filename if uploaded
     const { id: userId, role: userRole } = req.user;
 
-    if (!req.body.item_name || !req.body.price || !req.body.category_id || !req.body.supplier_id || !req.body.unit_id) {
+    // Validate incoming data
+    if (!item_name || !price || !category_id || !supplier_id || !unit_id) {
+        // If validation fails and a file was uploaded, delete it to prevent orphaned files
+        if (req.file) {
+            fs.unlink(req.file.path, (err) => {
+                if (err) console.error("Failed to delete uploaded file:", err);
+            });
+        }
         return failed(res, 400, 'Missing required fields: item_name, price, unit, category, and supplier are required.');
     }
 
     try {
-        const materialId = await createMaterial(res, req.body, userId, userRole);
+        const materialData = { item_name, item_description, price, unit_id, category_id, supplier_id, size, image_url };
+        const materialId = await createMaterial(res, materialData, userId, userRole);
         const logData = {
             logName: `created material ${item_name}`,
             projectId: 0, // Materials are not project-specific, using 0 or null as placeholder
@@ -1070,6 +1103,12 @@ app.post('/api/materials', authMiddleware(['admin', 'engineer', 'project manager
         const message = userRole === 'engineer' ? 'Material created and approved successfully.' : 'Material created successfully, awaiting approval.';
         res.status(201).json({ status: 'success', message, materialId });
     } catch (error) {
+        // If an error occurs and a file was uploaded, delete it
+        if (req.file) {
+            fs.unlink(req.file.path, (err) => {
+                if (err) console.error("Failed to delete uploaded file on error:", err);
+            });
+        }
         failed(res, 500, `Database Error: ${error}`);
     }
 });
@@ -1079,17 +1118,20 @@ app.put('/api/materials/:materialId/approve', authMiddleware(['engineer']), asyn
     const { id: userId } = req.user;
 
     try {
-        // Fetch material to get its name for logging and to check existence
-        const [materialResult] = await pool.execute('SELECT item_name, category_id, supplier_id, unit_id FROM items WHERE item_id = ?', [materialId]);
+        // Fetch material to get its name and creator for logging
+        const [materialResult] = await pool.execute('SELECT item_name, created_by FROM items WHERE item_id = ?', [materialId]);
         if (materialResult.length === 0) {
             return failed(res, 404, 'Material not found.');
         }
         const material = materialResult[0];
 
+        const [creator] = await pool.execute('SELECT full_name FROM users WHERE user_id = ?', [material.created_by]);
+        const creatorName = creator.length > 0 ? creator[0].full_name : 'an unknown user';
+
         const success = await approveMaterial(res, materialId, userId);
         if (success) {
             const logData = {
-                logName: `approved material ${material.item_name}`,
+                logName: `approved material quality check request of ${creatorName}`,
                 projectId: 0,
                 type: 'item',
                 action: 'approved',
@@ -1104,21 +1146,79 @@ app.put('/api/materials/:materialId/approve', authMiddleware(['engineer']), asyn
     }
 });
 
-app.put('/api/materials/:materialId', authMiddleware(['admin', 'engineer']), async(req, res) => {
+app.put('/api/materials/:materialId/decline', authMiddleware(['engineer']), async(req, res) => {
     const { materialId } = req.params;
     const { id: userId } = req.user;
-    const { item_name, item_description, price, unit_id, category_id, supplier_id, size, image_url } = req.body;
 
     try {
-        // Fetch old material data for logging changes
+        const [materialResult] = await pool.execute('SELECT item_name FROM items WHERE item_id = ?', [materialId]);
+        if (materialResult.length === 0) {
+            return failed(res, 404, 'Material not found.');
+        }
+        const material = materialResult[0];
+
+        // For now, let's just delete the material as a "decline" action.
+        // A better implementation would be to set a 'declined' status.
+        const [result] = await pool.execute('DELETE FROM items WHERE item_id = ?', [materialId]);
+
+        if (result.affectedRows > 0) {
+            const logData = {
+                logName: `declined material ${material.item_name}`,
+                projectId: 0,
+                type: 'item',
+                action: 'declined',
+            };
+            await createLogs(res, req, logData);
+            res.status(200).json({ status: 'success', message: 'Material declined successfully.' });
+        } else {
+            failed(res, 400, 'Failed to decline material.');
+        }
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+});
+
+app.put('/api/materials/:materialId', authMiddleware(['admin', 'engineer']), upload.single('image'), async(req, res) => {
+    const { materialId } = req.params;
+    const { id: userId } = req.user;
+    const { item_name, item_description, price, unit_id, category_id, supplier_id, size, image_url: old_image_url_from_body } = req.body; // Renamed image_url from body
+
+    const new_image_filename = req.file ? req.file.filename : old_image_url_from_body; // Use new file if uploaded, otherwise keep old
+
+    try {
+        // Fetch old material data for logging changes and to get original image_url if not updated
         const [oldMaterialResult] = await pool.execute('SELECT item_name, item_description, price, unit_id, category_id, supplier_id, size, image_url FROM items WHERE item_id = ?', [materialId]);
         if (oldMaterialResult.length === 0) {
+            // If new file was uploaded but material not found, delete it
+            if (req.file) {
+                fs.unlink(req.file.path, (err) => {
+                    if (err) console.error("Failed to delete uploaded file:", err);
+                });
+            }
             return failed(res, 404, 'Material not found.');
         }
         const oldMaterial = oldMaterialResult[0];
 
-        const success = await updateMaterial(res, materialId, req.body, userId);
+        const materialData = { 
+            item_name: item_name, 
+            item_description: item_description, 
+            price: price, 
+            unit_id: unit_id, 
+            category_id: category_id, 
+            supplier_id: supplier_id, 
+            size: size, 
+            image_url: new_image_filename || oldMaterial.image_url // Ensure image_url is always set
+        };
+
+        const success = await updateMaterial(res, materialId, materialData, userId);
         if (success) {
+            // If a new file was uploaded and old image was not default, delete the old file
+            if (req.file && oldMaterial.image_url && oldMaterial.image_url !== 'constrackerWhite.svg') {
+                fs.unlink(path.join(__dirName, 'private', 'privateAssets', 'pictures', oldMaterial.image_url), (err) => {
+                    if (err) console.error("Failed to delete old image file:", err);
+                });
+            }
+
             const logDetails = [];
             // Compare fields and add to logDetails if changed
             if (item_name !== undefined && item_name !== oldMaterial.item_name) {
@@ -1151,8 +1251,8 @@ app.put('/api/materials/:materialId', authMiddleware(['admin', 'engineer']), asy
             if (size !== undefined && size !== oldMaterial.size) {
                 logDetails.push({ varName: 'size', oldVal: oldMaterial.size, newVal: size, label: 'Size' });
             }
-            if (image_url !== undefined && image_url !== oldMaterial.image_url) {
-                logDetails.push({ varName: 'image_url', oldVal: oldMaterial.image_url, newVal: image_url, label: 'Image URL' });
+            if (new_image_filename !== oldMaterial.image_url) {
+                logDetails.push({ varName: 'image_url', oldVal: oldMaterial.image_url, newVal: new_image_filename, label: 'Image URL' });
             }
 
             if (logDetails.length > 0) {
@@ -1167,9 +1267,21 @@ app.put('/api/materials/:materialId', authMiddleware(['admin', 'engineer']), asy
             }
             res.status(200).json({ status: 'success', message: 'Material updated successfully.' });
         } else {
+            // If update failed and a new file was uploaded, delete it
+            if (req.file) {
+                fs.unlink(req.file.path, (err) => {
+                    if (err) console.error("Failed to delete uploaded file:", err);
+                });
+            }
             failed(res, 400, 'Failed to update material.');
         }
     } catch (error) {
+        // If an error occurs and a new file was uploaded, delete it
+        if (req.file) {
+            fs.unlink(req.file.path, (err) => {
+                if (err) console.error("Failed to delete uploaded file on error:", err);
+            });
+        }
         failed(res, 500, `Database Error: ${error}`);
     }
 });
