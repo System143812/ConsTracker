@@ -1516,3 +1516,36 @@ body {
     background: #1a3e72;
     transition: width 1s ease-in-out;
 }
+
+/* Prevent the dashboard from pushing the sidebar down */
+#dashboardBodyContainer {
+    height: 100%;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Force the graph containers to have a fixed height */
+.graph-box {
+    flex: 1;
+    background: white;
+    padding: 20px;
+    border-radius: 12px;
+    border: 1px solid #e0e0e0;
+    position: relative; /* CRITICAL for Chart.js responsiveness */
+    height: 300px; 
+    min-width: 0; /* Prevents flex items from bulging */
+}
+
+.graph-box canvas {
+    max-height: 100% !important;
+    width: 100% !important;
+}
+
+/* Ensure cards don't stretch vertically */
+.dashboard-stats-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    flex-shrink: 0;
+}

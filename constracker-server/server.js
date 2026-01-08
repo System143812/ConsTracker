@@ -602,11 +602,54 @@ async function getCategories(res) {
     }
 }
 
+// Add New Project Endpoint
+app.post('/api/projects', async (req, res) => {
+    const { project_name, project_location, project_status } = req.body;
+
+    // Basic validation
+    if (!project_name || !project_location || !project_status) {
+        return res.status(400).json({ message: 'All fields are required.' });
+    }
+
+    try {
+        // SQL query to insert project into the 'projects' table
+        const query = `
+            INSERT INTO projects (project_name, project_location, project_status, created_at) 
+            VALUES (?, ?, ?, NOW())
+        `;
+        
+        const [result] = await db.execute(query, [project_name, project_location, project_status]);
+
+        if (result.affectedRows > 0) {
+            res.status(201).json({ 
+                message: 'Project created successfully', 
+                projectId: result.insertId 
+            });
+        } else {
+            throw new Error('Failed to insert project');
+        }
+    } catch (error) {
+        console.error('Database error during project creation:', error);
+        res.status(500).json({ message: 'Internal Server Error' });
+    }
+});
+
 app.get('/api/selection/:type', authMiddleware(['all']), async(req, res) => {
     if (req.params.type === 'category') {
         res.status(200).json(await getCategories(res));
     } else {
         res.status(200).json(await getSelection(res, req, req.params.type));    
+    }
+});
+
+app.post('/api/projects', async (req, res) => {
+    const { project_name, project_location, project_status } = req.body;
+    try {
+        const sql = `INSERT INTO projects (project_name, project_location, project_status) VALUES (?, ?, ?)`;
+        const [result] = await db.execute(sql, [project_name, project_location, project_status]);
+        res.status(200).json({ message: 'Success', id: result.insertId });
+    } catch (err) {
+        res.status(500).send(err.message);
     }
 });
 
@@ -1057,7 +1100,7 @@ app.get('/api/recentMatReqs', authMiddleware(['admin']), async (req, res) => {
                 mr.status, 
                 mr.created_at as request_date,
                 (SELECT COUNT(*) FROM material_request_items WHERE mr_id = mr.id) as item_count,
-                (SELECT SUM(mri.quantity * i.item_price) 
+                (SELECT SUM(mri.quantity * i.price) 
                  FROM material_request_items mri 
                  JOIN items i ON mri.item_id = i.item_id 
                  WHERE mri.mr_id = mr.id) as cost
@@ -1250,6 +1293,23 @@ app.get('/access', authMiddleware(['all']), (req, res) => {
 
 // --- DASHBOARD API ROUTES ---
 
+// Endpoint for Dashboard Summary
+app.get('/api/dashboard/stats', async (req, res) => {
+    try {
+        const [projects] = await db.execute('SELECT COUNT(*) as total FROM projects');
+        const [materials] = await db.execute('SELECT COUNT(*) as total FROM materials_request WHERE status = "pending"');
+        const [personnel] = await db.execute('SELECT COUNT(*) as total FROM users WHERE role != "admin"');
+        
+        res.json({
+            totalProjects: projects[0].total,
+            pendingMaterials: materials[0].total,
+            activePersonnel: personnel[0].total
+        });
+    } catch (err) {
+        res.status(500).send(err.message);
+    }
+});
+
 // 1. Summary Cards
 app.get('/api/adminSummaryCards/dashboard', authMiddleware(['admin']), async (req, res) => {
     try {
@@ -1297,7 +1357,7 @@ app.get('/api/recentMatReqs', authMiddleware(['admin']), async (req, res) => {
                 mr.status, 
                 mr.created_at as request_date,
                 (SELECT COUNT(*) FROM material_request_items WHERE mr_id = mr.id) as item_count,
-                (SELECT SUM(mri.quantity * i.item_price) 
+                (SELECT SUM(mri.quantity * i.price) 
                  FROM material_request_items mri 
                  JOIN items i ON mri.item_id = i.item_id 
                  WHERE mri.mr_id = mr.id) as cost
@@ -1307,14 +1367,13 @@ app.get('/api/recentMatReqs', authMiddleware(['admin']), async (req, res) => {
             ORDER BY mr.created_at DESC
             LIMIT 5
         `;
-        const [results] = await pool.query(query);
-        res.json(results);
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ status: 'failed', message: error.message });
+        const [rows] = await pool.query(query);
+        res.json(rows); 
+    } catch (err) {
+        console.error("Recent Mat Req Error:", err);
+        res.status(500).json({ error: "Database error" });
     }
 });
-
 // 4. In Progress Projects (For progress bars)
 app.get('/api/inprogressProjects', authMiddleware(['admin']), async (req, res) => {
     try {

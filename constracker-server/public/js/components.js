@@ -25,16 +25,39 @@ export function button(id, className) {
 }
 
 // js/components.js
-export function createSectionTabs(tabs, container) {
-    const tabsContainer = div('sectionTabsContainer', 'section-tabs-container');
-    tabs.forEach(tab => {
-        const tabEl = div(`${tab.id}Tab`, 'section-tab');
-        tabEl.innerText = tab.label;
-        tabEl.addEventListener('click', () => tab.action());
-        tabsContainer.append(tabEl);
+// js/components.js
+export function createSectionTabs(tabs, projectId, refreshActiveTabContentFn) {
+    const selectionTabContainer = div('selectionTabContainer', 'selection-tab-container');
+    selectionTabContainer.id = 'selectionTabContainer';
+
+    // SAFETY CHECK: Force 'tabs' to be an array even if a string is passed
+    const tabList = Array.isArray(tabs) ? tabs : [tabs];
+
+    const selectionTabsWrapper = div('', 'selection-tabs-wrapper');
+    
+    tabList.forEach((tabLabel, index) => {
+        const tab = div('', 'selection-tabs');
+        tab.innerText = tabLabel;
+        
+        // Add your selection logic here...
+        if(index === 0) tab.classList.add('selected');
+
+        tab.addEventListener('click', () => {
+            document.querySelectorAll('.selection-tabs').forEach(t => t.classList.remove('selected'));
+            tab.classList.add('selected');
+            // Logic to trigger refreshActiveTabContentFn...
+        });
+
+        selectionTabsWrapper.append(tab);
     });
-    container.append(tabsContainer);
+
+    const selectionTabContent = div('selectionTabContent');
+    selectionTabContent.id = 'selectionTabContent';
+
+    selectionTabContainer.append(selectionTabsWrapper, selectionTabContent);
+    return selectionTabContainer;
 }
+
 
 function getErrSpan(inputField) {
     return inputField

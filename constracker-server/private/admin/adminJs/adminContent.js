@@ -487,121 +487,137 @@ async function generateLogsContent() {
     }
 }
 
-const tabContents = {
-    dashboard: {
-        generateContent: async() => await generateDashboardContent(),
-        generateGraphs: async() => await initDashboardGraphs()
-    },
-    projects: {
-        generateContent: async() => await generateProjectsContent(),
-        generateGraphs: async() => ''
-    },
-    inventory: {
-        generateContent: async function renderInventory(projectId, role, refreshActiveTabContentFn) {
-            const inventorySectionContainer = div('inventorySectionContainer');
-            inventorySectionContainer.innerText = 'Inventory Content for Project: ' + projectId + ' (Role: ' + role + ')'; // Example with parameters
-            return inventorySectionContainer;
-        },
-        generateGraphs: async() => ''
-    },
-    materialsRequest: {
-        generateContent: async() => '',
-        generateGraphs: async() => ''
-    },
-    personnel: {
-        generateContent: async() => '',
-        generateGraphs: async() => ''
-    },
-    logs: {
-        generateContent: async() => await generateLogsContent(),
-        generateGraphs: async() => ''
-    },
-    materials: {
-        generateContent: async(role) => await generateMaterialsContent(role),
-        generateGraphs: async() => '' 
-    },
-    settings: {
-        generateContent: async() => '',
-        generateGraphs: async() => ''
-    }
-}
 
+//displayContents here
+//updated displayContents to handle parameters correctly
 export async function displayContents(tabName, tabType, role) {
-    if(role !== 'admin') return alertPopup('error', 'Unauthorized Role');
+    // Hide all containers first to prevent overlapping
+    document.querySelectorAll('.body-container').forEach(container => {
+        container.style.display = 'none';
+        container.style.opacity = 0;
+    });
+
     const pageName = document.getElementById('pageName');
-    if(tabType === 'upperTabs'){
+    
+    if (tabType === 'upperTabs') {
         pageName.innerText = formatString(tabName);
-        await generateContent(tabName);
+        await generateContent(tabName, role);
     } else {
-        pageName.innerText = 'Projects'
+        pageName.innerText = 'Projects';
+        // Handle lower tabs (specific projects) if necessary
     }
 }
 
-async function generateContent(tabName) {
+
+async function generateContent(tabName, role) {
     const bodyContainer = document.getElementById(`${tabName}BodyContainer`);
+    if (!bodyContainer) {
+        console.error(`Container not found: ${tabName}BodyContainer`);
+        return;
+    }
+
     const pageData = tabContents[tabName];
-    await pageData.generateContent();
+    if (!pageData) {
+        console.error(`No content generator for tab: ${tabName}`);
+        return;
+    }
+
+    // Call the generator and pass the role
+    const content = await pageData.generateContent(role);
+    
+    // If the function returns an element (like Dashboard does), append it
+    if (content instanceof HTMLElement) {
+        bodyContainer.innerHTML = '';
+        bodyContainer.append(content);
+    }
+
     bodyContainer.style.display = 'flex';
-    bodyContainer.style.opacity = 1;
-    pageData.generateGraphs();
+    setTimeout(() => { bodyContainer.style.opacity = 1; }, 50);
+    
+    if (pageData.generateGraphs) {
+        await pageData.generateGraphs();
+    }
 }
 
-// adminContent.js
-export async function generateDashboardContent() {
+export async function generateDashboardContent(role) {
     const dashboardBodyContainer = div('dashboardBodyContainer', 'body-container');
     
-    // Create and append the header first so the user sees something
+    // Create a scrollable wrapper to prevent layout breaking
+    const scrollWrapper = div('dashboardScrollWrapper');
+    scrollWrapper.style.cssText = "flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 20px; padding: 20px;";
+    dashboardBodyContainer.append(scrollWrapper);
+
+    // Header
     const overviewTitle = div('overviewTitle', 'body-header-title');
     overviewTitle.innerText = "Dashboard Overview";
-    dashboardBodyContainer.append(overviewTitle);
+    scrollWrapper.append(overviewTitle);
 
-    // Use a try-catch block so one failing component doesn't break the whole page
+    // 1. Summary Cards (Load and Append)
     try {
-        // 1. Summary Cards
-        const summaryCards = await dashboardSummaryCards();
-        if (summaryCards) dashboardBodyContainer.append(summaryCards);
+        const summary = await dashboardSummaryCards();
+        if (summary) scrollWrapper.append(summary);
+    } catch (e) { console.error("Dashboard Summary Error:", e); }
 
-        // 2. Active Projects
-        const activeProjects = await dashboardActiveProjects('inprogress');
-        if (activeProjects) dashboardBodyContainer.append(activeProjects);
+    // 2. Graph Row (Static HTML first)
+    const graphRow = div('dashboardGraphRow');
+    graphRow.style.cssText = "display: flex; gap: 20px; height: 350px; min-height: 350px;";
+    graphRow.innerHTML = `
+        <div class="graph-box" style="flex: 1; background: white; padding: 20px; border-radius: 12px; border: 1px solid #e0e0e0; position: relative;">
+            <canvas id="projectStatusGraph"></canvas>
+        </div>
+        <div class="graph-box" style="flex: 1; background: white; padding: 20px; border-radius: 12px; border: 1px solid #e0e0e0; position: relative;">
+            <canvas id="budgetOverviewGraph"></canvas>
+        </div>
+    `;
+    scrollWrapper.append(graphRow);
 
-        // 3. Graph Containers
-        const projectOverviewContainer = div('projectOverviewContainer', 'project-overview-container');
-        projectOverviewContainer.innerHTML = `
-            <div class="graph-containers"><canvas id="projectStatusGraph"></canvas></div>
-            <div class="graph-containers"><canvas id="budgetOverviewGraph"></canvas></div>
-        `;
-        dashboardBodyContainer.append(projectOverviewContainer);
+    // 3. Recent Requests (Load and Append)
+    try {
+        const requests = await recentMaterialsRequest();
+        if (requests) scrollWrapper.append(requests);
+    } catch (e) { console.error("Recent Requests Error:", e); }
 
-        // 4. Initialize Graphs
-        // We use setTimeout to ensure canvases are in the DOM before Chart.js runs
-        setTimeout(() => initDashboardGraphs(), 100);
-
-        // 5. Recent Requests
-        const recentRequests = await recentMaterialsRequest();
-        if (recentRequests) dashboardBodyContainer.append(recentRequests);
-
-    } catch (error) {
-        console.error("Dashboard component failed to load:", error);
-    }
+    // CRITICAL: Delay graph initialization so the DOM is ready
+    setTimeout(() => {
+        try {
+            if (typeof initDashboardGraphs === 'function') {
+                initDashboardGraphs();
+            }
+        } catch (err) {
+            console.error("Chart.js failed to initialize:", err);
+        }
+    }, 200);
 
     return dashboardBodyContainer;
 }
 
 
-async function generateProjectsContent() {
+export async function generateProjectsContent(role) {
     const projectsBodyContent = document.getElementById('projectsBodyContent');
-    projectsBodyContent.innerHTML = ''; // Clear existing content
+    if (!projectsBodyContent) return;
+    projectsBodyContent.innerHTML = ''; 
+
+    // Header container for the action button
+    const projectActionsHeader = div('project-actions-header');
+    projectActionsHeader.style.cssText = "display: flex; justify-content: flex-end; padding: 10px 0;";
+
+    if (role === 'admin') {
+        const addProjectBtn = createButton('addProjectBtn', 'solid-buttons', 'Add New Project', 'addProjectBtnText', 'addWhite.png');
+        addProjectBtn.addEventListener('click', () => createProjectOverlay(() => generateProjectsContent(role)));
+        projectActionsHeader.append(addProjectBtn);
+    }
 
     const projectsContainer = div('projects-main-container');
     const projectListContainer = div('project-list-container');
     const projectDetailsContainer = div('project-details-container');
 
     projectsContainer.append(projectListContainer, projectDetailsContainer);
-    projectsBodyContent.append(projectsContainer);
+    
+    // Append button header first, then content
+    projectsBodyContent.append(projectActionsHeader, projectsContainer);
 
     const projects = await fetchData('/api/allProjects');
-    if (projects === 'error' || projects.length === 0) {
+    if (projects === 'error' || !projects || projects.length === 0) {
         showEmptyPlaceholder(null, projectListContainer, null, "No projects found.");
         return;
     }
@@ -619,69 +635,175 @@ async function generateProjectsContent() {
     });
 
     projectListContainer.append(projectList);
-
-    // Show the first project's details by default
     if (projects.length > 0) {
-        projectList.children[0].classList.add('selected');
-        showProjectDetails(projects[0].project_id, projectDetailsContainer);
+        projectList.children[0].click();
     }
 }
 
-async function showProjectDetails(projectId, container) {
-    // New helper function to update project percentage
+const tabContents = {
+    dashboard: {
+        generateContent: async (role) => await generateDashboardContent(role),
+        generateGraphs: async () => await initDashboardGraphs()
+    },
+    projects: {
+        generateContent: async (role) => await generateProjectsContent(role),
+        generateGraphs: async () => ''
+    },
+    inventory: {
+        generateContent: async (projectId, role) => {
+            const container = div('inventorySectionContainer');
+            container.innerText = `Inventory Content for Project: ${projectId} (Role: ${role})`;
+            return container;
+        },
+        generateGraphs: async () => ''
+    },
+    materialsRequest: {
+        generateContent: async () => '',
+        generateGraphs: async () => ''
+    },
+    personnel: {
+        generateContent: async () => '',
+        generateGraphs: async () => ''
+    },
+    logs: {
+        generateContent: async () => await generateLogsContent(),
+        generateGraphs: async () => ''
+    },
+    materials: {
+        generateContent: async (role) => await generateMaterialsContent(role),
+        generateGraphs: async () => ''
+    },
+    settings: {
+        generateContent: async () => '',
+        generateGraphs: async () => ''
+    }
+};
+
+
+
+async function createProjectOverlay(refreshCallback) {
+    const overlayTitle = 'Add New Project';
+    
+    const form = document.createElement('form');
+    form.id = 'projectForm';
+    form.classList.add('overlay-form');
+
+    // Form Fields
+    const projectNameInput = createInput('text', 'default', 'Project Name', 'projectName', 'project_name', '', 'Enter project name');
+    const projectLocationInput = createInput('text', 'default', 'Location', 'projectLocation', 'project_location', '', 'e.g. Imus, Cavite');
+    
+    // Status Select (using your createFilterInput component style)
+    const statusOptions = [
+        { id: 'planning', name: 'Planning' },
+        { id: 'in progress', name: 'In Progress' }
+    ];
+    
+    const statusSelectContainer = div('statusSelectContainer', 'input-box-containers');
+    const statusLabel = document.createElement('label');
+    statusLabel.innerText = 'Initial Status';
+    statusLabel.classList.add('input-labels');
+    
+    const statusSelect = createFilterInput('select', 'dropdown', 'projectStatusSelect', 'project_status', '', '', '', 'single', 1, statusOptions);
+    statusSelect.querySelector('.select-option-dropdowns .selectOptionText').innerText = 'Select Status';
+    
+    statusSelectContainer.append(statusLabel, statusSelect);
+    form.append(projectNameInput, projectLocationInput, statusSelectContainer);
+
+    const actionButtons = div('projectActionButtons', 'action-buttons-container');
+    const saveBtn = createButton('saveProjectBtn', 'solid-buttons', 'Create Project', 'saveBtnText');
+    const cancelBtn = createButton('cancelProjectBtn', 'solid-buttons', 'Cancel', 'cancelBtnText');
+
+    cancelBtn.addEventListener('click', () => hideOverlayWithBg());
+
+    saveBtn.addEventListener('click', async () => {
+        const payload = {
+            project_name: projectNameInput.querySelector('input').value,
+            project_location: projectLocationInput.querySelector('input').value,
+            project_status: statusSelect.dataset.value
+        };
+
+        if (!payload.project_name || !payload.project_location || !payload.project_status) {
+            return alertPopup('error', 'Please fill in all fields.');
+        }
+
+        const response = await fetch('/api/projects', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (response.ok) {
+            alertPopup('success', 'Project created successfully!');
+            hideOverlayWithBg();
+            refreshCallback();
+        } else {
+            alertPopup('error', 'Failed to create project.');
+        }
+    });
+
+    actionButtons.append(cancelBtn, saveBtn);
+    const { overlay } = createOverlayWithBg(overlayTitle, form, actionButtons);
+    showOverlayWithBg(overlay);
+}
+
+
+
+async function showProjectDetails(projectId, container, role = 'admin') {
+    // 1. Define the Tab Array based on role. 
+    // This ensures createSectionTabs receives an ARRAY, not a string.
+    const roleTabs = {
+        'admin': ['Overview', 'Milestones', 'Inventory', 'Personnel', 'Logs'],
+        'project manager': ['Overview', 'Milestones', 'Inventory', 'Personnel'],
+        'engineer': ['Overview', 'Milestones', 'Inventory'],
+        'foreman': ['Overview', 'Inventory']
+    };
+
+    const tabsToCreate = roleTabs[role] || ['Overview'];
+
+    // Helper: Update percentage
     async function updateProjectPercentage() {
         const data = await fetchData(`/api/getProjectCard/${projectId}`);
-        if(data === 'error') return alertPopup('error', 'Network Connection Error');
+        if(data === 'error') return; 
         const projectsOverallPercent = document.getElementById('projectsOverallPercent');
-        if (projectsOverallPercent) { // Ensure element exists before updating
+        if (projectsOverallPercent) {
             projectsOverallPercent.innerText = `${Math.round(data.progress)}%`;
         }
     }
 
-    // New helper function to refresh the content of the currently active tab
-    async function refreshActiveTabContent(currentProjectId, role) { // currentProjectId and role passed to ensure context
-        await updateProjectPercentage(currentProjectId); // Update project percentage
+    // Helper: Refresh Tab Content
+    async function refreshActiveTabContent(currentProjectId, currentRole) {
+        await updateProjectPercentage();
 
         const selectionTabContent = document.getElementById('selectionTabContent');
-        if (!selectionTabContent) return; // Should not happen if initialized correctly
+        if (!selectionTabContent) return;
 
-        const activeTab = selectionTabContent.closest('.selection-tab-container')?.querySelector('.selection-tabs.selected');
-
-        let currentRenderFunction;
-        let currentTabData;
-
-        // Retrieve the render function and tab data from the active tab element
-        if (activeTab && activeTab.tabData) {
-            currentTabData = activeTab.tabData;
-            currentRenderFunction = currentTabData.render;
-        } else {
-            // Default to milestones if no tab is active or tabData is missing
-            currentTabData = {id: "selectionTabMilestones", label: "Milestones", render: generateMilestonesContent};
-            currentRenderFunction = generateMilestonesContent;
-        }
+        const activeTab = document.querySelector('.selection-tabs.selected');
         
-        // Clear the current content and append the refreshed content
+        // Logic to determine which content to render
+        let renderFn = generateMilestonesContent; // Default
+        if (activeTab && activeTab.innerText === 'Inventory') renderFn = generateMaterialsContent;
+        // ... add other tab logic here if needed ...
+
         selectionTabContent.innerHTML = '';
-        selectionTabContent.append(await currentRenderFunction(currentProjectId, role, refreshActiveTabContent));
+        const content = await renderFn(currentProjectId, currentRole, refreshActiveTabContent);
+        selectionTabContent.append(content);
     }
 
-
-    let selectionTabContainer = container.querySelector('#selectionTabContainer'); // Try to find it inside the container
+    let selectionTabContainer = container.querySelector('#selectionTabContainer');
 
     if (!selectionTabContainer) {
-        // If selectionTabContainer doesn't exist, create it once
-        container.innerHTML = ''; // Clear previous details before appending new structure
-        selectionTabContainer = createSectionTabs('admin', projectId, refreshActiveTabContent); // Pass refresh function here
+        container.innerHTML = '';
+        // CRITICAL FIX: Passing 'tabsToCreate' (The Array) instead of 'admin' (The String)
+        selectionTabContainer = createSectionTabs(tabsToCreate, projectId, refreshActiveTabContent);
         container.append(selectionTabContainer);
     } else {
-        // If it exists, ensure its body content is cleared before re-rendering new content for the selected tab
         const selectionTabContent = selectionTabContainer.querySelector('#selectionTabContent');
-        selectionTabContent.innerHTML = '';
+        if (selectionTabContent) selectionTabContent.innerHTML = '';
     }
 
-    // Now, call the initial rendering of the active tab content
-    await refreshActiveTabContent(projectId, 'admin'); // Initial refresh for the current project
+    await refreshActiveTabContent(projectId, role);
 }
+
 
 async function generateMilestonesContent(projectId, role, refreshActiveTabContentFn) {
     const milestonesBody = div('milestones-body');
@@ -813,88 +935,48 @@ function dashboardGraphContainer() {
     return projectOverviewContainer;
 }
 
-async function initDashboardGraphs() {
-    let progress = 0, planning = 0, completed = 0;
-    
-    const data = await fetchData('/api/projectStatusGraph');
-    if (data === 'error') return;
+/**
+ * Initializes charts and data visualizations for the dashboard
+ */
+export async function initDashboardGraphs() {
+    const ctx = document.getElementById('projectStatusChart');
+    if (!ctx) return;
 
-    // FIX: Access keys directly because 'data' is the object results[0] from the server
-    if (data) {
-        progress = data.in_progress || 0;
-        planning = data.planning || 0;
-        completed = data.completed || 0;
-    }
-    
-    const projectStatusGraphElement = document.getElementById('projectStatusGraph');
-    if (!projectStatusGraphElement) return; // Safety check
-
-    const ctxStatus = projectStatusGraphElement.getContext('2d');
-    new Chart(ctxStatus, {
-        type: 'doughnut', 
-        data: {
-            labels: ['Completed', 'Progress', 'Planning'],
-            datasets: [{
-                label: 'Project Status',
-                data: [completed, progress, planning],
-                backgroundColor: ['#1A3E72', '#4187bfff', '#97a6c4'],
-                borderColor: '#f0f0f0',
-                borderWidth: 2
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false, // Helps the chart fit in your CSS container
-            plugins: {
-                legend: { position: 'top' },
-                title: {
-                    display: true,
-                    text: `Total Projects: ${planning + progress + completed}`,
-                    color: '#666666',
-                    padding: 20
-                },
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            const total = context.dataset.data.reduce((a, b) => a + b, 0) || 1;
-                            const value = context.raw;
-                            const percentage = ((value / total) * 100).toFixed(1);
-                            return `${context.label}: ${value} (${percentage}%)`;
-                        }
-                    }
-                }
-            }
-        }
-    });
-
-    // --- Budget Graph remains largely the same but ensure the canvas exists ---
-    const budgetOverviewGraphElement = document.getElementById('budgetOverviewGraph');
-    if (budgetOverviewGraphElement) {
-        const ctxBudget = budgetOverviewGraphElement.getContext('2d');
-        new Chart(ctxBudget, {
-            type: 'bar',
+    try {
+        const data = await fetchData('/api/dashboard/graphData');
+        
+        new Chart(ctx, {
+            type: 'doughnut',
             data: {
-                labels: ['Geanhs', 'City Hall', 'Dali Imus'], // Placeholder names
-                datasets: [
-                    { label: 'Budget', data: [4, 5, 3], backgroundColor: '#1A3E72' },
-                    { label: 'Spent', data: [2, 1, 2.5], backgroundColor: '#4187bfff' }
-                ]
+                labels: data.labels || ['Planning', 'In Progress', 'Completed'],
+                datasets: [{
+                    data: data.values || [0, 0, 0],
+                    backgroundColor: ['#FFD180', '#81D4FA', '#C5E1A5'],
+                    borderWidth: 0
+                }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                scales: {
-                    x: {
-                        ticks: {
-                            callback: function(val, index) {
-                                const label = this.getLabelForValue(val);
-                                return label.length > 10 ? label.substring(0, 10) + '...' : label;
-                            }
-                        }
-                    }
+                plugins: {
+                    legend: { position: 'bottom' }
                 }
             }
         });
+
+        // Load recent activity preview
+        const activityList = document.getElementById('dashboardActivityList');
+        const logs = await fetchData('/api/logs?page=1&limit=5');
+        if (logs && logs.logs) {
+            activityList.innerHTML = logs.logs.map(log => `
+                <div class="mini-log-item">
+                    <strong>${log.full_name}</strong> ${log.log_name}
+                    <span>${dateFormatting(log.created_at, 'date')}</span>
+                </div>
+            `).join('');
+        }
+    } catch (err) {
+        console.error("Failed to initialize charts:", err);
     }
 }
 
@@ -983,51 +1065,72 @@ async function recentMaterialsRequest() {
     const recentRequestSubtitle = div(`recentRequestSubtitle`, `content-card-subtitle`);
     recentRequestSubtitle.innerText = 'Latest material requests requiring attention';
     
-    const data = await fetchData(`/api/recentMatReqs`);
-    if(data === 'error') return;
-    if(data.length === 0){
-        const requestCardContainer = div(`requestCardContainer`, `request-card-container`);
-        requestCardContainer.innerText = 'There are no requests so far';
-        recentRequestContainer.append(recentRequestHeader, recentRequestBody);
-        recentRequestHeader.append(recentRequestTitle, recentRequestSubtitle);
-        recentRequestBody.append(requestCardContainer);
+    // Always append the header so the dashboard doesn't look empty while loading
+    recentRequestContainer.append(recentRequestHeader, recentRequestBody);
+    recentRequestHeader.append(recentRequestTitle, recentRequestSubtitle);
 
+    // Fetch the data
+    const data = await fetchData(`/api/recentMatReqs`);
+
+    // 1. SAFETY CHECK: Prevents the "data is not iterable" crash if server returns 500 or "error"
+    if (data === 'error' || !data || !Array.isArray(data) || data.length === 0) {
+        const emptyPlaceholder = div(`emptyPlaceholder`, `request-card-container`);
+        emptyPlaceholder.style.cssText = "display: flex; justify-content: center; padding: 40px; color: #888; font-style: italic;";
+        
+        if (data === 'error') {
+            emptyPlaceholder.innerText = 'Failed to connect to server. Please try again later.';
+        } else {
+            emptyPlaceholder.innerText = 'There are no recent material requests so far.';
+        }
+        
+        recentRequestBody.append(emptyPlaceholder);
         return recentRequestContainer;
     }
-    for (const requests of data) {
 
+    // 2. DATA PROCESSING: Only runs if data is a valid array
+    for (const requests of data) {
         const requestCardContainer = div(`requestCardContainer`, `request-card-container`);
         const requestCardLeft = div(`requestCardLeft`, `request-card-left`);
         const requestCardHeader = div(`requestCardHeader`, `request-card-header`);
         const requestCardTitle = div(`requestCardTitle`, `request-card-title`);
         requestCardTitle.innerText = `${requests.project_name}`;
+        
         const requestCardPriority = div(`requestCardPriority`, `request-card-priority`);
+        // Use if/else if for cleaner logic
         if(requests.priority_level === "medium") warnType(requestCardPriority, "solid", 'yellow', '', '');
-        if(requests.priority_level === "low") warnType(requestCardPriority, "solid", 'green', '', '');
-        if(requests.priority_level === "high") warnType(requestCardPriority, "solid", 'red', '', '');
+        else if(requests.priority_level === "low") warnType(requestCardPriority, "solid", 'green', '', '');
+        else if(requests.priority_level === "high") warnType(requestCardPriority, "solid", 'red', '', '');
+        
         requestCardPriority.innerText = `${formatString(requests.priority_level)} Priority`;
+        
         const requestCardBody = div(`requestCardBody`, `request-card-body`);
         const requestCardName = div(`requestCardName`, `request-card-name`);
         requestCardName.innerText = `Requested by ${requests.requested_by} • `;
+        
         const requestCardItemCount = div(`requestCardItemCount`, `request-card-item-count`);
         requestCardItemCount.innerText = `${requests.item_count} items • `;
+        
         const requestCardCost = div(`requestCardCost`, `request-card-cost`);
-        requestCardCost.innerText = `₱${requests.cost}`;
+        // 3. COST FORMATTING: Prevents errors if cost is null from the database
+        const numericCost = requests.cost ? Number(requests.cost) : 0;
+        requestCardCost.innerText = `₱${numericCost.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        
         const requestCardRight = div(`requestCardRight`, `request-card-right`);
         const requestStatusContainer = div(`requestStatusContainer`, `request-status-container`);
         const requestStatusIcon = div(`requestStatusIcon`, `request-status-icon`);
         requestStatusIcon.classList.add('icons');
         const requestStatusLabel = div(`requestStatusLabel`, `request-status-label`);
+        
         if(requests.status === "pending") warnType(requestStatusContainer, "", 'yellow', requestStatusIcon, requestStatusLabel);
-        if(requests.status === "approved") warnType(requestStatusContainer, "", 'green', requestStatusIcon, requestStatusLabel);
-        if(requests.status === "rejected") warnType(requestStatusContainer, "", 'red', requestStatusIcon, requestStatusLabel);
+        else if(requests.status === "approved") warnType(requestStatusContainer, "", 'green', requestStatusIcon, requestStatusLabel);
+        else if(requests.status === "rejected") warnType(requestStatusContainer, "", 'red', requestStatusIcon, requestStatusLabel);
+        
         requestStatusLabel.innerText = `${requests.status}`;
+        
         const requestCardDate = div(`requestCardDate`, `request-card-date`);
         requestCardDate.innerText = `${dateFormatting(requests.request_date, 'dateTime')}`; 
-        
 
-        recentRequestContainer.append(recentRequestHeader, recentRequestBody);
-        recentRequestHeader.append(recentRequestTitle, recentRequestSubtitle);
+        // Append everything in correct order
         recentRequestBody.append(requestCardContainer);
         requestCardContainer.append(requestCardLeft, requestCardRight);
         requestCardLeft.append(requestCardHeader, requestCardBody, requestCardDate);
@@ -1036,5 +1139,6 @@ async function recentMaterialsRequest() {
         requestCardRight.append(requestStatusContainer);
         requestStatusContainer.append(requestStatusIcon, requestStatusLabel);
     }
+
     return recentRequestContainer;
 }
