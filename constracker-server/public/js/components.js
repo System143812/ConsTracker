@@ -24,6 +24,18 @@ export function button(id, className) {
     return el;
 }
 
+// js/components.js
+export function createSectionTabs(tabs, container) {
+    const tabsContainer = div('sectionTabsContainer', 'section-tabs-container');
+    tabs.forEach(tab => {
+        const tabEl = div(`${tab.id}Tab`, 'section-tab');
+        tabEl.innerText = tab.label;
+        tabEl.addEventListener('click', () => tab.action());
+        tabsContainer.append(tabEl);
+    });
+    container.append(tabsContainer);
+}
+
 function getErrSpan(inputField) {
     return inputField
         .closest('.input-box-containers')
@@ -736,5 +748,7 @@ export function createPaginationControls({
 
     return paginationContainer;
 }
+
+
 
 

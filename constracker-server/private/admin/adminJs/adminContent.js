@@ -1,8 +1,29 @@
+// adminContent.js - Top of file
 import { fetchData } from "/js/apiURL.js";
 import { formatString, dateFormatting } from "/js/string.js";
 import { alertPopup, warnType, showEmptyPlaceholder } from "/js/popups.js";
-import { createFilterContainer, createButton, createPaginationControls, div, span, createInput, createFilterInput } from "/js/components.js";
-import { createMilestoneOl, milestoneFullOl, showLogDetailsOverlay, createOverlayWithBg, hideOverlayWithBg, showDeleteConfirmation } from "/mainJs/overlays.js";
+
+// Ensure createSectionTabs is HERE
+import { 
+    createFilterContainer, 
+    createButton, 
+    createPaginationControls, 
+    div, 
+    span, 
+    createInput, 
+    createFilterInput,
+    createSectionTabs 
+} from "/js/components.js";
+
+// Ensure it is NOT here
+import { 
+    createMilestoneOl, 
+    milestoneFullOl, 
+    showLogDetailsOverlay, 
+    createOverlayWithBg, 
+    hideOverlayWithBg, 
+    showDeleteConfirmation 
+} from "/mainJs/overlays.js";
 
 const defaultImageBackgroundColors = [
     '#B388EB', '#FFD180', '#80CBC4', '#E1BEE7', '#C5E1A5',
@@ -335,6 +356,16 @@ async function generateMaterialsContent(role) {
 
 
 async function generateLogsContent() {
+    const data = await fetchData('/api/logs?page=1&limit=10');
+    
+    // Safety Check:
+    if (!data || data === 'error' || !data.logs) {
+        console.error("Logs data is missing or malformed");
+        return div('error-msg', 'Could not load logs.');
+    }
+
+    // Now it is safe to check length
+    if (data.logs.length === 0) {
     const logsBodyContent = document.getElementById('logsBodyContent');
     logsBodyContent.innerHTML = ''; // Clear existing content
 
@@ -453,6 +484,7 @@ async function generateLogsContent() {
     filterContainer.append(filters);
 
     await renderLogs(new URLSearchParams()); // Initial render without filters
+    }
 }
 
 const tabContents = {
@@ -514,15 +546,48 @@ async function generateContent(tabName) {
     pageData.generateGraphs();
 }
 
-async function generateDashboardContent() {
-    const dashboardBodyContent = document.getElementById(`dashboardBodyContent`);
-    dashboardBodyContent.append(
-        await dashboardSummaryCards(),
-        await dashboardActiveProjects('inprogress'), 
-        dashboardGraphContainer(), 
-        await recentMaterialsRequest()
-    );
+// adminContent.js
+export async function generateDashboardContent() {
+    const dashboardBodyContainer = div('dashboardBodyContainer', 'body-container');
+    
+    // Create and append the header first so the user sees something
+    const overviewTitle = div('overviewTitle', 'body-header-title');
+    overviewTitle.innerText = "Dashboard Overview";
+    dashboardBodyContainer.append(overviewTitle);
+
+    // Use a try-catch block so one failing component doesn't break the whole page
+    try {
+        // 1. Summary Cards
+        const summaryCards = await dashboardSummaryCards();
+        if (summaryCards) dashboardBodyContainer.append(summaryCards);
+
+        // 2. Active Projects
+        const activeProjects = await dashboardActiveProjects('inprogress');
+        if (activeProjects) dashboardBodyContainer.append(activeProjects);
+
+        // 3. Graph Containers
+        const projectOverviewContainer = div('projectOverviewContainer', 'project-overview-container');
+        projectOverviewContainer.innerHTML = `
+            <div class="graph-containers"><canvas id="projectStatusGraph"></canvas></div>
+            <div class="graph-containers"><canvas id="budgetOverviewGraph"></canvas></div>
+        `;
+        dashboardBodyContainer.append(projectOverviewContainer);
+
+        // 4. Initialize Graphs
+        // We use setTimeout to ensure canvases are in the DOM before Chart.js runs
+        setTimeout(() => initDashboardGraphs(), 100);
+
+        // 5. Recent Requests
+        const recentRequests = await recentMaterialsRequest();
+        if (recentRequests) dashboardBodyContainer.append(recentRequests);
+
+    } catch (error) {
+        console.error("Dashboard component failed to load:", error);
+    }
+
+    return dashboardBodyContainer;
 }
+
 
 async function generateProjectsContent() {
     const projectsBodyContent = document.getElementById('projectsBodyContent');
@@ -660,56 +725,39 @@ async function generateMilestonesContent(projectId, role, refreshActiveTabConten
 
 async function dashboardSummaryCards() {
     const dashboardSummaryCards = div('dashboardSummaryCards', 'summary-cards');
+    
+    // Default data so the page doesn't look broken if the API fails
     const dashboardCardData = {
-        activeProjects: {
-            title: "activeProjects",
-            data: "-",
-            info: "No projects so far",
-            color: "darkblue"
-        },
-        activePersonnel: {
-            title: "activePersonnel",
-            data: "-",
-            info: "No personnel exists",
-            color: "green"
-        }, 
-        pendingRequest:  {
-            title: "pendingRequest",
-            data: "-",
-            info: "No pending requests so far",
-            color: "darkorange"
-        },
-        budgetUtilization: {
-            title: "budgetUtilization",
-            data: "36.7%",
-            info: "₱34.3M of ₱93.5M",
-            color: "red"
-        }
+        activeProjects: { title: "activeProjects", data: "-", info: "No projects so far", color: "darkblue" },
+        activePersonnel: { title: "activePersonnel", data: "-", info: "No personnel exists", color: "green" }, 
+        pendingRequest:  { title: "pendingRequest", data: "-", info: "No pending requests", color: "darkorange" },
+        budgetUtilization: { title: "budgetUtilization", data: "0%", info: "No data available", color: "red" }
     };
 
     function modifyCardData(objectCardData, data, info) {
         objectCardData.data = data;
         objectCardData.info = info;
     }
-    const data = await fetchData('/api/adminSummaryCards/dashboard');
-    if(data === 'error') return;
-    const cardData = data[0];
-    if(cardData){
-        if(cardData.total_projects !== 0) modifyCardData(dashboardCardData['activeProjects'], cardData.active_projects, `${cardData.total_projects} total projects`);
-        if(cardData.total_personnel !== 0) modifyCardData(dashboardCardData['activePersonnel'], cardData.active_personnel, `${cardData.total_personnel} total personnel`);
-        if(cardData.pending_requests !== 0) modifyCardData(dashboardCardData['pendingRequest'], cardData.pending_requests, `Material request awaiting for approval`); 
-    }
-    const activeProjectsData = dashboardCardData['activeProjects'];
-    const activePersonnelData = dashboardCardData['activePersonnel'];
-    const pendingRequestData = dashboardCardData['pendingRequest'];
-    const budgetUtilizationData = dashboardCardData['budgetUtilization'];
 
+    // Try to get data, but don't crash if it fails
+    const data = await fetchData('/api/adminSummaryCards/dashboard');
+    
+    // If the API works, update the default data
+    if(data !== 'error' && data.length > 0){
+        const cardData = data[0];
+        modifyCardData(dashboardCardData['activeProjects'], cardData.active_projects, `${cardData.total_projects} total projects`);
+        modifyCardData(dashboardCardData['activePersonnel'], cardData.active_personnel, `${cardData.total_personnel} total personnel`);
+        modifyCardData(dashboardCardData['pendingRequest'], cardData.pending_requests, `Requests awaiting approval`); 
+    }
+
+    // Always append and return, even if data is still "-"
     dashboardSummaryCards.append(
-        createSummaryCards(activeProjectsData), 
-        createSummaryCards(activePersonnelData),
-        createSummaryCards(pendingRequestData),
-        createSummaryCards(budgetUtilizationData)
+        createSummaryCards(dashboardCardData['activeProjects']), 
+        createSummaryCards(dashboardCardData['activePersonnel']),
+        createSummaryCards(dashboardCardData['pendingRequest']),
+        createSummaryCards(dashboardCardData['budgetUtilization'])
     );
+    
     return dashboardSummaryCards;
 }
 
@@ -767,16 +815,22 @@ function dashboardGraphContainer() {
 
 async function initDashboardGraphs() {
     let progress = 0, planning = 0, completed = 0;
+    
     const data = await fetchData('/api/projectStatusGraph');
-    if(data === 'error') return;
-    if(data.length > 0){
-        progress = data[0].in_progress;
-        planning =  data[0].planning;
-        completed = data[0].completed;
+    if (data === 'error') return;
+
+    // FIX: Access keys directly because 'data' is the object results[0] from the server
+    if (data) {
+        progress = data.in_progress || 0;
+        planning = data.planning || 0;
+        completed = data.completed || 0;
     }
     
-    const projectStatusGraph = document.getElementById('projectStatusGraph').getContext('2d');
-    new Chart(projectStatusGraph, {
+    const projectStatusGraphElement = document.getElementById('projectStatusGraph');
+    if (!projectStatusGraphElement) return; // Safety check
+
+    const ctxStatus = projectStatusGraphElement.getContext('2d');
+    new Chart(ctxStatus, {
         type: 'doughnut', 
         data: {
             labels: ['Completed', 'Progress', 'Planning'],
@@ -784,91 +838,67 @@ async function initDashboardGraphs() {
                 label: 'Project Status',
                 data: [completed, progress, planning],
                 backgroundColor: ['#1A3E72', '#4187bfff', '#97a6c4'],
-                borderColor: ['#f0f0f0', '#f0f0f0'],
+                borderColor: '#f0f0f0',
                 borderWidth: 2
             }]
         },
         options: {
             responsive: true,
+            maintainAspectRatio: false, // Helps the chart fit in your CSS container
             plugins: {
-                legend: {
-                    position: 'top',
-                },
+                legend: { position: 'top' },
                 title: {
                     display: true,
-                    text: [`Total Projects: ${planning + progress + completed}`],
-                    font: {
-                        size: 12,
-                        weight: 500,
-                        family: 'Inter, Arial'
-                    },
-                    align: 'center',
-                    gap: 10,
+                    text: `Total Projects: ${planning + progress + completed}`,
                     color: '#666666',
                     padding: 20
                 },
                 tooltip: {
                     callbacks: {
                         label: function(context) {
-                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0) || 1;
                             const value = context.raw;
                             const percentage = ((value / total) * 100).toFixed(1);
-                            return `${context.label}: ${percentage}%`;
+                            return `${context.label}: ${value} (${percentage}%)`;
                         }
                     }
                 }
             }
         }
     });
-    const budgetOverviewGraph = document.getElementById('budgetOverviewGraph').getContext('2d');
-    new Chart(budgetOverviewGraph, {
-        type: 'bar', 
-        data: {
-            labels: ['Geanhs', 'City Hall', 'Dali Imus'],
-            datasets: [
-                {
-                    label: 'Budget',
-                    data: [4, 5, 3],
-                    backgroundColor: ['#1A3E72'],
-                    borderColor: ['#f0f0f0'],
-                    borderWidth: 1
-                }, {
-                    label: 'Spent',
-                    data: [2, 1, 2.5],
-                    backgroundColor: ['#4187bfff'],
-                    borderColor: ['#f0f0f0'],
-                    borderWidth: 1
-                }   
-            ]
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                legend: {
-                    position: 'top',
-                }
+
+    // --- Budget Graph remains largely the same but ensure the canvas exists ---
+    const budgetOverviewGraphElement = document.getElementById('budgetOverviewGraph');
+    if (budgetOverviewGraphElement) {
+        const ctxBudget = budgetOverviewGraphElement.getContext('2d');
+        new Chart(ctxBudget, {
+            type: 'bar',
+            data: {
+                labels: ['Geanhs', 'City Hall', 'Dali Imus'], // Placeholder names
+                datasets: [
+                    { label: 'Budget', data: [4, 5, 3], backgroundColor: '#1A3E72' },
+                    { label: 'Spent', data: [2, 1, 2.5], backgroundColor: '#4187bfff' }
+                ]
             },
-            scales: {
-                x: {
-                    ticks: {
-                        callback: function(index) {
-                        const label = this.getLabelForValue(index);
-                        const maxLength = 10; 
-
-                        if (label.length > maxLength) {
-                            return label.substring(0, maxLength) + '…';
-                        }
-
-                        return label;
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        ticks: {
+                            callback: function(val, index) {
+                                const label = this.getLabelForValue(val);
+                                return label.length > 10 ? label.substring(0, 10) + '...' : label;
+                            }
                         }
                     }
                 }
             }
-        }
-    });
+        });
+    }
 }
 
-async function dashboardActiveProjects(filter) {
+async function dashboardActiveProjects(filter = 'inprogress') {
     const activeProjectsContainer = div('activeProjectsContainer', 'active-projects');
 
     const activeProjectsHeader = div('activeProjectsHeader', 'content-card-header');
@@ -877,80 +907,72 @@ async function dashboardActiveProjects(filter) {
     const activeProjectsSubtitle = div('activeProjectsSubtitle', 'content-card-subtitle');
     activeProjectsSubtitle.innerText = 'Currently in-progress construction projects';
     const activeProjectsBody = div('activeProjectsBody', 'content-card-body');
+    
     const data = await fetchData(`/api/${filter}Projects`);
-    if(data === 'error') return;
-    if(data.length === 0) {
-        const progressCardContainer = div('projectProgressCards', 'project-progress-cards');
-        progressCardContainer.innerText = "There's no active projects so far";
+    
+    // Check if fetch failed
+    if(data === 'error') return activeProjectsContainer;
 
-        activeProjectsBody.append(progressCardContainer);
+    // Check if no projects exist
+    if(data.length === 0) {
+        const noProjectsCard = div('projectProgressCards', 'project-progress-cards');
+        noProjectsCard.innerText = "There's no active projects so far";
+
+        activeProjectsBody.append(noProjectsCard);
         activeProjectsHeader.append(activeProjectsTitle, activeProjectsSubtitle);
         activeProjectsContainer.append(activeProjectsHeader, activeProjectsBody);
         return activeProjectsContainer;
     } 
-    let num  = 1;
+
+    // Logic for rendering projects
+    let num = 1;
     for (const projects of data) {
-        const progressCardContainer = div(`projectProgressCards`, 'project-progress-cards');
-        const progressCardHeader = div(`progressCardHeader`, 'progress-card-header');
-        const progressCardName = div(`progressCardName`, 'progress-card-name');
+        const progressCardContainer = div(`projectProgressCards_${num}`, 'project-progress-cards');
+        const progressCardHeader = div(`progressCardHeader_${num}`, 'progress-card-header');
+        const progressCardName = div(`progressCardName_${num}`, 'progress-card-name');
         progressCardName.innerText = projects.project_name;
-        const progressCardStatus = div(`progressCardStatus`, 'progress-card-status');
+        
+        const progressCardStatus = div(`progressCardStatus_${num}`, 'progress-card-status');
         if(projects.project_status === "planning") warnType(progressCardStatus, "glass", '', '', '');
         if(projects.project_status === "in progress") warnType(progressCardStatus, "glass", 'yellow', '', '');
         if(projects.project_status === "completed") warnType(progressCardStatus, "glass", 'green', '', '');
         progressCardStatus.innerText = projects.project_status;
-        const progressCardBody = div(`progressCardBody`, 'progress-card-body');
-        const progressCardLocation = div(`progressCardLocation`, 'progress-card-location');
-        const locationCardIcon = div(`locationCardIcon`, 'light-icons');
-        const locationCardName = div(`locationCardName`, 'location-card-name');
-        locationCardName.innerText = projects.project_location;
-        const progressCardPersonnel = div(`progressCardPersonnel`, 'progress-card-personnel');
-        const personnelCardIcon = div(`personnelCardIcon`, 'light-icons');
-        const personnelCardCount = div(`personnelCardCount`, 'personnel-card-count');
-        personnelCardCount.innerText =  `${projects.total_personnel} personnel`;
-        const progressCardDue = div(`progressCardDue`, 'progress-card-due');
-        const dueCardIcon = div(`dueCardIcon`, 'light-icons');
-        const dueCardDate = div(`dueCardDate`, 'due-card-date');
-        dueCardDate.innerText = `Due ${dateFormatting(projects.duedate, 'date')}`
 
-        const progressCardFooter = div(`progressCardFooter`, 'progress-card-footer');
-        const progressUpperSection = div(`progressUpperSection`, 'progress-upper-section');
-        const progressText = div(`progressText`,'progress-text');
-        progressText.innerText = 'Progress';
-        const progressPercent = div(`progressPercent`, 'progress-percent');
-        const pctString = `${Math.floor(projects.completed_milestone / projects.total_milestone * 100)}%`;
+        const progressCardBody = div(`progressCardBody_${num}`, 'progress-card-body');
+        const progressCardLocation = div(`progressCardLocation_${num}`, 'progress-card-location');
+        progressCardLocation.innerText = projects.project_location;
+
+        const progressCardFooter = div(`progressCardFooter_${num}`, 'progress-card-footer');
+        
+        // SAFE MATH: Prevent division by zero
+        const total = projects.total_milestone || 0;
+        const completed = projects.completed_milestone || 0;
+        const calcPercent = total > 0 ? Math.floor((completed / total) * 100) : 0;
+        const pctString = `${calcPercent}%`;
+
+        const progressPercent = div(`progressPercent_${num}`, 'progress-percent');
         progressPercent.innerText = pctString;
-        const progressLowerSection = div(`progressLowerSection`, 'progress-lower-section');
-        const style = document.createElement('style');
-        style.innerHTML = `
-        @keyframes progressBarAnim${num} {
-            0% { width: 0%; }
-            100% { width: ${pctString}; }
-        }`;
-        document.head.appendChild(style);
-        const progressBar = div(`progressBar`, 'progress-bar');
+
+        const progressLowerSection = div(`progressLowerSection_${num}`, 'progress-lower-section');
+        const progressBar = div(`progressBar_${num}`, 'progress-bar');
         progressBar.style.width = pctString;
-        progressBar.style.animation = `progressBarAnim${num} 1s ease`;
-        progressBar.addEventListener("animationend", () => {
-            style.remove();
-        }, {once: true})
-        num ++;
+
         progressLowerSection.append(progressBar);
-        progressUpperSection.append(progressText, progressPercent);
-        progressCardFooter.append(progressUpperSection, progressLowerSection);
-        progressCardDue.append(dueCardIcon, dueCardDate);
-        progressCardPersonnel.append(personnelCardIcon, personnelCardCount);
-        progressCardLocation.append(locationCardIcon, locationCardName);
-        progressCardBody.append(progressCardLocation, progressCardPersonnel, progressCardDue);
+        progressCardFooter.append(progressPercent, progressLowerSection);
+        progressCardBody.append(progressCardLocation);
         progressCardHeader.append(progressCardName, progressCardStatus);
         progressCardContainer.append(progressCardHeader, progressCardBody, progressCardFooter);
-        activeProjectsBody.append(progressCardContainer);  
+        
+        activeProjectsBody.append(progressCardContainer);
+        num++;
     }
+
     activeProjectsHeader.append(activeProjectsTitle, activeProjectsSubtitle);
     activeProjectsContainer.append(activeProjectsHeader, activeProjectsBody);
-    return activeProjectsContainer;
     
+    return activeProjectsContainer; 
 }
+
 
 async function recentMaterialsRequest() {
     const recentRequestContainer = div(`recentRequestContainer`, `recent-request-container`);

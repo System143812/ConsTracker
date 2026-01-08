@@ -1017,8 +1017,26 @@ app.get('/api/adminSummaryCards/:tabName', authMiddleware(['admin']), async(req,
     res.status(200).json(await getSummaryCards(res, req.params.tabName));
 });
 
-app.get('/api/projectStatusGraph', authMiddleware(['admin']), async(req, res) => { 
-    res.status(200).json(await getProjectStatus(res));
+app.get('/api/projectStatusGraph', authMiddleware(['admin']), async (req, res) => {
+    try {
+        // Use a real SQL query instead of 'SELECT ...'
+        const query = `
+            SELECT 
+                SUM(CASE WHEN status = 'in progress' THEN 1 ELSE 0 END) as in_progress,
+                SUM(CASE WHEN status = 'planning' THEN 1 ELSE 0 END) as planning,
+                SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed
+            FROM projects
+        `;
+        const [results] = await pool.query(query);
+        
+        // results[0] contains the counts. If no projects exist, default them to 0.
+        const summary = results[0] || { in_progress: 0, planning: 0, completed: 0 };
+        
+        res.json(summary); 
+    } catch (error) {
+        console.error("Database Error:", error);
+        res.status(500).json({ status: 'failed', message: error.message });
+    }
 });
 
 app.get('/api/allProjects', authMiddleware(['admin', 'engineer']), async(req, res) => { 
@@ -1029,8 +1047,32 @@ app.get('/api/inprogressProjects', authMiddleware(['admin']), async(req, res) =>
     res.status(200).json(await getInprogressProjects(res));
 });
 
-app.get('/api/recentMatReqs', authMiddleware(['all']), async(req, res) => {
-    res.status(200).json(await recentMaterialsRequest(res));
+app.get('/api/recentMatReqs', authMiddleware(['admin']), async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                p.project_name, 
+                mr.priority_level, 
+                u.full_name as requested_by, 
+                mr.status, 
+                mr.created_at as request_date,
+                (SELECT COUNT(*) FROM material_request_items WHERE mr_id = mr.id) as item_count,
+                (SELECT SUM(mri.quantity * i.item_price) 
+                 FROM material_request_items mri 
+                 JOIN items i ON mri.item_id = i.item_id 
+                 WHERE mri.mr_id = mr.id) as cost
+            FROM material_requests mr
+            JOIN projects p ON mr.project_id = p.project_id
+            JOIN users u ON mr.user_id = u.user_id
+            ORDER BY mr.created_at DESC
+            LIMIT 5
+        `;
+        const [results] = await pool.query(query);
+        res.json(results);
+    } catch (error) {
+        console.error("Recent Mat Req Error:", error);
+        res.status(500).json({ status: 'failed', message: `Database Error: ${error.message}` });
+    }
 });
 
 app.get('/api/materials/categories', authMiddleware(['all']), async(req, res) => {
@@ -1204,6 +1246,95 @@ app.delete('/api/materials/:materialId', authMiddleware(['admin', 'engineer']), 
 
 app.get('/access', authMiddleware(['all']), (req, res) => {
     dashboardRoleAccess(req, res);
+});
+
+// --- DASHBOARD API ROUTES ---
+
+// 1. Summary Cards
+app.get('/api/adminSummaryCards/dashboard', authMiddleware(['admin']), async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                (SELECT COUNT(*) FROM projects WHERE status = 'in progress') as active_projects,
+                (SELECT COUNT(*) FROM projects) as total_projects,
+                (SELECT COUNT(*) FROM users WHERE is_active = 1) as active_personnel,
+                (SELECT COUNT(*) FROM users) as total_personnel,
+                (SELECT COUNT(*) FROM material_requests WHERE status = 'pending') as pending_requests
+        `;
+        const [results] = await pool.query(query);
+        res.json(results);
+    } catch (error) {
+        res.status(500).json({ status: 'failed', message: error.message });
+    }
+});
+
+// 2. Project Status Distribution (For Doughnut Chart)
+app.get('/api/projectStatusGraph', authMiddleware(['admin']), async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                SUM(CASE WHEN status = 'in progress' THEN 1 ELSE 0 END) as in_progress,
+                SUM(CASE WHEN status = 'planning' THEN 1 ELSE 0 END) as planning,
+                SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed
+            FROM projects
+        `;
+        const [results] = await pool.query(query);
+        res.json(results[0]); 
+    } catch (error) {
+        console.error(error); // This will show the exact SQL error in your terminal
+        res.status(500).json({ status: 'failed', message: error.message });
+    }
+});
+
+// 3. Recent Material Requests (Fixed the i.item_price typo)
+app.get('/api/recentMatReqs', authMiddleware(['admin']), async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                p.project_name, 
+                mr.priority_level, 
+                u.full_name as requested_by, 
+                mr.status, 
+                mr.created_at as request_date,
+                (SELECT COUNT(*) FROM material_request_items WHERE mr_id = mr.id) as item_count,
+                (SELECT SUM(mri.quantity * i.item_price) 
+                 FROM material_request_items mri 
+                 JOIN items i ON mri.item_id = i.item_id 
+                 WHERE mri.mr_id = mr.id) as cost
+            FROM material_requests mr
+            JOIN projects p ON mr.project_id = p.project_id
+            JOIN users u ON mr.user_id = u.user_id
+            ORDER BY mr.created_at DESC
+            LIMIT 5
+        `;
+        const [results] = await pool.query(query);
+        res.json(results);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ status: 'failed', message: error.message });
+    }
+});
+
+// 4. In Progress Projects (For progress bars)
+app.get('/api/inprogressProjects', authMiddleware(['admin']), async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                p.project_name, 
+                p.project_location, 
+                p.status as project_status, 
+                p.duedate,
+                (SELECT COUNT(*) FROM assigned_projects ap WHERE ap.project_id = p.project_id) as total_personnel,
+                (SELECT COUNT(*) FROM project_milestones pm WHERE pm.project_id = p.project_id) as total_milestone,
+                (SELECT COUNT(*) FROM project_milestones pm WHERE pm.project_id = p.project_id AND pm.status = 'completed') as completed_milestone
+            FROM projects p
+            WHERE p.status = 'in progress'
+        `;
+        const [results] = await pool.query(query);
+        res.json(results);
+    } catch (error) {
+        res.status(500).json({ status: 'failed', message: error.message });
+    }
 });
 
 app.get('/checkToken', (req, res) => {

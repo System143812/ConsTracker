@@ -64,18 +64,28 @@ export function noProjectTabPlaceholder() {
     noProjectContainer.append(noProjectIcon, noProjectText);
 }
 
-function mobileHideSidebar(tabs) {
+// Add displayContents and role to the parameters
+function mobileHideSidebar(tabs, displayContents, role) { // Add params
     for (const tab of tabs) {
-        tab.addEventListener("click", () => {
-            const sidebarContainer = document.getElementById('sidebarContainer');
-            if(sidebarContainer.classList.contains('showMobile')) {
-                document.getElementById('sidebarOverlay').classList.toggle("showMobile");
-                sidebarContainer.classList.toggle("showMobile");
-                sidebarContainer.classList.toggle('hide');
+        tab.addEventListener("click", async() => {
+            hideContents();
+            tab.classList.add('selected');
+            await showLoader();
+            try {
+                const currentTab = `${(tab.id).replace(/Tab/g, "")}`;
+                // Now displayContents is defined here!
+                await displayContents(currentTab, 'upperTabs', role);
+            } catch (e) {
+                console.error("Navigation error:", e);
+            } finally {
+                await hideLoader();
             }
         });
     }
 }
+
+
+    
 
 export function hideContents() {
     const tabs = document.querySelectorAll('.sidebar-tabs');
@@ -97,9 +107,12 @@ export function hideContents() {
     }
 }
 
-export function sidebarInitEvents(eventFunction, role) {
+export function sidebarInitEvents(displayContents, role) { 
     const tabs = document.querySelectorAll('.sidebar-tabs');
+    // FIX 1: Define projectTabs inside the function so it's accessible
     const projectTabs = document.querySelectorAll('.sidebar-project-tabs');
+
+    // Loop 1: Upper Tabs
     for (const tab of tabs) {
         if(tab.id !== 'logoutTab') {
             tab.addEventListener("click", async() => {
@@ -107,21 +120,33 @@ export function sidebarInitEvents(eventFunction, role) {
                 tab.classList.add('selected');
                 await showLoader();
                 const currentTab = `${(tab.id).replace(/Tab/g, "")}`;
-                await eventFunction(currentTab, 'upperTabs', role);
+                try {
+                    await displayContents(currentTab, 'upperTabs', role); 
+                } catch (e) {
+                    console.error("Navigation error:", e);
+                }
                 await hideLoader();
             });
         }
     }
+
+    // FIX 2: Moved this loop INSIDE the sidebarInitEvents function
     for (const projectTab of projectTabs) {
-            projectTab.addEventListener("click", async() => {
-                hideContents();
-                projectTab.classList.add('selected');
-                await showLoader();
+        projectTab.addEventListener("click", async() => {
+            hideContents();
+            projectTab.classList.add('selected');
+            await showLoader();
+            try {
                 const projectTabId = `${(projectTab.id).replace(/TabNum/g, "")}`;
-                await eventFunction(projectTabId, 'lowerTabs', role); //displayContent ang i-pass here
-                await hideLoader();
-            });
+                await displayContents(projectTabId, 'lowerTabs', role); 
+            } catch (e) {
+                console.error("Project navigation error:", e);
+            }
+            await hideLoader();
+        });
     }
-    mobileHideSidebar(tabs);
-    mobileHideSidebar(projectTabs);
+    
+    // Optional: If you use these mobile functions, call them here
+    mobileHideSidebar(tabs, displayContents, role);
+    mobileHideSidebar(projectTabs, displayContents, role);
 }
