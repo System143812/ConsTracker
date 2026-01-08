@@ -395,6 +395,10 @@
     background-image: url('/assets/icons/deleteWhite.png');
 }
 
+#addMaterialBtnIcon {
+    background-image: url('/assets/icons/addWhite.png');
+}
+
 #weightsBtnIcon, #logDetailsIcon {
     width: 11px;
     height: 11px;
@@ -455,7 +459,7 @@
     opacity: 0.8;
 }
 
-#editFormBtn, #saveFormBtn, #cancelFormBtn {
+#editFormBtn, #saveFormBtn, #cancelFormBtn{
     text-align: center;
     white-space: nowrap;
     font-size: 10px;
@@ -484,8 +488,12 @@
     background-color: var(--gray-low-opacity);
 }
 
-#editBtnText, #saveBtnText, #deleteBtnText, #weightsBtnText, #createBtnText {
+#editBtnText, #saveBtnText, #deleteBtnText, #weightsBtnText, #createBtnText, #addMaterialBtnText {
     color: var(--white-ishy-text);
+}
+
+#addMaterialBtnText {
+    font-size: 12px;
 }
 
 #weightsBtnText, #logDetailsText {
@@ -699,7 +707,6 @@ input[type='date'] {
     flex-direction: column;
     position: absolute;
     overflow-y: auto;
-    overflow: hidden;
     transition: all 0.15s ease;
 
 }
@@ -806,6 +813,16 @@ input[type='date'] {
     margin-bottom: 0.25rem;
 }
 
+.checkbox-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.checkbox-container label {
+    margin-left: 0.5rem;
+}
+
 .radio-container {
     display: flex;
     align-items: center;
@@ -818,7 +835,7 @@ input[type='date'] {
     flex-wrap: wrap;
     justify-content: center;
     gap: 1rem;
-    padding: 1rem 0;
+    padding: 1rem 0.5rem;
 }
 .page-buttons-container {
     order: 1;
@@ -884,6 +901,7 @@ input[type='date'] {
     padding: 0.25rem;
     border: 1px solid var(--light-border);
     border-radius: 3px;
+    background-color: rgba(0, 0, 0, 0);
     font-size: 12px;
 }
 

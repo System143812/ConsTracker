@@ -48,6 +48,7 @@
 
 .overlay-bodies {
     display: flex;
+    flex-direction: column;
     flex: 1;
     width: 100%;
     padding: 1rem;
@@ -467,4 +468,10 @@
     color: var(--grayed-text);
     font-style: italic;
     padding-left: 1rem;
+}
+
+.radio-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
 }

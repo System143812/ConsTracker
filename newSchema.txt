@@ -1,0 +1,572 @@
+-- MySQL dump 10.13  Distrib 9.4.0, for Win64 (x86_64)
+--
+-- Host: localhost    Database: constracker_db
+-- ------------------------------------------------------
+-- Server version	9.4.0
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!50503 SET NAMES utf8mb4 */;
+/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
+/*!40103 SET TIME_ZONE='+00:00' */;
+/*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
+/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
+/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
+/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+
+--
+-- Table structure for table `assigned_projects`
+--
+
+DROP TABLE IF EXISTS `assigned_projects`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `assigned_projects` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `user_id` int DEFAULT NULL,
+  `project_id` int DEFAULT NULL,
+  `join_date` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `assigned_projects_ibfk_1` (`user_id`),
+  KEY `assigned_projects_ibfk_2` (`project_id`),
+  CONSTRAINT `assigned_projects_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `assigned_projects_ibfk_2` FOREIGN KEY (`project_id`) REFERENCES `projects` (`project_id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=15 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `assigned_projects`
+--
+
+LOCK TABLES `assigned_projects` WRITE;
+/*!40000 ALTER TABLE `assigned_projects` DISABLE KEYS */;
+INSERT INTO `assigned_projects` VALUES (4,2,1,'2025-11-18 08:58:37'),(5,2,2,'2025-11-18 08:58:37'),(6,2,3,'2025-11-18 08:58:37'),(7,3,1,'2025-11-18 08:59:12'),(8,3,2,'2025-11-18 08:59:12'),(9,3,3,'2025-11-18 08:59:12'),(10,3,4,'2025-11-18 08:59:12'),(11,6,3,'2025-11-18 08:59:44');
+/*!40000 ALTER TABLE `assigned_projects` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `inventory`
+--
+
+DROP TABLE IF EXISTS `inventory`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `inventory` (
+  `inventory_id` int NOT NULL AUTO_INCREMENT,
+  `project_id` int NOT NULL,
+  `item_id` int NOT NULL,
+  `current_amount` int DEFAULT '0',
+  `max_capacity` int NOT NULL,
+  `min_amount` int DEFAULT '30',
+  `status` enum('low','good') DEFAULT 'good',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `updated_by` int DEFAULT NULL,
+  PRIMARY KEY (`inventory_id`),
+  KEY `inventory_ibfk_1` (`project_id`),
+  KEY `inventory_ibfk_3` (`updated_by`),
+  KEY `fk_inventory_item` (`item_id`),
+  CONSTRAINT `fk_inventory_item` FOREIGN KEY (`item_id`) REFERENCES `items` (`item_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `inventory_ibfk_1` FOREIGN KEY (`project_id`) REFERENCES `projects` (`project_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `inventory_ibfk_3` FOREIGN KEY (`updated_by`) REFERENCES `users` (`user_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `chk_inventory_amount` CHECK ((`current_amount` >= 0))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `inventory`
+--
+
+LOCK TABLES `inventory` WRITE;
+/*!40000 ALTER TABLE `inventory` DISABLE KEYS */;
+/*!40000 ALTER TABLE `inventory` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `items`
+--
+
+DROP TABLE IF EXISTS `items`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `items` (
+  `item_id` int NOT NULL AUTO_INCREMENT,
+  `item_name` varchar(255) NOT NULL,
+  `item_description` varchar(255) DEFAULT NULL,
+  `price` decimal(10,2) NOT NULL,
+  `unit_id` int DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `created_by` int DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `updated_by` int DEFAULT NULL,
+  `category_id` int DEFAULT NULL,
+  `supplier_id` int DEFAULT NULL,
+  `size` varchar(255) DEFAULT NULL,
+  `status` enum('pending','approved') DEFAULT 'pending',
+  `approved_by` int DEFAULT NULL,
+  `image_url` varchar(255) DEFAULT 'constrackerWhite.svg',
+  PRIMARY KEY (`item_id`),
+  KEY `items_ibfk_1` (`updated_by`),
+  KEY `approved_by` (`approved_by`),
+  KEY `fk_items_created_by` (`created_by`),
+  KEY `fk_items_category` (`category_id`),
+  KEY `fk_items_units` (`unit_id`),
+  KEY `fk_items_supplier` (`supplier_id`),
+  CONSTRAINT `fk_items_category` FOREIGN KEY (`category_id`) REFERENCES `material_categories` (`category_id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `fk_items_created_by` FOREIGN KEY (`created_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `fk_items_supplier` FOREIGN KEY (`supplier_id`) REFERENCES `suppliers` (`supplier_id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `fk_items_units` FOREIGN KEY (`unit_id`) REFERENCES `units` (`unit_id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `items_ibfk_1` FOREIGN KEY (`updated_by`) REFERENCES `users` (`user_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `items_ibfk_4` FOREIGN KEY (`approved_by`) REFERENCES `users` (`user_id`),
+  CONSTRAINT `chk_items_price` CHECK ((`price` >= 0))
+) ENGINE=InnoDB AUTO_INCREMENT=12 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `items`
+--
+
+LOCK TABLES `items` WRITE;
+/*!40000 ALTER TABLE `items` DISABLE KEYS */;
+INSERT INTO `items` VALUES (1,'Hard Hat','A hard hat is a type of helmet predominantly used in hazardous environments such as industrial or construction sites to protect the head from injury due to falling objects',890.00,NULL,'2025-11-18 06:20:52',NULL,'2026-01-07 03:58:08',1,NULL,NULL,NULL,'pending',NULL,'constrackerWhite.svg'),(2,'Steel Rebar','Added to concrete to form reinforced concrete and reinforced masonry structures to strengthen and aid the concrete under tension.',22.00,NULL,'2025-11-18 06:30:48',NULL,'2026-01-07 11:05:26',1,NULL,301,NULL,'pending',NULL,'constrackerWhite.svg'),(3,'Portland Cement Type I','DPWH-compliant Portland cement for structural concrete works.',275.00,NULL,'2026-01-07 10:04:59',2,'2026-01-07 11:05:26',NULL,NULL,1,'40kg bag','approved',2,'constrackerWhite.svg'),(4,'Deformed Steel Bar 12mm','Grade 40 deformed steel bar for reinforced concrete.',320.00,NULL,'2026-01-07 10:04:59',2,'2026-01-07 11:05:26',NULL,NULL,2,'12mm x 6m','approved',2,'constrackerWhite.svg'),(5,'Marine Plywood 3/4','Water-resistant marine plywood for formworks and structural use.',1850.00,NULL,'2026-01-07 10:04:59',2,'2026-01-07 11:05:26',NULL,NULL,3,'4ft x 8ft','approved',2,'constrackerWhite.svg'),(6,'Construction Safety Helmet','Impact-resistant safety helmet compliant with DPWH safety standards.',950.00,NULL,'2026-01-07 10:04:59',2,'2026-01-07 11:05:26',NULL,NULL,4,'Universal Fit','approved',2,'constrackerWhite.svg'),(7,'Portland Cement (Type I)','Standard Portland Cement for general construction use.',280.50,NULL,'2026-01-07 10:30:14',2,'2026-01-07 11:05:26',NULL,NULL,300,'50kg Bag','approved',2,'constrackerWhite.svg'),(8,'PVC Pipe (4-inch)','Durable PVC pipe for drainage and water supply systems.',150.00,NULL,'2026-01-07 10:30:14',2,'2026-01-07 11:05:26',NULL,NULL,300,'4-inch x 6m','approved',2,'constrackerWhite.svg'),(9,'Electrical Cable (THHN 12AWG)','Copper electrical wire for indoor and outdoor applications.',85.75,NULL,'2026-01-07 10:30:14',2,'2026-01-07 11:05:26',NULL,NULL,301,'1 roll (150m)','approved',2,'constrackerWhite.svg'),(10,'Paint (Interior Latex)','High-quality washable interior latex paint.',1200.00,NULL,'2026-01-07 10:30:14',1,'2026-01-07 11:05:26',NULL,NULL,300,'1 Gallon','pending',NULL,'constrackerWhite.svg'),(11,'Drill Bit Set (Concrete)','Heavy-duty drill bit set for concrete and masonry.',450.00,NULL,'2026-01-07 10:30:14',2,'2026-01-07 11:05:26',NULL,NULL,301,'Set of 5','approved',2,'constrackerWhite.svg');
+/*!40000 ALTER TABLE `items` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `log_details`
+--
+
+DROP TABLE IF EXISTS `log_details`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `log_details` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `log_id` int DEFAULT NULL,
+  `log_details` varchar(255) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `log_id` (`log_id`),
+  CONSTRAINT `log_details_ibfk_1` FOREIGN KEY (`log_id`) REFERENCES `logs` (`log_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `log_details`
+--
+
+LOCK TABLES `log_details` WRITE;
+/*!40000 ALTER TABLE `log_details` DISABLE KEYS */;
+/*!40000 ALTER TABLE `log_details` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `log_edit_details`
+--
+
+DROP TABLE IF EXISTS `log_edit_details`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `log_edit_details` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `log_id` int DEFAULT NULL,
+  `var_name` varchar(255) DEFAULT NULL,
+  `old_value` varchar(255) DEFAULT NULL,
+  `new_value` varchar(255) DEFAULT NULL,
+  `label` varchar(255) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `log_edit_details_ibfk_1` (`log_id`),
+  CONSTRAINT `log_edit_details_ibfk_1` FOREIGN KEY (`log_id`) REFERENCES `logs` (`log_id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=64 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `log_edit_details`
+--
+
+LOCK TABLES `log_edit_details` WRITE;
+/*!40000 ALTER TABLE `log_edit_details` DISABLE KEYS */;
+INSERT INTO `log_edit_details` VALUES (29,40,'weight','30','20','Road Excavation weight value'),(30,40,'weight','0','10','eme lang weight value'),(31,41,'milestone_name','eme lang','Finalization','Milestone Name'),(32,41,'milestone_description','emerut','finish this','Milestone Description'),(33,44,'task_name','second task','final task','Task Name'),(34,44,'task_progress','0.00','30','Task Progress'),(35,45,'weight','0','50','new task ems weight value'),(36,45,'weight','0','50','final task weight value'),(37,49,'weight','0','100','new weight value'),(38,50,'task_progress','0.00','50','Task Progress'),(39,53,'weight','20','25','Road Excavation weight value'),(40,53,'weight','15','20','Drainage Installation weight value'),(41,63,'task_name','eme','emer','Task Name'),(42,68,'milestone_name','Finalization','Finalizatio','Milestone Name'),(43,68,'milestone_description','','sdas','Milestone Description'),(44,68,'duedate','2026-03-04 00:00:00','2026-03-03','Due Date'),(45,70,'milestone_name','bago','bag','Milestone Name'),(46,70,'duedate','2026-03-03 00:00:00','2026-03-02','Due Date'),(47,97,'milestone_description','213123','gab','Milestone Description'),(48,97,'duedate','2026-01-09 00:00:00','2026-01-08','Due Date'),(49,98,'milestone_description','gab','gabby','Milestone Description'),(50,98,'duedate','2026-01-08 00:00:00','2026-01-07','Due Date'),(51,99,'milestone_description','gabby','gabby boi','Milestone Description'),(52,99,'duedate','2026-01-07 00:00:00','2026-01-06','Due Date'),(53,100,'milestone_description','gabby boi','sup boi','Milestone Description'),(54,101,'milestone_description','sup boi','sup boi boi','Milestone Description'),(55,104,'weight','15','20','Road Excavation'),(56,104,'weight','10','5','New sample milestone'),(57,105,'weight','20','15','Road Excavation weight'),(58,105,'weight','5','10','New sample milestone weight'),(59,106,'task_progress','70','90','Task Progress'),(60,107,'weight','15','20','Road Excavation weight'),(61,107,'weight','10','5','New sample milestone weight'),(62,108,'task_progress','90','70','Task Progress'),(63,109,'milestone_name','New sample milestone','New sample mileston','Milestone Name');
+/*!40000 ALTER TABLE `log_edit_details` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `log_item_details`
+--
+
+DROP TABLE IF EXISTS `log_item_details`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `log_item_details` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `log_id` int DEFAULT NULL,
+  `item_id` int DEFAULT NULL,
+  `quantity` int DEFAULT '1',
+  PRIMARY KEY (`id`),
+  KEY `log_id` (`log_id`),
+  KEY `fk_log_item_details_item` (`item_id`),
+  CONSTRAINT `fk_log_item_details_item` FOREIGN KEY (`item_id`) REFERENCES `items` (`item_id`),
+  CONSTRAINT `log_item_details_ibfk_1` FOREIGN KEY (`log_id`) REFERENCES `logs` (`log_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `log_item_details`
+--
+
+LOCK TABLES `log_item_details` WRITE;
+/*!40000 ALTER TABLE `log_item_details` DISABLE KEYS */;
+/*!40000 ALTER TABLE `log_item_details` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `log_item_edit`
+--
+
+DROP TABLE IF EXISTS `log_item_edit`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `log_item_edit` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `log_id` int DEFAULT NULL,
+  `item_id` int DEFAULT NULL,
+  `var_name` varchar(255) DEFAULT NULL,
+  `old_value` varchar(255) DEFAULT NULL,
+  `new_value` varchar(255) DEFAULT NULL,
+  `label` varchar(255) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `log_id` (`log_id`),
+  KEY `fk_log_item_edit_item` (`item_id`),
+  CONSTRAINT `fk_log_item_edit_item` FOREIGN KEY (`item_id`) REFERENCES `items` (`item_id`),
+  CONSTRAINT `log_item_edit_ibfk_1` FOREIGN KEY (`log_id`) REFERENCES `logs` (`log_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `log_item_edit`
+--
+
+LOCK TABLES `log_item_edit` WRITE;
+/*!40000 ALTER TABLE `log_item_edit` DISABLE KEYS */;
+/*!40000 ALTER TABLE `log_item_edit` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `logs`
+--
+
+DROP TABLE IF EXISTS `logs`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `logs` (
+  `log_id` int NOT NULL AUTO_INCREMENT,
+  `log_name` varchar(255) NOT NULL,
+  `project_id` int DEFAULT '0',
+  `type` enum('non-item','item') DEFAULT 'non-item',
+  `action` enum('create','edit','delete','approved','declined','request') DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `created_by` int DEFAULT NULL,
+  PRIMARY KEY (`log_id`),
+  KEY `project_id` (`project_id`),
+  KEY `created_by` (`created_by`),
+  CONSTRAINT `logs_ibfk_1` FOREIGN KEY (`project_id`) REFERENCES `projects` (`project_id`),
+  CONSTRAINT `logs_ibfk_2` FOREIGN KEY (`created_by`) REFERENCES `users` (`user_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=111 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `logs`
+--
+
+LOCK TABLES `logs` WRITE;
+/*!40000 ALTER TABLE `logs` DISABLE KEYS */;
+INSERT INTO `logs` VALUES (39,'created milestone eme lang',1,'non-item','create','2026-01-05 06:03:57',2),(40,'updated the milestone weights',1,'non-item','edit','2026-01-05 06:04:28',2),(41,'updated milestone Finalization',1,'non-item','edit','2026-01-05 06:07:08',2),(42,'created task new task ems',1,'non-item','create','2026-01-05 06:08:01',2),(43,'created task second task',1,'non-item','create','2026-01-05 06:08:11',2),(44,'updated task final task',1,'non-item','edit','2026-01-05 06:08:48',2),(45,'updated the task weights of milestone Finalization',1,'non-item','edit','2026-01-05 06:09:19',2),(46,'deleted task final task',1,'non-item','delete','2026-01-05 06:23:39',2),(47,'deleted task new task ems',1,'non-item','delete','2026-01-05 06:23:41',2),(48,'created task new',1,'non-item','create','2026-01-05 06:24:10',2),(49,'updated the task weights of milestone Finalization',1,'non-item','edit','2026-01-05 06:24:25',2),(50,'updated task new',1,'non-item','edit','2026-01-05 06:24:30',2),(51,'deleted task new',1,'non-item','delete','2026-01-05 06:24:34',2),(52,'deleted milestone Finalization',1,'non-item','delete','2026-01-05 06:24:39',2),(53,'updated the milestone weights',1,'non-item','edit','2026-01-05 06:24:59',2),(54,'created milestone Finalization',1,'non-item','create','2026-01-05 10:56:46',2),(55,'created milestone Finalization',1,'non-item','create','2026-01-05 11:38:23',2),(56,'created task eme for milestone Asphalt Overlay',1,'non-item','create','2026-01-05 11:39:03',2),(57,'deleted task eme from milestone Asphalt Overlay',1,'non-item','delete','2026-01-05 11:39:07',2),(58,'created milestone emerut',1,'non-item','create','2026-01-05 11:39:22',2),(59,'created task eme for milestone Asphalt Overlay',1,'non-item','create','2026-01-05 11:40:09',2),(60,'deleted task eme from milestone Asphalt Overlay',1,'non-item','delete','2026-01-05 11:40:22',2),(61,'created milestone emerut',1,'non-item','create','2026-01-05 11:42:42',2),(62,'created task eme for milestone Asphalt Overlay',1,'non-item','create','2026-01-05 11:43:38',2),(63,'updated task eme from milestone Asphalt Overlay',1,'non-item','edit','2026-01-05 11:43:44',2),(64,'deleted task emer from milestone Asphalt Overlay',1,'non-item','delete','2026-01-05 11:43:53',2),(65,'deleted milestone emerut',1,'non-item','delete','2026-01-05 11:46:48',2),(66,'deleted milestone emerut',1,'non-item','delete','2026-01-05 11:46:52',2),(67,'deleted milestone Finalization',1,'non-item','delete','2026-01-05 11:46:55',2),(68,'updated milestone Finalization',1,'non-item','edit','2026-01-05 11:47:04',2),(69,'deleted milestone Finalizatio',1,'non-item','delete','2026-01-05 11:47:08',2),(70,'updated milestone bago',3,'non-item','edit','2026-01-05 12:02:07',6),(71,'created task enme for milestone bag',3,'non-item','create','2026-01-05 12:02:16',6),(72,'deleted task enme from milestone bag',3,'non-item','delete','2026-01-05 12:02:18',6),(73,'deleted milestone bag',3,'non-item','delete','2026-01-05 12:02:20',6),(74,'created milestone eme',1,'non-item','create','2026-01-05 21:57:56',2),(75,'created task new for milestone Asphalt Overlay',1,'non-item','create','2026-01-05 21:58:29',2),(76,'deleted task new from milestone Asphalt Overlay',1,'non-item','delete','2026-01-05 21:58:33',2),(77,'deleted milestone eme',1,'non-item','delete','2026-01-05 22:26:46',2),(78,'created milestone eme',1,'non-item','create','2026-01-05 22:26:57',2),(79,'created milestone Finalization',1,'non-item','create','2026-01-05 22:27:26',2),(80,'deleted milestone Finalization',1,'non-item','delete','2026-01-06 01:27:09',2),(81,'deleted milestone eme',1,'non-item','delete','2026-01-06 01:27:11',2),(82,'created milestone eme',1,'non-item','create','2026-01-06 01:27:18',2),(83,'deleted milestone eme',1,'non-item','delete','2026-01-06 20:20:59',2),(84,'created milestone Finalization',1,'non-item','create','2026-01-06 20:24:55',2),(85,'created milestone Finalization',1,'non-item','create','2026-01-06 20:30:53',2),(86,'deleted milestone Finalization',1,'non-item','delete','2026-01-06 20:30:59',2),(87,'deleted milestone Finalization',1,'non-item','delete','2026-01-06 20:31:02',2),(88,'created milestone eme',1,'non-item','create','2026-01-06 20:35:21',2),(89,'created milestone sda',1,'non-item','create','2026-01-06 20:42:12',2),(90,'created milestone sadsada',1,'non-item','create','2026-01-06 20:50:39',2),(91,'created milestone sdadasdas',1,'non-item','create','2026-01-06 20:53:29',2),(92,'deleted milestone sdadasdas',1,'non-item','delete','2026-01-06 20:53:33',2),(93,'deleted milestone sadsada',1,'non-item','delete','2026-01-06 20:53:42',2),(94,'deleted milestone sda',1,'non-item','delete','2026-01-06 20:53:45',2),(95,'deleted milestone eme',1,'non-item','delete','2026-01-06 20:53:48',2),(96,'created milestone eme',1,'non-item','create','2026-01-06 21:03:10',2),(97,'updated milestone eme',1,'non-item','edit','2026-01-06 23:14:29',2),(98,'updated milestone eme',1,'non-item','edit','2026-01-06 23:15:01',2),(99,'updated milestone eme',1,'non-item','edit','2026-01-06 23:20:50',2),(100,'updated milestone eme',1,'non-item','edit','2026-01-06 23:23:35',2),(101,'updated milestone eme',1,'non-item','edit','2026-01-06 23:23:56',2),(102,'deleted milestone eme',1,'non-item','delete','2026-01-06 23:24:22',2),(103,'created milestone New sample milestone',1,'non-item','create','2026-01-06 23:25:09',2),(104,'updated the milestone weights',1,'non-item','edit','2026-01-06 23:35:13',2),(105,'updated the milestone weights',1,'non-item','edit','2026-01-06 23:39:38',2),(106,'updated task Debris Disposal from milestone Road Excavation',1,'non-item','edit','2026-01-07 00:04:21',2),(107,'updated the milestone weights',1,'non-item','edit','2026-01-07 00:09:52',2),(108,'updated task Debris Disposal from milestone Road Excavation',1,'non-item','edit','2026-01-07 00:10:13',2),(109,'updated milestone New sample milestone',1,'non-item','edit','2026-01-07 04:18:53',2),(110,'deleted milestone New sample mileston',1,'non-item','delete','2026-01-07 04:19:14',2);
+/*!40000 ALTER TABLE `logs` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `material_categories`
+--
+
+DROP TABLE IF EXISTS `material_categories`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `material_categories` (
+  `category_id` int NOT NULL AUTO_INCREMENT,
+  `category_name` varchar(255) NOT NULL,
+  `is_active` tinyint(1) DEFAULT '1',
+  PRIMARY KEY (`category_id`),
+  UNIQUE KEY `category_name` (`category_name`)
+) ENGINE=InnoDB AUTO_INCREMENT=15 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `material_categories`
+--
+
+LOCK TABLES `material_categories` WRITE;
+/*!40000 ALTER TABLE `material_categories` DISABLE KEYS */;
+INSERT INTO `material_categories` VALUES (1,'Cement & Concrete',1),(2,'Steel & Metals',1),(3,'Wood & Lumber',1),(4,'Aggregates',1),(5,'Plumbing Materials',1),(6,'Electrical Materials',1),(7,'Finishing Materials',1),(8,'Paints & Coatings',1),(9,'Safety Equipment',1),(10,'Roofing Materials',1),(11,'Heavy Equipment Components',1),(12,'Site Preparation',1),(13,'Bricks & Masonry',1),(14,'Insulation Materials',1);
+/*!40000 ALTER TABLE `material_categories` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `material_request_items`
+--
+
+DROP TABLE IF EXISTS `material_request_items`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `material_request_items` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `mr_id` int NOT NULL,
+  `item_id` int DEFAULT NULL,
+  `quantity` int NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `material_request_items_ibfk_1` (`mr_id`),
+  KEY `fk_material_request_items_item` (`item_id`),
+  CONSTRAINT `fk_material_request_items_item` FOREIGN KEY (`item_id`) REFERENCES `items` (`item_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `material_request_items_ibfk_1` FOREIGN KEY (`mr_id`) REFERENCES `material_requests` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `material_request_items`
+--
+
+LOCK TABLES `material_request_items` WRITE;
+/*!40000 ALTER TABLE `material_request_items` DISABLE KEYS */;
+INSERT INTO `material_request_items` VALUES (1,1,1,10),(2,1,2,50),(3,2,1,5),(4,2,2,20),(5,3,2,30),(6,4,1,15),(7,4,2,40);
+/*!40000 ALTER TABLE `material_request_items` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `material_requests`
+--
+
+DROP TABLE IF EXISTS `material_requests`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `material_requests` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `user_id` int DEFAULT NULL,
+  `status` enum('pending','approved','rejected') DEFAULT 'pending',
+  `priority_level` enum('low','medium','high') DEFAULT 'low',
+  `delivery_date` date DEFAULT NULL,
+  `reviewed_by` int DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `project_id` int DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `fk_project_id` (`project_id`),
+  KEY `material_requests_ibfk_1` (`user_id`),
+  KEY `material_requests_ibfk_2` (`reviewed_by`),
+  CONSTRAINT `fk_project_id` FOREIGN KEY (`project_id`) REFERENCES `projects` (`project_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `material_requests_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `material_requests_ibfk_2` FOREIGN KEY (`reviewed_by`) REFERENCES `users` (`user_id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `material_requests`
+--
+
+LOCK TABLES `material_requests` WRITE;
+/*!40000 ALTER TABLE `material_requests` DISABLE KEYS */;
+INSERT INTO `material_requests` VALUES (1,1,'pending','high','2025-11-25',NULL,'2025-11-18 02:00:00',1),(2,2,'approved','medium','2025-11-28',3,'2025-11-18 03:00:00',2),(3,1,'rejected','low','2025-12-01',2,'2025-11-18 04:00:00',3),(4,3,'pending','medium','2025-12-05',NULL,'2025-11-18 05:00:00',1);
+/*!40000 ALTER TABLE `material_requests` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `project_milestones`
+--
+
+DROP TABLE IF EXISTS `project_milestones`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `project_milestones` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `milestone_name` varchar(255) NOT NULL,
+  `milestone_description` varchar(255) DEFAULT NULL,
+  `project_id` int DEFAULT NULL,
+  `status` enum('not started','in progress','completed','overdue') DEFAULT 'not started',
+  `duedate` date NOT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `updated_by` int DEFAULT NULL,
+  `weights` decimal(10,2) DEFAULT '0.00',
+  PRIMARY KEY (`id`),
+  KEY `project_milestones_ibfk_1` (`project_id`),
+  KEY `project_milestones_ibfk_2` (`updated_by`),
+  CONSTRAINT `project_milestones_ibfk_1` FOREIGN KEY (`project_id`) REFERENCES `projects` (`project_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `project_milestones_ibfk_2` FOREIGN KEY (`updated_by`) REFERENCES `users` (`user_id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=44 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `project_milestones`
+--
+
+LOCK TABLES `project_milestones` WRITE;
+/*!40000 ALTER TABLE `project_milestones` DISABLE KEYS */;
+INSERT INTO `project_milestones` VALUES (1,'Site Assessment & Survey','Geotechnical and area assessment.',1,'completed','2025-02-06','2025-11-18 07:51:52','2026-01-05 05:51:04',NULL,35.00),(2,'Road Excavation','Initial excavation of damaged portions.',1,'in progress','2025-04-05','2025-11-18 07:51:52','2026-01-07 00:09:52',NULL,20.00),(3,'Drainage Installation','Installing new drainage lines.',1,'not started','2025-06-20','2025-11-18 07:51:52','2026-01-05 06:24:59',NULL,20.00),(4,'Asphalt Overlay','Final road surfacing.',1,'not started','2025-08-15','2025-11-18 07:51:52','2025-12-25 02:59:36',NULL,20.00),(5,'Hydrological Study','Flood risk evaluation and water flow analysis.',2,'in progress','2025-06-12','2025-11-18 07:51:52','2025-12-25 04:12:47',NULL,35.00),(6,'Canal Cleaning','Clearing clogged waterways.',2,'not started','2025-07-05','2025-11-18 07:51:52','2025-12-25 04:12:47',NULL,20.00),(7,'Flood Gate Installation','Installing automated flood control gates.',2,'not started','2025-09-30','2025-11-18 07:51:52','2025-12-25 04:12:47',NULL,25.00),(8,'Testing & Monitoring','Test runs for flood control system.',2,'not started','2025-10-10','2025-11-18 07:51:52','2025-11-23 08:26:01',NULL,20.00),(9,'Site Preparation','Clearing and fencing of construction area.',3,'in progress','2025-04-28','2025-11-18 07:51:52','2025-12-25 17:23:14',NULL,30.00),(10,'Foundation Laying','Pouring concrete foundation.',3,'not started','2025-08-10','2025-11-18 07:51:52','2025-12-25 17:23:14',NULL,15.00),(11,'Building Construction','Main structure building.',3,'not started','2025-12-15','2025-11-18 07:51:52','2025-11-23 22:47:13',NULL,20.00),(12,'Electrical & Plumbing','Installing utilities.',3,'not started','2026-02-15','2025-11-18 07:51:52','2025-11-23 08:26:01',NULL,20.00),(13,'Final Inspection','Final quality and safety inspection.',3,'not started','2026-03-10','2025-11-18 07:51:52','2025-11-23 08:26:01',NULL,15.00),(14,'Stall Demolition','Removing old structures.',4,'completed','2025-01-15','2025-11-18 07:51:52','2025-11-23 08:26:01',NULL,25.00),(15,'Structural Repair','Reinforcing building foundation.',4,'completed','2025-03-20','2025-11-18 07:51:52','2025-11-23 08:26:01',NULL,25.00),(16,'Painting & Finishing','Interior and exterior finishing.',4,'completed','2025-04-18','2025-11-18 07:51:52','2025-11-23 08:26:01',NULL,25.00),(17,'Turnover','Project handover to LGU.',4,'completed','2025-05-05','2025-11-18 07:51:52','2025-11-23 08:26:01',NULL,25.00);
+/*!40000 ALTER TABLE `project_milestones` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `projects`
+--
+
+DROP TABLE IF EXISTS `projects`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `projects` (
+  `project_id` int NOT NULL AUTO_INCREMENT,
+  `project_name` varchar(150) NOT NULL,
+  `project_location` varchar(150) NOT NULL,
+  `project_budget` bigint NOT NULL,
+  `status` enum('planning','in progress','completed') DEFAULT 'planning',
+  `duedate` date NOT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `image` varchar(255) DEFAULT 'default.jpg',
+  PRIMARY KEY (`project_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `projects`
+--
+
+LOCK TABLES `projects` WRITE;
+/*!40000 ALTER TABLE `projects` DISABLE KEYS */;
+INSERT INTO `projects` VALUES (1,'Barangay Road Rehabilitation - Phase 1','Quezon City, Metro Manila',7500000,'in progress','2026-08-30','2025-11-18 07:51:32','default.jpg'),(2,'Flood Control Improvement Project','Taguig City, Metro Manila',5200000,'planning','2026-10-15','2025-11-18 07:51:32','conSiteBg8.jpg'),(3,'Community Health Center Construction','Cebu City, Cebu',12000000,'in progress','2026-03-20','2025-11-18 07:51:32','conSiteBg1.jpg'),(4,'Public Market Renovation','Davao City, Davao del Sur',9500000,'completed','2026-05-10','2025-11-18 07:51:32','conSiteBg5.jpg');
+/*!40000 ALTER TABLE `projects` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `suppliers`
+--
+
+DROP TABLE IF EXISTS `suppliers`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `suppliers` (
+  `supplier_id` int NOT NULL AUTO_INCREMENT,
+  `supplier_name` varchar(255) NOT NULL,
+  `supplier_email` varchar(255) DEFAULT NULL,
+  `supplier_address` varchar(255) DEFAULT NULL,
+  PRIMARY KEY (`supplier_id`),
+  UNIQUE KEY `supplier_email` (`supplier_email`)
+) ENGINE=InnoDB AUTO_INCREMENT=303 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `suppliers`
+--
+
+LOCK TABLES `suppliers` WRITE;
+/*!40000 ALTER TABLE `suppliers` DISABLE KEYS */;
+INSERT INTO `suppliers` VALUES (1,'DPWH Accredited Materials Corp','dpwh@materials.com','Quezon City, Metro Manila'),(2,'Metro Steel Supply','sales@metrosteel.ph','Valenzuela City'),(3,'LumberWorks Trading','info@lumberworks.ph','Bulacan'),(4,'SafeBuild Equipment','contact@safebuild.ph','Makati City'),(300,'Alpha Construction Supply','sales@alpha-cs.com','101 Industrial Park, Cityville'),(301,'Mega Builders Depot','contact@megabuilders.com','202 Trade Center, Townsville'),(302,'SecureSite Safety','info@securesite.co','303 Safety Blvd, Safeport');
+/*!40000 ALTER TABLE `suppliers` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `tasks`
+--
+
+DROP TABLE IF EXISTS `tasks`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `tasks` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `milestone_id` int DEFAULT NULL,
+  `task_progress` decimal(10,2) DEFAULT '0.00',
+  `status` enum('not started','in progress','completed','overdue') DEFAULT 'not started',
+  `duedate` date NOT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `updated_by` int DEFAULT NULL,
+  `task_name` varchar(255) NOT NULL,
+  `weights` decimal(10,2) DEFAULT '0.00',
+  PRIMARY KEY (`id`),
+  KEY `tasks_ibfk_1` (`milestone_id`),
+  KEY `tasks_ibfk_2` (`updated_by`),
+  CONSTRAINT `tasks_ibfk_1` FOREIGN KEY (`milestone_id`) REFERENCES `project_milestones` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `tasks_ibfk_2` FOREIGN KEY (`updated_by`) REFERENCES `users` (`user_id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=64 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `tasks`
+--
+
+LOCK TABLES `tasks` WRITE;
+/*!40000 ALTER TABLE `tasks` DISABLE KEYS */;
+INSERT INTO `tasks` VALUES (1,1,100.00,'completed','2025-01-20','2025-11-18 07:52:05','2026-01-04 01:26:13',NULL,'Topographic Mapping',30.00),(2,1,100.00,'completed','2025-01-28','2025-11-18 07:52:05','2026-01-04 01:26:13',NULL,'Soil Testing',35.00),(3,1,100.00,'completed','2025-02-05','2025-11-18 07:52:05','2026-01-04 01:26:14',NULL,'Survey Report Finalization',35.00),(4,2,80.00,'in progress','2025-03-18','2025-11-18 07:52:05','2025-12-25 04:36:58',NULL,'Equipment Mobilization',25.00),(5,2,60.00,'in progress','2025-03-25','2025-11-18 07:52:05','2025-12-25 04:36:58',NULL,'Road Cutting',45.00),(6,2,70.00,'in progress','2025-04-05','2025-11-18 07:52:05','2026-01-07 00:10:13',2,'Debris Disposal',30.00),(7,3,0.00,'not started','2025-05-20','2025-11-18 07:52:05','2025-11-23 22:47:13',NULL,'Pipe Lay-out Planning',30.00),(8,3,0.00,'not started','2025-06-05','2025-11-18 07:52:05','2025-11-23 22:47:13',NULL,'Excavation for Drainage',30.00),(9,3,0.00,'not started','2025-06-18','2025-11-18 07:52:05','2025-11-23 22:47:13',NULL,'Pipe Installation',40.00),(10,4,0.00,'not started','2025-07-28','2025-11-18 07:52:05','2025-11-23 08:23:14',NULL,'Material Procurement',33.00),(11,4,0.00,'not started','2025-08-10','2025-11-18 07:52:05','2025-11-23 08:23:14',NULL,'Asphalt Mixing',33.00),(12,4,0.00,'not started','2025-08-15','2025-11-18 07:52:05','2025-11-23 08:23:14',NULL,'Road Surfacing',34.00),(13,5,30.00,'in progress','2025-05-20','2025-11-18 07:52:05','2025-11-23 08:23:14',NULL,'Data Gathering',40.00),(14,5,15.00,'in progress','2025-06-01','2025-11-18 07:52:05','2025-11-23 08:23:14',NULL,'Flow Rate Simulation',25.00),(15,5,20.00,'in progress','2025-06-12','2025-11-18 07:52:05','2025-11-23 08:23:14',NULL,'Study Documentation',35.00),(16,6,0.00,'not started','2025-06-28','2025-11-18 07:52:05','2025-11-23 08:23:14',NULL,'Debris Removal',34.00),(17,6,0.00,'not started','2025-07-03','2025-11-18 07:52:05','2025-11-23 08:23:14',NULL,'Waterway Clearing',33.00),(18,6,0.00,'not started','2025-07-05','2025-11-18 07:52:05','2025-11-23 08:23:14',NULL,'Inspection',33.00),(19,7,0.00,'not started','2025-09-10','2025-11-18 07:52:05','2025-11-23 08:23:14',NULL,'Equipment Procurement',30.00),(20,7,0.00,'not started','2025-09-20','2025-11-18 07:52:05','2025-11-23 08:23:14',NULL,'Gate Assembly',35.00),(21,7,0.00,'not started','2025-09-28','2025-11-18 07:52:05','2025-11-23 08:23:14',NULL,'Electrical Setup',35.00),(22,8,0.00,'not started','2025-10-03','2025-11-18 07:52:05','2025-11-23 08:23:14',NULL,'System Calibration',33.00),(23,8,0.00,'not started','2025-10-08','2025-11-18 07:52:05','2025-11-23 08:23:14',NULL,'Dry Run Test',33.00),(24,8,0.00,'not started','2025-10-10','2025-11-18 07:52:05','2025-11-23 08:23:14',NULL,'Operational Validation',34.00),(25,9,95.00,'in progress','2025-04-10','2025-11-18 07:52:05','2025-12-25 17:29:25',NULL,'Lot Clearing',30.00),(26,9,90.00,'in progress','2025-04-18','2025-11-18 07:52:05','2025-12-25 17:29:25',NULL,'Perimeter Fencing',40.00),(27,9,85.00,'in progress','2025-04-25','2025-11-18 07:52:05','2025-12-25 17:29:25',NULL,'Ground Leveling',30.00),(28,10,0.00,'not started','2025-07-20','2025-11-18 07:52:05','2025-11-23 22:47:13',NULL,'Rebar Installation',33.00),(29,10,0.00,'not started','2025-07-28','2025-11-18 07:52:05','2025-11-23 22:47:13',NULL,'Concrete Pouring',33.00),(30,10,0.00,'not started','2025-08-05','2025-11-18 07:52:05','2025-11-23 22:47:13',NULL,'Curing Process',34.00),(31,11,0.00,'not started','2025-11-20','2025-11-18 07:52:05','2025-11-23 22:47:13',NULL,'Column Construction',34.00),(32,11,0.00,'not started','2025-11-28','2025-11-18 07:52:05','2025-11-23 22:47:13',NULL,'Wall Installation',33.00),(33,11,0.00,'not started','2025-12-15','2025-11-18 07:52:05','2025-11-23 22:47:13',NULL,'Roof Framing',33.00),(34,12,0.00,'not started','2026-01-28','2025-11-18 07:52:05','2025-11-23 08:23:14',NULL,'Electrical Wiring',33.00),(35,12,0.00,'not started','2026-02-10','2025-11-18 07:52:05','2025-11-23 08:23:14',NULL,'Pipe Installation',33.00),(36,12,0.00,'not started','2026-02-15','2025-11-18 07:52:05','2025-11-23 08:23:14',NULL,'Fixture Setup',34.00),(37,13,0.00,'not started','2026-03-05','2025-11-18 07:52:05','2025-11-23 08:23:14',NULL,'Safety Audit',33.00),(38,13,0.00,'not started','2026-03-08','2025-11-18 07:52:05','2025-11-23 08:23:14',NULL,'Compliance Review',33.00),(39,13,0.00,'not started','2026-03-10','2025-11-18 07:52:05','2025-11-23 08:23:14',NULL,'Final Approval',34.00),(40,14,100.00,'completed','2024-12-20','2025-11-18 07:52:05','2025-11-23 08:23:14',NULL,'Stall Removal',33.00),(41,14,100.00,'completed','2025-01-05','2025-11-18 07:52:05','2025-11-23 08:23:14',NULL,'Debris Clearing',33.00),(42,14,100.00,'completed','2025-01-15','2025-11-18 07:52:05','2025-11-23 08:23:14',NULL,'Site Cleanup',34.00),(43,15,100.00,'completed','2025-02-20','2025-11-18 07:52:05','2025-11-23 08:23:14',NULL,'Foundation Reinforcement',33.00),(44,15,100.00,'completed','2025-03-10','2025-11-18 07:52:05','2025-11-23 08:23:14',NULL,'Wall Repair',33.00),(45,15,100.00,'completed','2025-03-20','2025-11-18 07:52:05','2025-11-23 08:23:14',NULL,'Beam Strengthening',34.00),(46,16,100.00,'completed','2025-04-05','2025-11-18 07:52:05','2025-11-23 08:23:14',NULL,'Interior Painting',33.00),(47,16,100.00,'completed','2025-04-12','2025-11-18 07:52:05','2025-11-23 08:23:14',NULL,'Exterior Painting',33.00),(48,16,100.00,'completed','2025-04-18','2025-11-18 07:52:05','2025-11-23 08:23:14',NULL,'Floor Finishing',34.00),(49,17,100.00,'completed','2025-05-01','2025-11-18 07:52:05','2025-11-23 08:23:14',NULL,'Documentation Finalization',33.00),(50,17,100.00,'completed','2025-05-03','2025-11-18 07:52:05','2025-11-23 08:23:14',NULL,'LGU Inspection',33.00),(51,17,100.00,'completed','2025-05-05','2025-11-18 07:52:05','2025-11-23 08:23:15',NULL,'Turnover Ceremony',34.00);
+/*!40000 ALTER TABLE `tasks` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `units`
+--
+
+DROP TABLE IF EXISTS `units`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `units` (
+  `unit_id` int NOT NULL AUTO_INCREMENT,
+  `unit_name` varchar(255) NOT NULL,
+  `unit_symbol` varchar(10) DEFAULT NULL,
+  PRIMARY KEY (`unit_id`),
+  UNIQUE KEY `uq_units_name` (`unit_name`)
+) ENGINE=InnoDB AUTO_INCREMENT=13 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `units`
+--
+
+LOCK TABLES `units` WRITE;
+/*!40000 ALTER TABLE `units` DISABLE KEYS */;
+INSERT INTO `units` VALUES (1,'piece','pc'),(2,'meter','m'),(3,'kilogram','kg'),(4,'liter','l'),(5,'bag','bag'),(6,'sheet','sheet'),(7,'roll','roll'),(8,'gallon','gal'),(9,'set','set'),(10,'cubic meter','m┬│'),(11,'cubic yard','yd┬│'),(12,'foot','ft');
+/*!40000 ALTER TABLE `units` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `users`
+--
+
+DROP TABLE IF EXISTS `users`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `users` (
+  `user_id` int NOT NULL AUTO_INCREMENT,
+  `email` varchar(255) NOT NULL,
+  `password` varchar(255) NOT NULL,
+  `role` varchar(255) NOT NULL,
+  `full_name` varchar(255) NOT NULL,
+  `is_active` tinyint(1) DEFAULT '1',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`user_id`),
+  UNIQUE KEY `email` (`email`)
+) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `users`
+--
+
+LOCK TABLES `users` WRITE;
+/*!40000 ALTER TABLE `users` DISABLE KEYS */;
+INSERT INTO `users` VALUES (1,'gabbylopez@gmail.com','$2b$10$YyRU9iRYw0KDngFJbXVcGO.xu4fo/3QzX72oMhjT8bXb3fQ2wv73C','admin','Gabby Lopez',0,'2025-11-10 16:51:25'),(2,'shizutanaka@gmail.com','$2b$10$GU3MOOTNBLYN2i53SychFOl7MfyQEc3srrjBn8aywgY1sONcLvBkO','engineer','Shizu Tanaka',1,'2025-11-10 16:51:25'),(3,'reynoldsantiago@gmail.com','$2b$10$cC7lBvwmpEg6V4zEYJ0cLefZD03TcvMbo4osqkrVNUXFr5tu/x6C.','foreman','Reynold Santiago',1,'2025-11-10 16:51:25'),(4,'marygrace@gmail.com','$2b$10$jB..vpzaLndbcoY6fztapO3JII8u7ELzv6m/vcPAHSaoIkfzreD5S','foreman','Mary Grace Luntian',1,'2025-11-10 16:58:28'),(5,'isaac.christian.sican@gmail.com','$2b$10$j7v1xFMJiIzuSHQ/hFa7AeYoliG4G3CBI5mLtR0xOY4dQk.A2FWEG','admin','Isaac Christian Sican',0,'2025-11-13 13:16:20'),(6,'john.ryan.pecure@gmail.com','$2b$10$VUQm9/dFtn6zsl0rw/oOm.QFHaXPZWYXYNV65XLF7kw/WzHudZO6W','project manager','John Ryan Pecure',0,'2025-11-13 13:16:57'),(7,'khatrinna.vargas@gmail.com','$2b$10$WuUPNqOGqEuuCyXAYfSz8uaddIGzj7i.9mcl9QLD8w9XjV3ftHTga','admin','Khatrinna Vargas',0,'2025-11-13 13:17:37'),(8,'tj.torres@gmail.com','$2b$10$jFkNNm2A48QJjdttfnSf3.4n1D4MAlIp8Zm7kNWTkwIlj4wQ01VES','admin','Tj Torres',1,'2025-11-13 13:18:04'),(9,'neilrho.topacio@gmail.com','$2b$10$8MbVRHlYcUQyE9qmZZV2WeYN06uMiQvfSZdruSqtoKWBPIcuW9V6a','admin','Neilrho Topacio',1,'2025-11-13 13:18:37'),(10,'bea.paner@gmail.com','$2b$10$2TSiAzCEROArNaDxKsWkeuB49XOqhBLuX6Pdh5YvSS8ItHy0Ha9W.','admin','Bea Marie Paner',0,'2025-11-23 04:46:23');
+/*!40000 ALTER TABLE `users` ENABLE KEYS */;
+UNLOCK TABLES;
+/*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
+
+/*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
+/*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;
+/*!40014 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS */;
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
+/*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
+
+-- Dump completed on 2026-01-07 19:08:56

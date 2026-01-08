@@ -223,6 +223,51 @@ async function filterByCategory(applyFilterCallback, filtersForm) {
     return filterCategoryGroup;
 }
 
+async function filterByStatus(applyFilterCallback, filtersForm) {
+    const filterStatusGroup = div('filterStatusGroup', 'filter-group');
+    const title = span('filterStatusTitle', 'filter-title');
+    title.textContent = 'Status';
+
+    const statusOptions = [
+        { id: 'approved', label: 'Approved' },
+        { id: 'pending', label: 'Pending' }
+    ];
+
+    const checkboxGroup = div('statusCheckboxGroup', 'checkbox-group');
+    const statusHidden = createFilterInput('hidden', '', 'filterByStatusHidden', 'status', 'all');
+
+    function triggerUpdate() {
+        const selectedStatuses = [];
+        const checkboxes = checkboxGroup.querySelectorAll('input[type="checkbox"]:checked');
+        checkboxes.forEach(checkbox => {
+            selectedStatuses.push(checkbox.id);
+        });
+
+        statusHidden.dataset.value = selectedStatuses.length > 0 ? selectedStatuses.join(',') : 'all';
+        
+        const filteredUrlParams = getFilteredValues(filtersForm);
+        applyFilterCallback(filteredUrlParams);
+    }
+
+    statusOptions.forEach(option => {
+        const checkboxContainer = div(`${option.id}CheckboxContainer`, 'checkbox-container'); // Changed from radio-container
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.id = option.id;
+        const label = document.createElement('label');
+        label.htmlFor = option.id;
+        label.textContent = option.label;
+        
+        input.addEventListener('change', triggerUpdate);
+
+        checkboxContainer.append(input, label);
+        checkboxGroup.append(checkboxContainer);
+    });
+
+    filterStatusGroup.append(title, statusHidden, checkboxGroup);
+    return filterStatusGroup;
+}
+
 export async function createFilterContainer(applyFilterCallback, searchBarPlaceholder = null, defaultFilterList, searchBarType = null, defaultSort = 'newest') {
     const filterList = Object.keys(defaultFilterList);
     const filtersObj = {
@@ -243,6 +288,9 @@ export async function createFilterContainer(applyFilterCallback, searchBarPlaceh
         },
         category: {
             filterFunction: async(applyFilterCallback, filtersForm) => await filterByCategory(applyFilterCallback, filtersForm)
+        },
+        status: {
+            filterFunction: async(applyFilterCallback, filtersForm) => await filterByStatus(applyFilterCallback, filtersForm)
         }
     }
 
@@ -266,7 +314,7 @@ export async function createFilterContainer(applyFilterCallback, searchBarPlaceh
     filtersForm.append(filterBtnContainer);
 
     // Defined Order
-    const orderedFilters = ['project', 'category', 'dateFrom', 'dateTo', 'sort'];
+    const orderedFilters = ['project', 'category', 'status', 'dateFrom', 'dateTo', 'sort'];
 
     for (const filterName of orderedFilters) {
         if (defaultFilterList[filterName]) {
