@@ -614,10 +614,17 @@ export async function showLogDetailsOverlay(logId) {
     overlayHeader.classList.add('log-details');
     // --- Title & Subtitle ---
     const title = div('log-detail-title', 'log-detail-title');
-    const formattedLogName = logData.log_name.charAt(0).toUpperCase() + logData.log_name.slice(1);
+    let formattedLogName = '';
+    if (logData.log_name && typeof logData.log_name === 'string') {
+        formattedLogName = logData.log_name.charAt(0).toUpperCase() + logData.log_name.slice(1);
+    }
     title.textContent = `"${formattedLogName}"`;
     const subtitle = div('log-detail-subtitle', 'log-detail-subtitle');
-    subtitle.textContent = logData.project_name;
+    if (logData.type === 'item' && logData.action === 'create') {
+        subtitle.textContent = `Approved by: ${logData.full_name || 'N/A'}`;
+    } else {
+        subtitle.textContent = logData.project_name || 'General'; // Fallback for other logs
+    }
     overlayHeader.append(title, subtitle);
 
     // --- By/Date Section ---
@@ -628,7 +635,7 @@ export async function showLogDetailsOverlay(logId) {
     const byIcon = span('', 'log-detail-icon'); // Common class for icons
     byIcon.style.backgroundImage = `url('/assets/icons/person.png')`;
     const byText = span('log-detail-by');
-    byText.textContent = logData.full_name;
+    byText.textContent = logData.full_name || '[Deleted User]';
     byInfoContainer.append(byIcon, byText);
     byDateContainer.append(byInfoContainer);
 

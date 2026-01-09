@@ -1,6 +1,7 @@
 import { alertPopup } from "/js/popups.js";
 import { showOverlayWithBg, hideOverlayWithBg, createFilterOverlay } from "/mainJs/overlays.js";
 import { fetchData, fetchPostJson } from "/js/apiURL.js";
+import { formatString } from "/js/string.js";
 
 export function div(id, className) {
     const el = document.createElement('div');
@@ -486,23 +487,42 @@ export function limitNumberInput(input, min = 0, max = 100, numType = "whole", d
 }
 
 
+let zIndexCounter = 100;
+
 export function createFilterInput(inputType, inputVariant = null,  inputId, name, defaultVal, placeholder, searchType = null, selectType = null, selectLimit = null, selectOptionObj = null, optionLabel = null) {
     let filterInput;
     if(inputType === 'select') {
         if(inputVariant && inputVariant === 'dropdown') {
-            console.log("this is the object", selectOptionObj);
             filterInput = document.createElement('button');
+            filterInput.type = "button";
             filterInput.id = inputId;
             filterInput.classList.add('select-option-dropdowns')
             const selectOptionText = span('selectOptionText', 'btn-texts');
             const selectIcon = span('selectOptionIcon', 'btn-icons');
             const optionOverlay = div('selectionOverlay', 'selection-overlays');
 
+            // Initialize filterInput.dataset.value based on defaultVal
+            filterInput.dataset.value = (defaultVal !== null && defaultVal !== undefined && String(defaultVal).trim() !== '' && String(defaultVal).toLowerCase() !== 'all')
+                                        ? String(defaultVal) : 'all';
+            filterInput.dataset.name = name; // Set name here as well
+
             if(selectType === 'single') {
-                selectOptionText.innerText = `Select a ${name}`;
                 selectLimit = 1;
-            } else {
-                selectOptionText.innerText = 'All';    
+                let displaytext = `Select a ${formatString(name)}`;
+                if (filterInput.dataset.value !== 'all') { // Use the now correctly set dataset.value
+                    const selectedOption = selectOptionObj.find(opt => String(opt.id) === filterInput.dataset.value);
+                    if(selectedOption) {
+                        displaytext = selectedOption.name;
+                    }
+                }
+                selectOptionText.innerText = displaytext;
+            } else { // Multi-select
+                const currentValues = (filterInput.dataset.value !== 'all') ? filterInput.dataset.value.split(',') : [];
+                if (currentValues.length > 0) {
+                    selectOptionText.innerText = `(${currentValues.length}) selected`;
+                } else {
+                    selectOptionText.innerText = 'All';
+                }
             }
 
             function selectOptionCard(card, icon) {
@@ -531,6 +551,11 @@ export function createFilterInput(inputType, inputVariant = null,  inputId, name
                 optionCard.append(optionCardTitle, optionCardIcon);
                 optionOverlay.append(optionCard);
                 
+                // Apply initial selection for single select if dataset.value matches
+                if (selectType === 'single' && String(option.id) === filterInput.dataset.value) {
+                    selectOptionCard(optionCard, optionCardIcon);
+                }
+
                 optionCard.addEventListener("click", () => {
                     let initialValues = [];
                     if(selectType === 'multiple') {
@@ -566,7 +591,7 @@ export function createFilterInput(inputType, inputVariant = null,  inputId, name
                         if(optionCard.classList.contains('selected')) {
                             unselectOptionCard(optionCard, optionCardIcon);
                             filterInput.dataset.value = 'all';
-                            selectOptionText.innerText = `Select a ${name}`;
+                            selectOptionText.innerText = `Select a ${formatString(name)}`;
                         } else {
                             const cards = optionOverlay.querySelectorAll('.option-cards');
                             for (const card of cards) {
@@ -574,18 +599,15 @@ export function createFilterInput(inputType, inputVariant = null,  inputId, name
                             }
                             setTimeout(() => {
                                 selectOptionCard(optionCard, optionCardIcon);
-                                console.log(`Eto value ng project single: `, initialValues);
                                 selectOptionText.innerText = optionCardName.innerText;
                             }, 120);
-                            initialValues.push(optionCard.dataset.value);
-                            filterInput.dataset.value = initialValues;
+                            filterInput.dataset.value = optionCard.dataset.value; // Set dataset.value to the single selected ID
                         }
                         
                     } else return console.error(`Error: ${selectType} is not a valid selectType`);
                 });
             }    
-            filterInput.dataset.name = name;
-            filterInput.dataset.value = defaultVal ?? 'all';
+            // Removed redundant filterInput.dataset.value assignment
 
             filterInput.append(selectOptionText, selectIcon, optionOverlay);
             optionOverlay.addEventListener("click", (e) => {
@@ -598,6 +620,7 @@ export function createFilterInput(inputType, inputVariant = null,  inputId, name
                         optionOverlay.style.display = 'none';
                     }, 160);
                 } else {
+                    optionOverlay.style.zIndex = zIndexCounter++;
                     showOverlayWithBg(optionOverlay);
                 }
             });
@@ -613,7 +636,7 @@ export function createFilterInput(inputType, inputVariant = null,  inputId, name
                 const optionRadioContainers = div('optionRadio', 'option-radio-containers');
                 const optionRadio = document.createElement('input');
                 optionRadio.type = 'radio';
-                optionRadio.setAttribute('selected')
+                optionRadio.setAttribute('selected', '')
                 const optionCardName = div('', 'option-card-names');
                 optionCardName.innerText = option.name;
                 optionRadioContainers.addEventListener("click", () => {

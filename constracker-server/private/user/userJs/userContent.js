@@ -3,7 +3,7 @@ import { formatString, dateFormatting } from "/js/string.js";
 import { alertPopup, warnType, showEmptyPlaceholder } from "/js/popups.js";
 import { hideContents } from "/mainJs/sidebar.js";
 import { createMilestoneOl, milestoneFullOl, showLogDetailsOverlay, createOverlayWithBg, hideOverlayWithBg, showDeleteConfirmation, showOverlayWithBg } from "/mainJs/overlays.js";
-import { div, span, button, createButton, createFilterContainer, createPaginationControls, createInput, createFilterInput } from "/js/components.js";
+import { div, span, button, createButton, createFilterContainer, createPaginationControls, createInput, createFilterInput, editFormButton } from "/js/components.js";
 
 const requiredRoles = ['engineer', 'foreman', 'project manager'];
 
@@ -15,9 +15,19 @@ const defaultImageBackgroundColors = [
 function createMaterialCard(material, role, currentUserId, refreshMaterialsContentFn) {
     const card = div(`material-card-${material.item_id}`, 'material-card');
 
-    const imageUrl = material.image_url && material.image_url !== 'constrackerWhite.svg'
-        ? `/image/${material.image_url}`
-        : `/assets/pictures/constrackerWhite.svg`;
+    let imageUrl;
+    if (material.image_url) {
+        // Heuristic to check if it's a new hashed image (SHA256 hex length is 64)
+        if (material.image_url.length > 60 && !material.image_url.includes('-')) {
+            imageUrl = `/itemImages/${material.image_url}`;
+        } else if (material.image_url !== 'constrackerWhite.svg') {
+            imageUrl = `/image/${material.image_url}`;
+        } else {
+            imageUrl = `/assets/pictures/constrackerWhite.svg`;
+        }
+    } else {
+        imageUrl = `/assets/pictures/constrackerWhite.svg`;
+    }
 
     const colorIndex = material.item_id % defaultImageBackgroundColors.length;
     const backgroundColor = defaultImageBackgroundColors[colorIndex];
@@ -126,144 +136,191 @@ async function createMaterialOverlay(material = null, refreshMaterialsContentFn)
     const isEditMode = material !== null;
     const overlayTitle = isEditMode ? `Edit Material: ${material.item_name}` : 'Add New Material';
 
+    const { overlayBackground, overlayHeader, overlayBody } = createOverlayWithBg();
+    const overlayHeaderContainer = div('', 'overlay-header-containers');
+    overlayHeaderContainer.innerText = overlayTitle;
+    overlayHeader.append(overlayHeaderContainer);
+
     const categories = await fetchData('/api/materials/categories');
     const suppliers = await fetchData('/api/materials/suppliers');
     const units = await fetchData('/api/materials/units');
 
     if (categories === 'error' || suppliers === 'error' || units === 'error') {
+        hideOverlayWithBg(overlayBackground);
         return alertPopup('error', 'Failed to load material data for form.');
     }
 
     const form = document.createElement('form');
     form.id = 'materialForm';
-    form.classList.add('overlay-form');
+    form.classList.add('form-edit-forms');
+    form.enctype = 'multipart/form-data';
 
-    const materialNameInput = createInput('text', isEditMode ? 'edit' : 'default', 'Material Name', 'materialName', 'item_name', material?.item_name || '', 'Enter material name', null, 255);
-    const materialDescriptionInput = createInput('textarea', isEditMode ? 'edit' : 'default', 'Description', 'materialDescription', 'item_description', material?.item_description || '', 'Enter description', null, 255);
-    const materialPriceInput = createInput('text', isEditMode ? 'edit' : 'default', 'Base Price (₱)', 'materialPrice', 'price', material?.price || '', '0.00', 0.01, 99999999.99, 'decimal', 'Minimum 0.01');
-    const materialSizeInput = createInput('text', isEditMode ? 'edit' : 'default', 'Size', 'materialSize', 'size', material?.size || '', 'e.g., 2x4, 1/2 inch', null, 255);
-    const materialImageUrlInput = createInput('text', isEditMode ? 'edit' : 'default', 'Image URL', 'materialImageUrl', 'image_url', material?.image_url || 'constrackerWhite.svg', 'e.g., constrackerWhite.svg', null, 255);
+    const createMaterialFormHeader = div('createMaterialFormHeader', 'create-form-headers');
+    const createMaterialFormFooter = div('createMaterialFormFooter', 'create-form-footers');
 
-    // Category Select
-    const categorySelectContainer = div('categorySelectContainer', 'input-box-containers');
-    const categoryLabel = document.createElement('label');
-    categoryLabel.htmlFor = 'materialCategorySelect';
-    categoryLabel.classList.add('input-labels');
-    categoryLabel.innerText = 'Category';
-    const categorySelect = createFilterInput('select', 'dropdown', 'materialCategorySelect', 'category_id', material?.category_id || '', '', '', 'single', 1, categories);
-    if (isEditMode && material?.category_id) {
-        const selectedCategory = categories.find(cat => cat.id === material.category_id);
-        if (selectedCategory) {
-            categorySelect.querySelector('#selectOptionText').innerText = selectedCategory.name;
-            categorySelect.dataset.value = material.category_id;
+    const materialNameInput = createInput('text', 'edit', 'Material Name', 'materialName', 'item_name', material?.item_name || '', 'Enter material name', null, 255);
+    const materialDescriptionInput = createInput('textarea', 'edit', 'Description', 'materialDescription', 'item_description', material?.item_description || '', 'Enter description', null, 255);
+    const materialPriceInput = createInput('text', 'edit', 'Base Price (₱)', 'materialPrice', 'price', material?.price || '', '0.00', 0.01, 99999999.99, 'decimal', 'Minimum 0.01');
+    const materialSizeInput = createInput('text', 'edit', 'Size', 'materialSize', 'size', material?.size || '', 'e.g., 2x4, 1/2 inch', null, 255);
+
+    const imageDropAreaContainer = div('imageDropAreaContainer', 'input-box-containers');
+    const imageLabel = document.createElement('label');
+    imageLabel.className = 'input-labels';
+    imageLabel.innerText = 'Material Image';
+
+    const imageDropArea = div('imageDropArea', 'image-drop-area');
+    const imageDropAreaText = span('', 'image-drop-text');
+    imageDropAreaText.innerText = 'Drag & drop an image or click to select';
+    const imageInput = document.createElement('input');
+    imageInput.type = 'file';
+    imageInput.name = 'image';
+    imageInput.accept = 'image/*';
+    imageInput.style.display = 'none';
+
+    const imagePreview = div('imagePreview', 'image-preview');
+    if (isEditMode && material?.image_url && material.image_url !== 'constrackerWhite.svg') {
+        // Heuristic to check if it's a new hashed image (SHA256 hex length is 64)
+        if (material.image_url.length > 60 && !material.image_url.includes('-')) {
+            imagePreview.style.backgroundImage = `url('/itemImages/${material.image_url}')`;
+        } else {
+            imagePreview.style.backgroundImage = `url('/image/${material.image_url}')`;
         }
+        imagePreview.style.display = 'block';
+        // Removed: imageDropAreaText.innerText = material.image_url;
     } else {
-        categorySelect.querySelector('#selectOptionText').innerText = 'Select a category';
+        imagePreview.style.display = 'none';
     }
-    categorySelectContainer.append(categoryLabel, categorySelect);
 
-    // Supplier Select
-    const supplierSelectContainer = div('supplierSelectContainer', 'input-box-containers');
-    const supplierLabel = document.createElement('label');
-    supplierLabel.htmlFor = 'materialSupplierSelect';
-    supplierLabel.classList.add('input-labels');
-    supplierLabel.innerText = 'Supplier';
-    const supplierSelect = createFilterInput('select', 'dropdown', 'materialSupplierSelect', 'supplier_id', material?.supplier_id || '', '', '', 'single', 1, suppliers);
-    if (isEditMode && material?.supplier_id) {
-        const selectedSupplier = suppliers.find(sup => sup.id === material.supplier_id);
-        if (selectedSupplier) {
-            supplierSelect.querySelector('#selectOptionText').innerText = selectedSupplier.name;
-            supplierSelect.dataset.value = material.supplier_id;
+    imageDropArea.append(imageDropAreaText, imageInput, imagePreview);
+    imageDropAreaContainer.append(imageLabel, imageDropArea);
+
+    imageDropArea.addEventListener('click', () => imageInput.click());
+    imageInput.addEventListener('change', () => {
+        const file = imageInput.files[0];
+        if (file) {
+            imageDropAreaText.innerText = file.name;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                imagePreview.style.backgroundImage = `url(${e.target.result})`;
+                imagePreview.style.display = 'block';
+            };
+            reader.readAsDataURL(file);
+        } else {
+            imageDropAreaText.innerText = 'Drag & drop an image or click to select';
+            imagePreview.style.backgroundImage = 'none';
+            imagePreview.style.display = 'none';
         }
-    } else {
-        supplierSelect.querySelector('#selectOptionText').innerText = 'Select a supplier';
-    }
-    supplierSelectContainer.append(supplierLabel, supplierSelect);
-
-    // Unit Select
-    const unitSelectContainer = div('unitSelectContainer', 'input-box-containers');
-    const unitLabel = document.createElement('label');
-    unitLabel.htmlFor = 'materialUnitSelect';
-    unitLabel.classList.add('input-labels');
-    unitLabel.innerText = 'Unit';
-    const unitSelect = createFilterInput('select', 'dropdown', 'materialUnitSelect', 'unit_id', material?.unit_id || '', '', '', 'single', 1, units);
-    if (isEditMode && material?.unit_id) {
-        const selectedUnit = units.find(u => u.id === material.unit_id);
-        if (selectedUnit) {
-            unitSelect.querySelector('#selectOptionText').innerText = selectedUnit.name;
-            unitSelect.dataset.value = material.unit_id;
-        }
-    } else {
-        unitSelect.querySelector('#selectOptionText').innerText = 'Select a unit';
-    }
-    unitSelectContainer.append(unitLabel, unitSelect);
-
-
-    form.append(
-        materialNameInput,
-        materialDescriptionInput,
-        materialPriceInput,
-        materialSizeInput,
-        materialImageUrlInput,
-        categorySelectContainer,
-        supplierSelectContainer,
-        unitSelectContainer
-    );
-
-    const actionButtonsContainer = div('materialActionButtons', 'action-buttons-container');
-    const saveButton = createButton('saveMaterialBtn', 'solid-buttons', 'Save', 'saveBtnText');
-    const cancelButton = createButton('cancelMaterialBtn', 'solid-buttons', 'Cancel', 'cancelBtnText');
-
-    cancelButton.addEventListener('click', () => {
-        hideOverlayWithBg();
+    });
+    // Drag and Drop listeners
+    ['dragover', 'dragleave', 'drop'].forEach(eventName => {
+        imageDropArea.addEventListener(eventName, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (eventName === 'dragover') imageDropArea.classList.add('drag-over');
+            if (eventName === 'dragleave' || eventName === 'drop') imageDropArea.classList.remove('drag-over');
+            if (eventName === 'drop') {
+                const file = e.dataTransfer.files[0];
+                 if (file) {
+                    imageInput.files = e.dataTransfer.files;
+                    imageDropAreaText.innerText = file.name;
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        imagePreview.style.backgroundImage = `url(${e.target.result})`;
+                        imagePreview.style.display = 'block';
+                    };
+                    reader.readAsDataURL(file);
+                }
+            }
+        });
     });
 
-    saveButton.addEventListener('click', async () => {
+    // --- Selects (Category, Supplier, Unit) ---
+    const createSelect = (id, labelText, apiEndpoint, initialData, editValue, options) => {
+        const container = div(`${id}Container`, 'input-box-containers');
+        const label = document.createElement('label');
+        label.htmlFor = id;
+        label.classList.add('input-labels');
+        label.innerText = labelText;
+        const select = createFilterInput('select', 'dropdown', id, `material ${labelText.toLowerCase()}`, editValue, '', '', 'single', 1, options);
+        container.append(label, select);
+        return { container, select };
+    };
+    
+    const { container: categorySelectContainer, select: categorySelect } = createSelect('materialCategorySelect', 'Category', '/api/materials/categories', material, material?.category_id, categories);
+    const { container: supplierSelectContainer, select: supplierSelect } = createSelect('materialSupplierSelect', 'Supplier', '/api/materials/suppliers', material, material?.supplier_id, suppliers);
+    const { container: unitSelectContainer, select: unitSelect } = createSelect('materialUnitSelect', 'Unit', '/api/materials/units', material, material?.unit_id, units);
+
+
+    createMaterialFormHeader.append(
+        materialNameInput,
+        materialDescriptionInput,
+        categorySelectContainer,
+        supplierSelectContainer,
+        unitSelectContainer,
+        materialPriceInput,
+        materialSizeInput,
+        imageDropAreaContainer
+    );
+
+    const cancelBtn = createButton('cancelCreateBtn', 'wide-buttons', 'Cancel', 'cancelCreateText');
+    cancelBtn.addEventListener('click', () => hideOverlayWithBg(overlayBackground));
+
+    const saveMaterialData = async () => {
         const payload = {
             item_name: materialNameInput.querySelector('input').value,
             item_description: materialDescriptionInput.querySelector('textarea').value,
             price: parseFloat(materialPriceInput.querySelector('input').value),
             size: materialSizeInput.querySelector('input').value,
-            image_url: materialImageUrlInput.querySelector('input').value,
             category_id: parseInt(categorySelect.dataset.value),
             supplier_id: parseInt(supplierSelect.dataset.value),
             unit_id: parseInt(unitSelect.dataset.value)
         };
-
+        
         if (!payload.item_name || isNaN(payload.price) || payload.price <= 0 || !payload.category_id || !payload.supplier_id || !payload.unit_id) {
-            return alertPopup('error', 'Please fill in all required fields correctly (ensure price is a positive number).');
+            alertPopup('error', 'Please fill in all required fields correctly (ensure price is a positive number).');
+            return false; // Indicate failure
         }
 
-        let response;
-        if (isEditMode) {
-            response = await fetch(`/api/materials/${material.item_id}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-        } else {
-            response = await fetch('/api/materials', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
+        const formData = new FormData();
+        for (const key in payload) {
+            if (payload[key]) formData.append(key, payload[key]);
         }
+
+        if (imageInput.files[0]) {
+            formData.append('image', imageInput.files[0]);
+        } else if (isEditMode && material?.image_url && material.image_url !== 'constrackerWhite.svg') {
+            // Preserve existing image if no new one is uploaded during edit and it's not the default
+            formData.append('image_url', material.image_url);
+        }
+
+        const url = isEditMode ? `/api/materials/${material.item_id}` : '/api/materials';
+        const method = isEditMode ? 'PUT' : 'POST';
+
+        const response = await fetch(url, { method, body: formData });
 
         if (response.ok) {
             alertPopup('success', isEditMode ? 'Material updated successfully!' : 'Material added successfully, awaiting approval!');
-            hideOverlayWithBg();
+            hideOverlayWithBg(overlayBackground);
             refreshMaterialsContentFn();
+            return true; // Indicate success
         } else {
             const errorData = await response.json();
             alertPopup('error', errorData.message || 'Failed to save material.');
+            return false; // Indicate failure
         }
+    };
+
+    const actionButton = createButton('createMaterialBtn', 'wide-buttons', isEditMode ? 'Save Changes' : 'Create Material', 'createBtnText');
+    createMaterialFormFooter.append(cancelBtn, actionButton);
+
+    actionButton.addEventListener('click', async () => {
+        await saveMaterialData();
     });
 
-    actionButtonsContainer.append(cancelButton, saveButton);
+    form.append(createMaterialFormHeader, createMaterialFormFooter);
+    overlayBody.append(form);
 
-    const { overlayBackground, overlayHeader, overlayBody } = createOverlayWithBg();
-    overlayHeader.innerText = overlayTitle;
-    overlayBody.append(form, actionButtonsContainer);
+
 
     showOverlayWithBg(overlayBackground);
 }
@@ -458,13 +515,17 @@ function createLogCard(logData) {
     }
 
     const logCardName = span('', 'log-card-names');
-    logCardName.innerText = `${logData.full_name} ${logData.log_name}`;
+    if (logData.type === 'item') {
+        logCardName.innerText = logData.log_name;
+    } else {
+        logCardName.innerText = `${logData.full_name} ${logData.log_name}`;
+    }
     
     const logCardFooter = div('', 'log-card-footers');
     const logDetailsBtn = createButton('logDetailsBtn', 'solid-buttons', 'Details', 'logDetailsText', '', () => {});
     const logDetailsIcon  = span('logDetailsIcon', 'btn-icons');
     
-    const clickableActions = ['edit', 'requests', 'approved', 'declined'];
+    const clickableActions = ['edit']; // Only 'edit' has a details view now
     if (clickableActions.includes(logData.action)) {
         logDetailsBtn.style.cursor = 'pointer';
         logDetailsBtn.addEventListener('click', () => showLogDetailsOverlay(logData.log_id));
