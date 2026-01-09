@@ -1,6 +1,7 @@
 import { alertPopup } from "/js/popups.js";
 import { showOverlayWithBg, hideOverlayWithBg, createFilterOverlay } from "/mainJs/overlays.js";
 import { fetchData, fetchPostJson } from "/js/apiURL.js";
+import { formatString } from "/js/string.js";
 
 export function div(id, className) {
     const el = document.createElement('div');
@@ -486,23 +487,44 @@ export function limitNumberInput(input, min = 0, max = 100, numType = "whole", d
 }
 
 
+let zIndexCounter = 100;
+
 export function createFilterInput(inputType, inputVariant = null,  inputId, name, defaultVal, placeholder, searchType = null, selectType = null, selectLimit = null, selectOptionObj = null, optionLabel = null) {
     let filterInput;
     if(inputType === 'select') {
         if(inputVariant && inputVariant === 'dropdown') {
-            console.log("this is the object", selectOptionObj);
             filterInput = document.createElement('button');
+            filterInput.type = "button";
             filterInput.id = inputId;
             filterInput.classList.add('select-option-dropdowns')
             const selectOptionText = span('selectOptionText', 'btn-texts');
             const selectIcon = span('selectOptionIcon', 'btn-icons');
             const optionOverlay = div('selectionOverlay', 'selection-overlays');
 
+            // Initialize filterInput.dataset.value here
+            let initialFilterValue = defaultVal;
+            if (initialFilterValue === null || initialFilterValue === undefined || String(initialFilterValue).trim() === '' || String(initialFilterValue).toLowerCase() === 'all') {
+                initialFilterValue = 'all';
+            }
+            filterInput.dataset.value = initialFilterValue;
+
             if(selectType === 'single') {
-                selectOptionText.innerText = `Select a ${name}`;
                 selectLimit = 1;
-            } else {
-                selectOptionText.innerText = 'All';    
+                let displaytext = `Select a ${formatString(name)}`;
+                if (initialFilterValue !== 'all') { // If there's a specific default value
+                    const selectedOption = selectOptionObj.find(opt => String(opt.id) === String(initialFilterValue));
+                    if(selectedOption) {
+                        displaytext = selectedOption.name;
+                    }
+                }
+                selectOptionText.innerText = displaytext; // Set the text here
+            } else { // Multi-select
+                const currentValues = (initialFilterValue !== 'all') ? String(initialFilterValue).split(',') : [];
+                if (currentValues.length > 0) {
+                    selectOptionText.innerText = `(${currentValues.length}) selected`;
+                } else {
+                    selectOptionText.innerText = 'All';
+                }
             }
 
             function selectOptionCard(card, icon) {
@@ -531,6 +553,11 @@ export function createFilterInput(inputType, inputVariant = null,  inputId, name
                 optionCard.append(optionCardTitle, optionCardIcon);
                 optionOverlay.append(optionCard);
                 
+                // NEW: Check and apply initial selection for single select
+                if (selectType === 'single' && String(option.id) === String(defaultVal)) {
+                    selectOptionCard(optionCard, optionCardIcon);
+                }
+
                 optionCard.addEventListener("click", () => {
                     let initialValues = [];
                     if(selectType === 'multiple') {
@@ -574,7 +601,6 @@ export function createFilterInput(inputType, inputVariant = null,  inputId, name
                             }
                             setTimeout(() => {
                                 selectOptionCard(optionCard, optionCardIcon);
-                                console.log(`Eto value ng project single: `, initialValues);
                                 selectOptionText.innerText = optionCardName.innerText;
                             }, 120);
                             initialValues.push(optionCard.dataset.value);
@@ -598,6 +624,7 @@ export function createFilterInput(inputType, inputVariant = null,  inputId, name
                         optionOverlay.style.display = 'none';
                     }, 160);
                 } else {
+                    optionOverlay.style.zIndex = zIndexCounter++;
                     showOverlayWithBg(optionOverlay);
                 }
             });
@@ -613,7 +640,7 @@ export function createFilterInput(inputType, inputVariant = null,  inputId, name
                 const optionRadioContainers = div('optionRadio', 'option-radio-containers');
                 const optionRadio = document.createElement('input');
                 optionRadio.type = 'radio';
-                optionRadio.setAttribute('selected')
+                optionRadio.setAttribute('selected', '')
                 const optionCardName = div('', 'option-card-names');
                 optionCardName.innerText = option.name;
                 optionRadioContainers.addEventListener("click", () => {
