@@ -12,9 +12,19 @@ const defaultImageBackgroundColors = [
 function createMaterialCard(material, role, currentUserId, refreshMaterialsContentFn) {
     const card = div(`material-card-${material.item_id}`, 'material-card');
 
-    const imageUrl = material.image_url && material.image_url !== 'constrackerWhite.svg'
-        ? `/image/${material.image_url}`
-        : `/assets/pictures/constrackerWhite.svg`;
+    let imageUrl;
+    if (material.image_url) {
+        // Heuristic to check if it's a new hashed image (SHA256 hex length is 64)
+        if (material.image_url.length > 60 && !material.image_url.includes('-')) {
+            imageUrl = `/itemImages/${material.image_url}`;
+        } else if (material.image_url !== 'constrackerWhite.svg') {
+            imageUrl = `/image/${material.image_url}`;
+        } else {
+            imageUrl = `/assets/pictures/constrackerWhite.svg`;
+        }
+    } else {
+        imageUrl = `/assets/pictures/constrackerWhite.svg`;
+    }
 
     const colorIndex = material.item_id % defaultImageBackgroundColors.length;
     const backgroundColor = defaultImageBackgroundColors[colorIndex];
@@ -166,9 +176,14 @@ async function createMaterialOverlay(material = null, refreshMaterialsContentFn)
 
     const imagePreview = div('imagePreview', 'image-preview');
     if (isEditMode && material?.image_url && material.image_url !== 'constrackerWhite.svg') {
-        imagePreview.style.backgroundImage = `url('/image/${material.image_url}')`;
+        // Heuristic to check if it's a new hashed image (SHA256 hex length is 64)
+        if (material.image_url.length > 60 && !material.image_url.includes('-')) {
+            imagePreview.style.backgroundImage = `url('/itemImages/${material.image_url}')`;
+        } else {
+            imagePreview.style.backgroundImage = `url('/image/${material.image_url}')`;
+        }
         imagePreview.style.display = 'block';
-        imageDropAreaText.innerText = material.image_url;
+        // Removed: imageDropAreaText.innerText = material.image_url;
     } else {
         imagePreview.style.display = 'none';
     }
@@ -273,9 +288,6 @@ async function createMaterialOverlay(material = null, refreshMaterialsContentFn)
         } else if (isEditMode && material?.image_url && material.image_url !== 'constrackerWhite.svg') {
             // Preserve existing image if no new one is uploaded during edit and it's not the default
             formData.append('image_url', material.image_url);
-        } else if (!isEditMode) {
-            alertPopup('error', 'Please upload an image for the new material.');
-            return false; // Indicate failure
         }
 
         const url = isEditMode ? `/api/materials/${material.item_id}` : '/api/materials';
@@ -451,13 +463,17 @@ async function generateLogsContent() {
         }
 
         const logCardName = span('', 'log-card-names');
-        logCardName.innerText = `${logData.full_name} ${logData.log_name}`;
+        if (logData.type === 'item') {
+            logCardName.innerText = logData.log_name;
+        } else {
+            logCardName.innerText = `${logData.full_name} ${logData.log_name}`;
+        }
 
         const logCardFooter = div('', 'log-card-footers');
         const logDetailsBtn = createButton('logDetailsBtn', 'solid-buttons', 'Details', 'logDetailsText', '', () => {});
         const logDetailsIcon  = span('logDetailsIcon', 'btn-icons');
         
-        const clickableActions = ['edit', 'requests', 'approved', 'declined'];
+        const clickableActions = ['edit']; // Only 'edit' has a details view now
         if (clickableActions.includes(logData.action)) {
             logDetailsBtn.style.cursor = 'pointer';
             logDetailsBtn.addEventListener('click', () => showLogDetailsOverlay(logData.log_id));

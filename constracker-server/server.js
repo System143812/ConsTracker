@@ -10,15 +10,17 @@ import rateLimit from 'express-rate-limit';
 import cookieParser from 'cookie-parser';
 import multer from 'multer'; // Import multer
 import fs from 'fs'; // Import fs module
+import crypto from 'crypto';
 
-dotenv.config();
+const __fileName = fileURLToPath(import.meta.url);
+const __dirName = path.dirname(__fileName);
+
+dotenv.config({ path: path.join(__dirName, '.env') });
 const PORT = process.env.PORT;
 const app = express();
 app.use(express.json());
 app.use(cookieParser());
 
-const __fileName = fileURLToPath(import.meta.url);
-const __dirName = path.dirname(__fileName);
 const indexDir = path.join(__dirName, "public");
 const privDir = path.join(__dirName, "private");
 const JWT_KEY = process.env.JWT_SECRET_KEY;
@@ -26,10 +28,12 @@ const JWT_KEY = process.env.JWT_SECRET_KEY;
 // Multer configuration for file uploads
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
-        cb(null, path.join(__dirName, 'private', 'privateAssets', 'pictures'));
+        cb(null, path.join(__dirName, 'public', 'itemImages'));
     },
     filename: function (req, file, cb) {
-        cb(null, Date.now() + '-' + file.originalname);
+        const hash = crypto.createHash('sha256').update(file.originalname + Date.now()).digest('hex');
+        const extension = path.extname(file.originalname);
+        cb(null, `${hash}${extension}`);
     }
 });
 
@@ -401,6 +405,7 @@ async function getAllMaterials(res, role, assignedProjects, filters) {
         SELECT 
             i.item_id, i.item_name, i.item_description, i.price, i.size, 
             i.status, i.image_url, i.created_at, i.created_by,
+            i.category_id, i.supplier_id, i.unit_id,
             mc.category_name, s.supplier_name, s.supplier_email,
             s.supplier_address, u.unit_name
         ${baseQuery}
@@ -516,7 +521,7 @@ function filterLogsQuery(defaultQuery, role, assignedProjects, filters, joinAbr 
 
     if (role !== 'admin') {
         const placeholders = assignedProjects.map(() => "?").join(",");
-        filteredQuery += ` WHERE ${joinAbr}project_id IN (${placeholders})`;
+        filteredQuery += ` WHERE (${joinAbr}project_id IN (${placeholders}) OR ${joinAbr}project_id IS NULL)`;
         filterParams.push(...assignedProjects);
     } else {
         // No initial WHERE clause for admin, they can see all projects.
@@ -574,7 +579,7 @@ function filterLogsQuery(defaultQuery, role, assignedProjects, filters, joinAbr 
 
 async function getLogs(res, role, assignedProjects, filters) {
     const { filteredQuery, filterParams } = filterLogsQuery(
-        "SELECT l.*, p.project_name, u.full_name FROM logs l LEFT JOIN projects p ON l.project_id = p.project_id JOIN users u ON l.created_by = u.user_id",
+        "SELECT l.*, p.project_name, u.full_name FROM logs l LEFT JOIN projects p ON l.project_id = p.project_id LEFT JOIN users u ON l.created_by = u.user_id",
         role,
         assignedProjects,
         filters,
@@ -668,7 +673,7 @@ app.post('/api/logs', authMiddleware(['all']), async(req, res) => {
 app.get('/api/logs/:logId/details', authMiddleware(['all']), async(req, res) => {
     const { logId } = req.params;
     try {
-        const [logResult] = await pool.execute("SELECT l.*, p.project_name, u.full_name FROM logs l JOIN projects p ON l.project_id = p.project_id JOIN users u ON l.created_by = u.user_id WHERE l.log_id = ?", [logId]);
+        const [logResult] = await pool.execute("SELECT l.*, p.project_name, u.full_name FROM logs l LEFT JOIN projects p ON l.project_id = p.project_id LEFT JOIN users u ON l.created_by = u.user_id WHERE l.log_id = ?", [logId]);
         if (logResult.length === 0) {
             return failed(res, 404, 'Log not found');
         }
@@ -1093,13 +1098,7 @@ app.post('/api/materials', authMiddleware(['admin', 'engineer', 'project manager
     try {
         const materialData = { item_name, item_description, price, unit_id, category_id, supplier_id, size, image_url };
         const materialId = await createMaterial(res, materialData, userId, userRole);
-        const logData = {
-            logName: `created material ${item_name}`,
-            projectId: 0, // Materials are not project-specific, using 0 or null as placeholder
-            type: 'item',
-            action: 'create',
-        };
-        await createLogs(res, req, logData);
+        
         const message = userRole === 'engineer' ? 'Material created and approved successfully.' : 'Material created successfully, awaiting approval.';
         res.status(201).json({ status: 'success', message, materialId });
     } catch (error) {
@@ -1125,16 +1124,23 @@ app.put('/api/materials/:materialId/approve', authMiddleware(['engineer']), asyn
         }
         const material = materialResult[0];
 
-        const [creator] = await pool.execute('SELECT full_name FROM users WHERE user_id = ?', [material.created_by]);
-        const creatorName = creator.length > 0 ? creator[0].full_name : 'an unknown user';
-
         const success = await approveMaterial(res, materialId, userId);
+
         if (success) {
+            // Fetch creator's name (for frontend "Created by:" display)
+            const [creatorResult] = await pool.execute('SELECT full_name FROM users WHERE user_id = ?', [material.created_by]);
+            const creatorName = creatorResult.length > 0 ? creatorResult[0].full_name : 'An unknown user';
+
+            // Fetch approver's name (for log message)
+            const [approverResult] = await pool.execute('SELECT full_name FROM users WHERE user_id = ?', [userId]);
+            const approverName = approverResult.length > 0 ? approverResult[0].full_name : 'An unknown engineer';
+
             const logData = {
-                logName: `approved material quality check request of ${creatorName}`,
-                projectId: 0,
+                logName: `${approverName} approved the creation of material "${material.item_name}"`,
+                projectId: null,
                 type: 'item',
-                action: 'approved',
+                action: 'create', // Log the 'create' action upon approval
+                created_by: material.created_by // Store original creator's ID in logs.created_by
             };
             await createLogs(res, req, logData);
             res.status(200).json({ status: 'success', message: 'Material approved successfully.' });
@@ -1164,7 +1170,7 @@ app.put('/api/materials/:materialId/decline', authMiddleware(['engineer']), asyn
         if (result.affectedRows > 0) {
             const logData = {
                 logName: `declined material ${material.item_name}`,
-                projectId: 0,
+                projectId: null,
                 type: 'item',
                 action: 'declined',
             };
@@ -1258,7 +1264,7 @@ app.put('/api/materials/:materialId', authMiddleware(['admin', 'engineer']), upl
             if (logDetails.length > 0) {
                 const logData = {
                     logName: `updated material ${oldMaterial.item_name}`,
-                    projectId: 0,
+                    projectId: null,
                     type: 'item',
                     action: 'edit',
                     logDetails: logDetails
@@ -1300,7 +1306,7 @@ app.delete('/api/materials/:materialId', authMiddleware(['admin', 'engineer']), 
         if (success) {
             const logData = {
                 logName: `deleted material ${material.item_name}`,
-                projectId: 0,
+                projectId: null,
                 type: 'item',
                 action: 'delete',
             };

@@ -501,25 +501,23 @@ export function createFilterInput(inputType, inputVariant = null,  inputId, name
             const selectIcon = span('selectOptionIcon', 'btn-icons');
             const optionOverlay = div('selectionOverlay', 'selection-overlays');
 
-            // Initialize filterInput.dataset.value here
-            let initialFilterValue = defaultVal;
-            if (initialFilterValue === null || initialFilterValue === undefined || String(initialFilterValue).trim() === '' || String(initialFilterValue).toLowerCase() === 'all') {
-                initialFilterValue = 'all';
-            }
-            filterInput.dataset.value = initialFilterValue;
+            // Initialize filterInput.dataset.value based on defaultVal
+            filterInput.dataset.value = (defaultVal !== null && defaultVal !== undefined && String(defaultVal).trim() !== '' && String(defaultVal).toLowerCase() !== 'all')
+                                        ? String(defaultVal) : 'all';
+            filterInput.dataset.name = name; // Set name here as well
 
             if(selectType === 'single') {
                 selectLimit = 1;
                 let displaytext = `Select a ${formatString(name)}`;
-                if (initialFilterValue !== 'all') { // If there's a specific default value
-                    const selectedOption = selectOptionObj.find(opt => String(opt.id) === String(initialFilterValue));
+                if (filterInput.dataset.value !== 'all') { // Use the now correctly set dataset.value
+                    const selectedOption = selectOptionObj.find(opt => String(opt.id) === filterInput.dataset.value);
                     if(selectedOption) {
                         displaytext = selectedOption.name;
                     }
                 }
-                selectOptionText.innerText = displaytext; // Set the text here
+                selectOptionText.innerText = displaytext;
             } else { // Multi-select
-                const currentValues = (initialFilterValue !== 'all') ? String(initialFilterValue).split(',') : [];
+                const currentValues = (filterInput.dataset.value !== 'all') ? filterInput.dataset.value.split(',') : [];
                 if (currentValues.length > 0) {
                     selectOptionText.innerText = `(${currentValues.length}) selected`;
                 } else {
@@ -553,8 +551,8 @@ export function createFilterInput(inputType, inputVariant = null,  inputId, name
                 optionCard.append(optionCardTitle, optionCardIcon);
                 optionOverlay.append(optionCard);
                 
-                // NEW: Check and apply initial selection for single select
-                if (selectType === 'single' && String(option.id) === String(defaultVal)) {
+                // Apply initial selection for single select if dataset.value matches
+                if (selectType === 'single' && String(option.id) === filterInput.dataset.value) {
                     selectOptionCard(optionCard, optionCardIcon);
                 }
 
@@ -593,7 +591,7 @@ export function createFilterInput(inputType, inputVariant = null,  inputId, name
                         if(optionCard.classList.contains('selected')) {
                             unselectOptionCard(optionCard, optionCardIcon);
                             filterInput.dataset.value = 'all';
-                            selectOptionText.innerText = `Select a ${name}`;
+                            selectOptionText.innerText = `Select a ${formatString(name)}`;
                         } else {
                             const cards = optionOverlay.querySelectorAll('.option-cards');
                             for (const card of cards) {
@@ -603,15 +601,13 @@ export function createFilterInput(inputType, inputVariant = null,  inputId, name
                                 selectOptionCard(optionCard, optionCardIcon);
                                 selectOptionText.innerText = optionCardName.innerText;
                             }, 120);
-                            initialValues.push(optionCard.dataset.value);
-                            filterInput.dataset.value = initialValues;
+                            filterInput.dataset.value = optionCard.dataset.value; // Set dataset.value to the single selected ID
                         }
                         
                     } else return console.error(`Error: ${selectType} is not a valid selectType`);
                 });
             }    
-            filterInput.dataset.name = name;
-            filterInput.dataset.value = defaultVal ?? 'all';
+            // Removed redundant filterInput.dataset.value assignment
 
             filterInput.append(selectOptionText, selectIcon, optionOverlay);
             optionOverlay.addEventListener("click", (e) => {
