@@ -296,6 +296,11 @@ async function createMaterialOverlay(material = null, refreshMaterialsContentFn)
         const response = await fetch(url, { method, body: formData });
 
         if (response.ok) {
+            const responseData = await response.json();
+            if (responseData.message === 'No changes made to material.') {
+                hideOverlayWithBg(overlayBackground);
+                return true;
+            }
             alertPopup('success', isEditMode ? 'Material updated successfully!' : 'Material added successfully, awaiting approval!');
             hideOverlayWithBg(overlayBackground);
             refreshMaterialsContentFn();
@@ -442,6 +447,15 @@ async function generateLogsContent() {
         logProjectName.innerText = logData.project_name;
         const logDate = span('', 'log-dates');
         logDate.innerText = dateFormatting(logData.created_at, 'date');
+        
+        if (logData.creator_name) {
+            const logCreatorName = span('', 'log-creator-names');
+            logCreatorName.innerText = `Created by: ${logData.creator_name}`;
+            logCardHeader.append(logCreatorName, logDate);
+        } else {
+            logCardHeader.append(logData.project_id !== 0 ? logProjectName : '', logDate);
+        }
+
         const logCardBody = div('', 'log-card-bodies');
         
         const logCardIcon = span('', 'log-card-icons');
@@ -463,7 +477,7 @@ async function generateLogsContent() {
         }
 
         const logCardName = span('', 'log-card-names');
-        if (logData.type === 'item') {
+        if (logData.type === 'item' && (logData.action === 'approved' || logData.action === 'declined')) {
             logCardName.innerText = logData.log_name;
         } else {
             logCardName.innerText = `${logData.full_name} ${logData.log_name}`;
@@ -484,7 +498,6 @@ async function generateLogsContent() {
         logDetailsBtn.append(logDetailsIcon);
         logCardFooter.append(logDetailsBtn);
         logCardBody.append(logCardIcon, logCardName);
-        logCardHeader.append(logData.project_id !== 0 ? logProjectName : '', logDate);
         logCard.append(logCardHeader,logCardBody, logCardFooter);
         return logCard;
     }
