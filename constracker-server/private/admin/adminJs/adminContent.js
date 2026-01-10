@@ -339,7 +339,23 @@ async function generateMaterialsContent(role) {
     const subtitle = span('', 'body-header-subtitle');
     subtitle.innerText = 'Manage and track all construction materials.';
     bodyHeaderContainer.append(title, subtitle);
-    bodyHeader.append(bodyHeaderContainer);
+
+    const headerActionsContainer = div('headerActionsContainer', 'header-actions-container');
+
+    const textButtonsContainer = div('textButtonsContainer', 'text-buttons-container');
+    const suppliersBtn = span('suppliersTextBtn', 'text-buttons');
+    suppliersBtn.innerText = 'Suppliers';
+    suppliersBtn.addEventListener('click', () => { /* Placeholder for overlay */ });
+
+    const categoriesBtn = span('categoriesTextBtn', 'text-buttons');
+    categoriesBtn.innerText = 'Categories';
+    categoriesBtn.addEventListener('click', () => { /* Placeholder for overlay */ });
+
+    const unitsBtn = span('unitsTextBtn', 'text-buttons');
+    unitsBtn.innerText = 'Units';
+    unitsBtn.addEventListener('click', () => { /* Placeholder for overlay */ });
+
+    textButtonsContainer.append(suppliersBtn, categoriesBtn, unitsBtn);
     
     const user = await fetchData('/profile');
     if (user === 'error') {
@@ -354,8 +370,12 @@ async function generateMaterialsContent(role) {
         addMaterialBtn.addEventListener('click', () => {
             createMaterialOverlay(null, () => renderMaterials(new URLSearchParams(), role, currentUserId));
         });
-        bodyHeader.append(addMaterialBtn);
+        headerActionsContainer.append(textButtonsContainer, addMaterialBtn);
+    } else {
+        headerActionsContainer.append(textButtonsContainer);
     }
+    
+    bodyHeader.append(bodyHeaderContainer, headerActionsContainer);
 
     const materialsContainer = div('materials-main-container');
     const filterContainer = div('materials-filter-container');

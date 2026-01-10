@@ -329,12 +329,105 @@ async function getAllUnits(res) {
     }
 }
 
+async function createSupplier(res, supplierData) {
+    const { name, address, contact_number, email } = supplierData;
+    try {
+        const [result] = await pool.execute(
+            'INSERT INTO suppliers (supplier_name, supplier_address, supplier_contact, supplier_email) VALUES (?, ?, ?, ?)',
+            [name, address, contact_number, email]
+        );
+        return result.insertId;
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+}
+
+async function updateSupplier(res, supplierId, supplierData) {
+    const { name, address, contact_number, email } = supplierData;
+    try {
+        const [result] = await pool.execute(
+            'UPDATE suppliers SET supplier_name = ?, supplier_address = ?, supplier_contact = ?, supplier_email = ? WHERE supplier_id = ?',
+            [name, address, contact_number, email, supplierId]
+        );
+        return result.affectedRows > 0;
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+}
+
+async function deleteSupplier(res, supplierId) {
+    try {
+        const [result] = await pool.execute('DELETE FROM suppliers WHERE supplier_id = ?', [supplierId]);
+        return result.affectedRows > 0;
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+}
+
+async function createCategory(res, categoryData) {
+    const { name } = categoryData;
+    try {
+        const [result] = await pool.execute('INSERT INTO material_categories (category_name) VALUES (?)', [name]);
+        return result.insertId;
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+}
+
+async function updateCategory(res, categoryId, categoryData) {
+    const { name } = categoryData;
+    try {
+        const [result] = await pool.execute('UPDATE material_categories SET category_name = ? WHERE category_id = ?', [name, categoryId]);
+        return result.affectedRows > 0;
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+}
+
+async function deleteCategory(res, categoryId) {
+    try {
+        const [result] = await pool.execute('DELETE FROM material_categories WHERE category_id = ?', [categoryId]);
+        return result.affectedRows > 0;
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+}
+
+async function createUnit(res, unitData) {
+    const { name } = unitData;
+    try {
+        const [result] = await pool.execute('INSERT INTO units (unit_name) VALUES (?)', [name]);
+        return result.insertId;
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+}
+
+async function updateUnit(res, unitId, unitData) {
+    const { name } = unitData;
+    try {
+        const [result] = await pool.execute('UPDATE units SET unit_name = ? WHERE unit_id = ?', [name, unitId]);
+        return result.affectedRows > 0;
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+}
+
+async function deleteUnit(res, unitId) {
+    try {
+        const [result] = await pool.execute('DELETE FROM units WHERE unit_id = ?', [unitId]);
+        return result.affectedRows > 0;
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+}
+
 async function getAllMaterials(res, role, assignedProjects, filters) {
     const { page = 1, limit = 10, name, category, sort, status } = filters;
     const pageInt = parseInt(page);
     const limitInt = parseInt(limit);
     const offset = (pageInt - 1) * limitInt;
-
+    
     let baseQuery = `
         FROM 
             items i
@@ -1094,12 +1187,147 @@ app.get('/api/materials/categories', authMiddleware(['all']), async(req, res) =>
     res.status(200).json(await getAllMaterialCategories(res));
 });
 
+app.post('/api/materials/categories', authMiddleware(['admin', 'engineer', 'project manager']), async(req, res) => {
+    const { name } = req.body;
+    if (!name) {
+        return failed(res, 400, 'Category name is required.');
+    }
+    try {
+        const categoryId = await createCategory(res, { name });
+        res.status(201).json({ status: 'success', message: 'Category created successfully.', categoryId });
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+});
+
+app.put('/api/materials/categories/:categoryId', authMiddleware(['admin', 'engineer', 'project manager']), async(req, res) => {
+    const { categoryId } = req.params;
+    const { name } = req.body;
+    if (!name) {
+        return failed(res, 400, 'Category name is required.');
+    }
+    try {
+        const success = await updateCategory(res, categoryId, { name });
+        if (success) {
+            res.status(200).json({ status: 'success', message: 'Category updated successfully.' });
+        } else {
+            failed(res, 400, 'Failed to update category.');
+        }
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+});
+
+app.delete('/api/materials/categories/:categoryId', authMiddleware(['admin', 'engineer', 'project manager']), async(req, res) => {
+    const { categoryId } = req.params;
+    try {
+        const success = await deleteCategory(res, categoryId);
+        if (success) {
+            res.status(200).json({ status: 'success', message: 'Category deleted successfully.' });
+        } else {
+            failed(res, 400, 'Failed to delete category.');
+        }
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+});
+
 app.get('/api/materials/suppliers', authMiddleware(['all']), async(req, res) => {
     res.status(200).json(await getAllSuppliers(res));
 });
 
 app.get('/api/materials/units', authMiddleware(['all']), async(req, res) => {
     res.status(200).json(await getAllUnits(res));
+});
+
+app.post('/api/materials/units', authMiddleware(['admin', 'engineer', 'project manager']), async(req, res) => {
+    const { name } = req.body;
+    if (!name) {
+        return failed(res, 400, 'Unit name is required.');
+    }
+    try {
+        const unitId = await createUnit(res, { name });
+        res.status(201).json({ status: 'success', message: 'Unit created successfully.', unitId });
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+});
+
+app.put('/api/materials/units/:unitId', authMiddleware(['admin', 'engineer', 'project manager']), async(req, res) => {
+    const { unitId } = req.params;
+    const { name } = req.body;
+    if (!name) {
+        return failed(res, 400, 'Unit name is required.');
+    }
+    try {
+        const success = await updateUnit(res, unitId, { name });
+        if (success) {
+            res.status(200).json({ status: 'success', message: 'Unit updated successfully.' });
+        } else {
+            failed(res, 400, 'Failed to update unit.');
+        }
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+});
+
+app.delete('/api/materials/units/:unitId', authMiddleware(['admin', 'engineer', 'project manager']), async(req, res) => {
+    const { unitId } = req.params;
+    try {
+        const success = await deleteUnit(res, unitId);
+        if (success) {
+            res.status(200).json({ status: 'success', message: 'Unit deleted successfully.' });
+        } else {
+            failed(res, 400, 'Failed to delete unit.');
+        }
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+});
+
+app.post('/api/materials/suppliers', authMiddleware(['admin', 'engineer', 'project manager']), async(req, res) => {
+    const { name, address, contact_number, email } = req.body;
+    if (!name) {
+        return failed(res, 400, 'Supplier name is required.');
+    }
+    try {
+        const supplierId = await createSupplier(res, { name, address, contact_number, email });
+        res.status(201).json({ status: 'success', message: 'Supplier created successfully.', supplierId });
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+});
+
+app.put('/api/materials/suppliers/:supplierId', authMiddleware(['admin', 'engineer', 'project manager']), async(req, res) => {
+    const { supplierId } = req.params;
+    const { name, address, contact_number, email } = req.body;
+    if (!name) {
+        return failed(res, 400, 'Supplier name is required.');
+    }
+    try {
+        const success = await updateSupplier(res, supplierId, { name, address, contact_number, email });
+        if (success) {
+            res.status(200).json({ status: 'success', message: 'Supplier updated successfully.' });
+        } else {
+            failed(res, 400, 'Failed to update supplier.');
+        }
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+});
+
+app.delete('/api/materials/suppliers/:supplierId', authMiddleware(['admin', 'engineer', 'project manager']), async(req, res) => {
+    const { supplierId } = req.params;
+    try {
+        const success = await deleteSupplier(res, supplierId);
+        if (success) {
+            res.status(200).json({ status: 'success', message: 'Supplier deleted successfully.' });
+        } else {
+            failed(res, 400, 'Failed to delete supplier.');
+        }
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
 });
 
 app.get('/api/materials', authMiddleware(['all']), async(req, res) => {
