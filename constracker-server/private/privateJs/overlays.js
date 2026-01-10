@@ -667,7 +667,12 @@ export async function showLogDetailsOverlay(logId) {
             const changeEntry = div('log-change-entry', 'log-change-entry');
             
             const changeText = span('log-change-text');
-            changeText.textContent = `Changed ${detail.label} to ${detail.new_value}`;
+            if (detail.label === 'Image') {
+                changeText.textContent = 'Changed Image';
+                showOldValuesToggle.style.display = 'none';
+            } else {
+                changeText.textContent = `Changed ${detail.label} to ${detail.new_value}`;
+            }
 
             const oldValText = span('log-change-old-val', 'log-change-old-val');
             let formattedOldValue = detail.old_value;

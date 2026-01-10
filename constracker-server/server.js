@@ -329,12 +329,105 @@ async function getAllUnits(res) {
     }
 }
 
+async function createSupplier(res, supplierData) {
+    const { name, address, contact_number, email } = supplierData;
+    try {
+        const [result] = await pool.execute(
+            'INSERT INTO suppliers (supplier_name, supplier_address, supplier_contact, supplier_email) VALUES (?, ?, ?, ?)',
+            [name, address, contact_number, email]
+        );
+        return result.insertId;
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+}
+
+async function updateSupplier(res, supplierId, supplierData) {
+    const { name, address, contact_number, email } = supplierData;
+    try {
+        const [result] = await pool.execute(
+            'UPDATE suppliers SET supplier_name = ?, supplier_address = ?, supplier_contact = ?, supplier_email = ? WHERE supplier_id = ?',
+            [name, address, contact_number, email, supplierId]
+        );
+        return result.affectedRows > 0;
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+}
+
+async function deleteSupplier(res, supplierId) {
+    try {
+        const [result] = await pool.execute('DELETE FROM suppliers WHERE supplier_id = ?', [supplierId]);
+        return result.affectedRows > 0;
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+}
+
+async function createCategory(res, categoryData) {
+    const { name } = categoryData;
+    try {
+        const [result] = await pool.execute('INSERT INTO material_categories (category_name) VALUES (?)', [name]);
+        return result.insertId;
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+}
+
+async function updateCategory(res, categoryId, categoryData) {
+    const { name } = categoryData;
+    try {
+        const [result] = await pool.execute('UPDATE material_categories SET category_name = ? WHERE category_id = ?', [name, categoryId]);
+        return result.affectedRows > 0;
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+}
+
+async function deleteCategory(res, categoryId) {
+    try {
+        const [result] = await pool.execute('DELETE FROM material_categories WHERE category_id = ?', [categoryId]);
+        return result.affectedRows > 0;
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+}
+
+async function createUnit(res, unitData) {
+    const { name } = unitData;
+    try {
+        const [result] = await pool.execute('INSERT INTO units (unit_name) VALUES (?)', [name]);
+        return result.insertId;
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+}
+
+async function updateUnit(res, unitId, unitData) {
+    const { name } = unitData;
+    try {
+        const [result] = await pool.execute('UPDATE units SET unit_name = ? WHERE unit_id = ?', [name, unitId]);
+        return result.affectedRows > 0;
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+}
+
+async function deleteUnit(res, unitId) {
+    try {
+        const [result] = await pool.execute('DELETE FROM units WHERE unit_id = ?', [unitId]);
+        return result.affectedRows > 0;
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+}
+
 async function getAllMaterials(res, role, assignedProjects, filters) {
     const { page = 1, limit = 10, name, category, sort, status } = filters;
     const pageInt = parseInt(page);
     const limitInt = parseInt(limit);
     const offset = (pageInt - 1) * limitInt;
-
+    
     let baseQuery = `
         FROM 
             items i
@@ -479,7 +572,7 @@ async function deleteMaterial(res, materialId) {
     }
 }
 
-async function createLogDetails(res, type, action, logId, logDetailsObj) {
+async function createLogDetails(res, type, action, logId, logDetailsObj, itemId) { // added itemId
     try {
         let logDetailQuery;
         let logDetailParams = [];
@@ -490,12 +583,20 @@ async function createLogDetails(res, type, action, logId, logDetailsObj) {
                     logDetailParams = [logId, logDetailObj.varName, logDetailObj.oldVal, logDetailObj.newVal, logDetailObj.label];
                     const [result] = await pool.execute(logDetailQuery, logDetailParams);    
                 }          
-            } else {
-
             }
-        } else {
-            if(action === 'edit') {
-
+        } else { // type === 'item'
+            if(action === 'approved') {
+                if (logDetailsObj && logDetailsObj.creator_id) {
+                    logDetailQuery = "INSERT INTO log_details (log_id, log_details) VALUES (?, ?)";
+                    logDetailParams = [logId, JSON.stringify({ creator_id: logDetailsObj.creator_id })];
+                    await pool.execute(logDetailQuery, logDetailParams);
+                }
+            } else if(action === 'edit') {
+                for (const logDetailObj of logDetailsObj) {
+                    logDetailQuery = "INSERT INTO log_item_edit (log_id, item_id, var_name, old_value, new_value, label) VALUES (?, ?, ?, ?, ?, ?)";
+                    logDetailParams = [logId, itemId, logDetailObj.varName, logDetailObj.oldVal, logDetailObj.newVal, logDetailObj.label];
+                    const [result] = await pool.execute(logDetailQuery, logDetailParams);
+                }
             } else {
 
             }
@@ -579,7 +680,7 @@ function filterLogsQuery(defaultQuery, role, assignedProjects, filters, joinAbr 
 
 async function getLogs(res, role, assignedProjects, filters) {
     const { filteredQuery, filterParams } = filterLogsQuery(
-        "SELECT l.*, p.project_name, u.full_name FROM logs l LEFT JOIN projects p ON l.project_id = p.project_id LEFT JOIN users u ON l.created_by = u.user_id",
+        "SELECT l.*, p.project_name, u.full_name, ld.log_details FROM logs l LEFT JOIN projects p ON l.project_id = p.project_id LEFT JOIN users u ON l.created_by = u.user_id LEFT JOIN log_details ld on l.log_id = ld.log_id",
         role,
         assignedProjects,
         filters,
@@ -587,6 +688,21 @@ async function getLogs(res, role, assignedProjects, filters) {
     );
     try {
         const [result] = await pool.execute(filteredQuery, filterParams);
+        for (const log of result) {
+            if (log.log_details) {
+                try {
+                    const details = JSON.parse(log.log_details);
+                    if (details.creator_id) {
+                        const [creatorResult] = await pool.execute('SELECT full_name FROM users WHERE user_id = ?', [details.creator_id]);
+                        if (creatorResult.length > 0) {
+                            log.creator_name = creatorResult[0].full_name;
+                        }
+                    }
+                } catch (e) {
+                    // not json
+                }
+            }
+        }
         return result;
     } catch (error) {
         failed(res, 500, `Database Error: ${error}`);
@@ -596,7 +712,7 @@ async function getLogs(res, role, assignedProjects, filters) {
 async function createLogs(res, req, body) {
     try {
         const [result] = await pool.execute("INSERT INTO logs (log_name, project_id, type, action, created_by) VALUES (?, ?, ?, ?, ?)", [body.logName, body.projectId, body.type, body.action, req.user.id]);
-        await createLogDetails(res, body.type, body.action, result.insertId, body.logDetails);
+        await createLogDetails(res, body.type, body.action, result.insertId, body.logDetails, body.itemId);
     } catch (error) {
         failed(res, 500, `Database Error: ${error}`);
     }
@@ -680,8 +796,13 @@ app.get('/api/logs/:logId/details', authMiddleware(['all']), async(req, res) => 
         const log = logResult[0];
 
         if (log.action === 'edit') {
-            const [detailsResult] = await pool.execute("SELECT * FROM log_edit_details WHERE log_id = ?", [logId]);
-            log.details = detailsResult;
+            if (log.type === 'item') {
+                const [detailsResult] = await pool.execute("SELECT * FROM log_item_edit WHERE log_id = ?", [logId]);
+                log.details = detailsResult;
+            } else {
+                const [detailsResult] = await pool.execute("SELECT * FROM log_edit_details WHERE log_id = ?", [logId]);
+                log.details = detailsResult;
+            }
         } else {
             const [detailsResult] = await pool.execute("SELECT * FROM log_details WHERE log_id = ?", [logId]);
             log.details = detailsResult;
@@ -1066,12 +1187,147 @@ app.get('/api/materials/categories', authMiddleware(['all']), async(req, res) =>
     res.status(200).json(await getAllMaterialCategories(res));
 });
 
+app.post('/api/materials/categories', authMiddleware(['admin', 'engineer', 'project manager']), async(req, res) => {
+    const { name } = req.body;
+    if (!name) {
+        return failed(res, 400, 'Category name is required.');
+    }
+    try {
+        const categoryId = await createCategory(res, { name });
+        res.status(201).json({ status: 'success', message: 'Category created successfully.', categoryId });
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+});
+
+app.put('/api/materials/categories/:categoryId', authMiddleware(['admin', 'engineer', 'project manager']), async(req, res) => {
+    const { categoryId } = req.params;
+    const { name } = req.body;
+    if (!name) {
+        return failed(res, 400, 'Category name is required.');
+    }
+    try {
+        const success = await updateCategory(res, categoryId, { name });
+        if (success) {
+            res.status(200).json({ status: 'success', message: 'Category updated successfully.' });
+        } else {
+            failed(res, 400, 'Failed to update category.');
+        }
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+});
+
+app.delete('/api/materials/categories/:categoryId', authMiddleware(['admin', 'engineer', 'project manager']), async(req, res) => {
+    const { categoryId } = req.params;
+    try {
+        const success = await deleteCategory(res, categoryId);
+        if (success) {
+            res.status(200).json({ status: 'success', message: 'Category deleted successfully.' });
+        } else {
+            failed(res, 400, 'Failed to delete category.');
+        }
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+});
+
 app.get('/api/materials/suppliers', authMiddleware(['all']), async(req, res) => {
     res.status(200).json(await getAllSuppliers(res));
 });
 
 app.get('/api/materials/units', authMiddleware(['all']), async(req, res) => {
     res.status(200).json(await getAllUnits(res));
+});
+
+app.post('/api/materials/units', authMiddleware(['admin', 'engineer', 'project manager']), async(req, res) => {
+    const { name } = req.body;
+    if (!name) {
+        return failed(res, 400, 'Unit name is required.');
+    }
+    try {
+        const unitId = await createUnit(res, { name });
+        res.status(201).json({ status: 'success', message: 'Unit created successfully.', unitId });
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+});
+
+app.put('/api/materials/units/:unitId', authMiddleware(['admin', 'engineer', 'project manager']), async(req, res) => {
+    const { unitId } = req.params;
+    const { name } = req.body;
+    if (!name) {
+        return failed(res, 400, 'Unit name is required.');
+    }
+    try {
+        const success = await updateUnit(res, unitId, { name });
+        if (success) {
+            res.status(200).json({ status: 'success', message: 'Unit updated successfully.' });
+        } else {
+            failed(res, 400, 'Failed to update unit.');
+        }
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+});
+
+app.delete('/api/materials/units/:unitId', authMiddleware(['admin', 'engineer', 'project manager']), async(req, res) => {
+    const { unitId } = req.params;
+    try {
+        const success = await deleteUnit(res, unitId);
+        if (success) {
+            res.status(200).json({ status: 'success', message: 'Unit deleted successfully.' });
+        } else {
+            failed(res, 400, 'Failed to delete unit.');
+        }
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+});
+
+app.post('/api/materials/suppliers', authMiddleware(['admin', 'engineer', 'project manager']), async(req, res) => {
+    const { name, address, contact_number, email } = req.body;
+    if (!name) {
+        return failed(res, 400, 'Supplier name is required.');
+    }
+    try {
+        const supplierId = await createSupplier(res, { name, address, contact_number, email });
+        res.status(201).json({ status: 'success', message: 'Supplier created successfully.', supplierId });
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+});
+
+app.put('/api/materials/suppliers/:supplierId', authMiddleware(['admin', 'engineer', 'project manager']), async(req, res) => {
+    const { supplierId } = req.params;
+    const { name, address, contact_number, email } = req.body;
+    if (!name) {
+        return failed(res, 400, 'Supplier name is required.');
+    }
+    try {
+        const success = await updateSupplier(res, supplierId, { name, address, contact_number, email });
+        if (success) {
+            res.status(200).json({ status: 'success', message: 'Supplier updated successfully.' });
+        } else {
+            failed(res, 400, 'Failed to update supplier.');
+        }
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+});
+
+app.delete('/api/materials/suppliers/:supplierId', authMiddleware(['admin', 'engineer', 'project manager']), async(req, res) => {
+    const { supplierId } = req.params;
+    try {
+        const success = await deleteSupplier(res, supplierId);
+        if (success) {
+            res.status(200).json({ status: 'success', message: 'Supplier deleted successfully.' });
+        } else {
+            failed(res, 400, 'Failed to delete supplier.');
+        }
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
 });
 
 app.get('/api/materials', authMiddleware(['all']), async(req, res) => {
@@ -1098,6 +1354,18 @@ app.post('/api/materials', authMiddleware(['admin', 'engineer', 'project manager
     try {
         const materialData = { item_name, item_description, price, unit_id, category_id, supplier_id, size, image_url };
         const materialId = await createMaterial(res, materialData, userId, userRole);
+        
+        if (userRole === 'admin' || userRole === 'engineer') {
+            const user = await getUser(userId);
+            const logData = {
+                logName: `${user.full_name} approved the creation of material ${item_name}`,
+                projectId: null,
+                type: 'item',
+                action: 'approved',
+                logDetails: { creator_id: userId }
+            };
+            await createLogs(res, req, logData);
+        }
         
         const message = userRole === 'engineer' ? 'Material created and approved successfully.' : 'Material created successfully, awaiting approval.';
         res.status(201).json({ status: 'success', message, materialId });
@@ -1136,11 +1404,11 @@ app.put('/api/materials/:materialId/approve', authMiddleware(['engineer']), asyn
             const approverName = approverResult.length > 0 ? approverResult[0].full_name : 'An unknown engineer';
 
             const logData = {
-                logName: `${approverName} approved the creation of material "${material.item_name}"`,
+                logName: `${approverName} approved the creation of material ${material.item_name}`,
                 projectId: null,
                 type: 'item',
-                action: 'create', // Log the 'create' action upon approval
-                created_by: material.created_by // Store original creator's ID in logs.created_by
+                action: 'approved',
+                logDetails: { creator_id: material.created_by }
             };
             await createLogs(res, req, logData);
             res.status(200).json({ status: 'success', message: 'Material approved successfully.' });
@@ -1187,7 +1455,11 @@ app.put('/api/materials/:materialId/decline', authMiddleware(['engineer']), asyn
 app.put('/api/materials/:materialId', authMiddleware(['admin', 'engineer']), upload.single('image'), async(req, res) => {
     const { materialId } = req.params;
     const { id: userId } = req.user;
-    const { item_name, item_description, price, unit_id, category_id, supplier_id, size, image_url: old_image_url_from_body } = req.body; // Renamed image_url from body
+    const { item_name, item_description, size, image_url: old_image_url_from_body } = req.body;
+    const price = parseFloat(req.body.price);
+    const unit_id = req.body.unit_id ? parseInt(req.body.unit_id, 10) : undefined;
+    const category_id = req.body.category_id ? parseInt(req.body.category_id, 10) : undefined;
+    const supplier_id = req.body.supplier_id ? parseInt(req.body.supplier_id, 10) : undefined;
 
     const new_image_filename = req.file ? req.file.filename : old_image_url_from_body; // Use new file if uploaded, otherwise keep old
 
@@ -1233,7 +1505,7 @@ app.put('/api/materials/:materialId', authMiddleware(['admin', 'engineer']), upl
             if (item_description !== undefined && item_description !== oldMaterial.item_description) {
                 logDetails.push({ varName: 'item_description', oldVal: oldMaterial.item_description, newVal: item_description, label: 'Description' });
             }
-            if (price !== undefined && price !== oldMaterial.price) {
+            if (price !== undefined && price !== parseFloat(oldMaterial.price)) {
                 logDetails.push({ varName: 'price', oldVal: oldMaterial.price, newVal: price, label: 'Base Price' });
             }
             if (unit_id !== undefined && unit_id !== oldMaterial.unit_id) { 
@@ -1258,7 +1530,7 @@ app.put('/api/materials/:materialId', authMiddleware(['admin', 'engineer']), upl
                 logDetails.push({ varName: 'size', oldVal: oldMaterial.size, newVal: size, label: 'Size' });
             }
             if (new_image_filename !== oldMaterial.image_url) {
-                logDetails.push({ varName: 'image_url', oldVal: oldMaterial.image_url, newVal: new_image_filename, label: 'Image URL' });
+                logDetails.push({ varName: 'image_url', oldVal: oldMaterial.image_url, newVal: new_image_filename, label: 'Image' });
             }
 
             if (logDetails.length > 0) {
@@ -1267,11 +1539,14 @@ app.put('/api/materials/:materialId', authMiddleware(['admin', 'engineer']), upl
                     projectId: null,
                     type: 'item',
                     action: 'edit',
-                    logDetails: logDetails
+                    logDetails: logDetails,
+                    itemId: materialId
                 };
                 await createLogs(res, req, logData);
+                res.status(200).json({ status: 'success', message: 'Material updated successfully.' });
+            } else {
+                res.status(200).json({ status: 'success', message: 'No changes made to material.' });
             }
-            res.status(200).json({ status: 'success', message: 'Material updated successfully.' });
         } else {
             // If update failed and a new file was uploaded, delete it
             if (req.file) {

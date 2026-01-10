@@ -470,7 +470,7 @@
     transition: all 0.15s ease;
 }
 
-#createBtn, #cancelCreateBtn {
+#createBtn, #createMaterialBtn, #cancelCreateBtn {
     border: none;
     border-radius: 5px;
     width: 50%;

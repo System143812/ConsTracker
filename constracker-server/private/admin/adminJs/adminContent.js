@@ -296,6 +296,11 @@ async function createMaterialOverlay(material = null, refreshMaterialsContentFn)
         const response = await fetch(url, { method, body: formData });
 
         if (response.ok) {
+            const responseData = await response.json();
+            if (responseData.message === 'No changes made to material.') {
+                hideOverlayWithBg(overlayBackground);
+                return true;
+            }
             alertPopup('success', isEditMode ? 'Material updated successfully!' : 'Material added successfully, awaiting approval!');
             hideOverlayWithBg(overlayBackground);
             refreshMaterialsContentFn();
@@ -334,7 +339,23 @@ async function generateMaterialsContent(role) {
     const subtitle = span('', 'body-header-subtitle');
     subtitle.innerText = 'Manage and track all construction materials.';
     bodyHeaderContainer.append(title, subtitle);
-    bodyHeader.append(bodyHeaderContainer);
+
+    const headerActionsContainer = div('headerActionsContainer', 'header-actions-container');
+
+    const textButtonsContainer = div('textButtonsContainer', 'text-buttons-container');
+    const suppliersBtn = span('suppliersTextBtn', 'text-buttons');
+    suppliersBtn.innerText = 'Suppliers';
+    suppliersBtn.addEventListener('click', () => { /* Placeholder for overlay */ });
+
+    const categoriesBtn = span('categoriesTextBtn', 'text-buttons');
+    categoriesBtn.innerText = 'Categories';
+    categoriesBtn.addEventListener('click', () => { /* Placeholder for overlay */ });
+
+    const unitsBtn = span('unitsTextBtn', 'text-buttons');
+    unitsBtn.innerText = 'Units';
+    unitsBtn.addEventListener('click', () => { /* Placeholder for overlay */ });
+
+    textButtonsContainer.append(suppliersBtn, categoriesBtn, unitsBtn);
     
     const user = await fetchData('/profile');
     if (user === 'error') {
@@ -349,8 +370,12 @@ async function generateMaterialsContent(role) {
         addMaterialBtn.addEventListener('click', () => {
             createMaterialOverlay(null, () => renderMaterials(new URLSearchParams(), role, currentUserId));
         });
-        bodyHeader.append(addMaterialBtn);
+        headerActionsContainer.append(textButtonsContainer, addMaterialBtn);
+    } else {
+        headerActionsContainer.append(textButtonsContainer);
     }
+    
+    bodyHeader.append(bodyHeaderContainer, headerActionsContainer);
 
     const materialsContainer = div('materials-main-container');
     const filterContainer = div('materials-filter-container');
@@ -442,6 +467,15 @@ async function generateLogsContent() {
         logProjectName.innerText = logData.project_name;
         const logDate = span('', 'log-dates');
         logDate.innerText = dateFormatting(logData.created_at, 'date');
+        
+        if (logData.creator_name) {
+            const logCreatorName = span('', 'log-creator-names');
+            logCreatorName.innerText = `Created by: ${logData.creator_name}`;
+            logCardHeader.append(logCreatorName, logDate);
+        } else {
+            logCardHeader.append(logData.project_id !== 0 ? logProjectName : '', logDate);
+        }
+
         const logCardBody = div('', 'log-card-bodies');
         
         const logCardIcon = span('', 'log-card-icons');
@@ -463,7 +497,7 @@ async function generateLogsContent() {
         }
 
         const logCardName = span('', 'log-card-names');
-        if (logData.type === 'item') {
+        if (logData.type === 'item' && (logData.action === 'approved' || logData.action === 'declined')) {
             logCardName.innerText = logData.log_name;
         } else {
             logCardName.innerText = `${logData.full_name} ${logData.log_name}`;
@@ -484,7 +518,6 @@ async function generateLogsContent() {
         logDetailsBtn.append(logDetailsIcon);
         logCardFooter.append(logDetailsBtn);
         logCardBody.append(logCardIcon, logCardName);
-        logCardHeader.append(logData.project_id !== 0 ? logProjectName : '', logDate);
         logCard.append(logCardHeader,logCardBody, logCardFooter);
         return logCard;
     }
