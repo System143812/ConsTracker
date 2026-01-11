@@ -1072,6 +1072,18 @@ async function renderAnalytics() {
     return analyticsSectionContainer;
 }
 
+async function generateAssetsContent() {
+    const assetsBodyContent = document.getElementById('assetsBodyContent');
+    assetsBodyContent.innerHTML = '';
+    showEmptyPlaceholder('/assets/icons/inventory.png', assetsBodyContent, null, "Assets Content Coming Soon");
+}
+
+async function generateReportsContent() {
+    const reportsBodyContent = document.getElementById('reportsBodyContent');
+    reportsBodyContent.innerHTML = '';
+    showEmptyPlaceholder('/assets/icons/logs.png', reportsBodyContent, null, "Reports Content Coming Soon");
+}
+
 async function generateLogsContent(role) {
     const logsBodyContent = document.getElementById('logsBodyContent');
     logsBodyContent.innerHTML = '';
@@ -1338,6 +1350,10 @@ function createLogCard(logData) {
 }
 
 const tabContents = {
+    assets: {
+        generateContent: async(role) => await generateAssetsContent(role),
+        generateGraphs: async() => ''
+    },
     dashboard: {
         generateContent: async(role) => await generateUserDashboardContent(role),
         generateGraphs: async() => await initDashboardGraphs()
@@ -1352,6 +1368,10 @@ const tabContents = {
     },
     project: {
         generateContent: async(tabName, role) => await generateProjectContent(tabName, role)
+    },
+    reports: {
+        generateContent: async(role) => await generateReportsContent(role),
+        generateGraphs: async() => ''
     },
     settings: {
         generateContent: async(role) => '',

@@ -1014,13 +1014,17 @@ function createProjectCard(projects, num) {
 }
 
 const tabContents = {
+    analytics: {
+        generateContent: async() => await generateAnalyticsContent(),
+        generateGraphs: async() => ''
+    },
+    assets: {
+        generateContent: async() => await generateAssetsContent(),
+        generateGraphs: async() => ''
+    },
     dashboard: {
         generateContent: async() => await generateDashboardContent(),
         generateGraphs: async() => await initDashboardGraphs()
-    },
-    projects: {
-        generateContent: async() => await generateProjectsContent(),
-        generateGraphs: async() => ''
     },
     inventory: {
         generateContent: async function renderInventory(projectId, role, refreshActiveTabContentFn) {
@@ -1030,10 +1034,6 @@ const tabContents = {
         },
         generateGraphs: async() => ''
     },
-    personnel: {
-        generateContent: async() => '',
-        generateGraphs: async() => ''
-    },
     logs: {
         generateContent: async() => await generateLogsContent(),
         generateGraphs: async() => ''
@@ -1041,6 +1041,18 @@ const tabContents = {
     materials: {
         generateContent: async(role) => await generateMaterialsContent(role),
         generateGraphs: async() => '' 
+    },
+    personnel: {
+        generateContent: async() => await generatePersonnelContent(),
+        generateGraphs: async() => ''
+    },
+    projects: {
+        generateContent: async() => await generateProjectsContent(),
+        generateGraphs: async() => ''
+    },
+    reports: {
+        generateContent: async() => await generateReportsContent(),
+        generateGraphs: async() => ''
     },
     settings: {
         generateContent: async() => '',
@@ -1066,6 +1078,30 @@ async function generateContent(tabName, role) {
     bodyContainer.style.display = 'flex';
     bodyContainer.style.opacity = 1;
     pageData.generateGraphs();
+}
+
+async function generatePersonnelContent() {
+    const personnelBodyContent = document.getElementById('personnelBodyContent');
+    personnelBodyContent.innerHTML = '';
+    showEmptyPlaceholder('/assets/icons/personnel.png', personnelBodyContent, null, "Personnel Content Coming Soon");
+}
+
+async function generateAssetsContent() {
+    const assetsBodyContent = document.getElementById('assetsBodyContent');
+    assetsBodyContent.innerHTML = '';
+    showEmptyPlaceholder('/assets/icons/inventory.png', assetsBodyContent, null, "Assets Content Coming Soon");
+}
+
+async function generateReportsContent() {
+    const reportsBodyContent = document.getElementById('reportsBodyContent');
+    reportsBodyContent.innerHTML = '';
+    showEmptyPlaceholder('/assets/icons/logs.png', reportsBodyContent, null, "Reports Content Coming Soon");
+}
+
+async function generateAnalyticsContent() {
+    const analyticsBodyContent = document.getElementById('analyticsBodyContent');
+    analyticsBodyContent.innerHTML = '';
+    showEmptyPlaceholder('/assets/icons/analytics.png', analyticsBodyContent, null, "Analytics Content Coming Soon");
 }
 
 async function generateDashboardContent() {

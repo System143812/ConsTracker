@@ -153,10 +153,10 @@ function failed(res, status, message) {
 }
 function dashboardRoleAccess(req, res) {
     const roles = [
-        {role: 'admin', access: ['dashboard', 'projects', 'inventory', 'personnel', 'logs', 'materials']},
-        {role: 'engineer', access: ['dashboard', 'logs', 'materials']},
-        {role: 'foreman', access: ['dashboard', 'logs', 'materials']},
-        {role: 'project manager', access: ['dashboard', 'logs', 'materials']}
+        {role: 'admin', access: ['dashboard', 'projects', 'inventory', 'materials', 'assets', 'personnel', 'reports', 'analytics', 'logs']},
+        {role: 'engineer', access: ['dashboard', 'materials', 'assets', 'reports', 'logs']},
+        {role: 'foreman', access: ['dashboard', 'materials', 'assets', 'reports', 'logs']},
+        {role: 'project manager', access: ['dashboard', 'materials', 'assets', 'reports', 'logs']}
     ];
     const userRole = roles.find(obj => obj.role === req.user.role);
     if(userRole) {
@@ -363,23 +363,23 @@ async function getAllProjects(res, filters) {
     if (sort) {
         switch (sort) {
             case 'newest':
-                orderByClause = 'ORDER BY p.created_at DESC';
+                orderByClause = 'ORDER BY p.created_at DESC, p.project_id DESC';
                 break;
             case 'oldest':
-                orderByClause = 'ORDER BY p.created_at ASC';
+                orderByClause = 'ORDER BY p.created_at ASC, p.project_id ASC';
                 break;
             case 'atoz':
-                orderByClause = 'ORDER BY p.project_name ASC';
+                orderByClause = 'ORDER BY p.project_name ASC, p.project_id ASC';
                 break;
             case 'ztoa':
-                orderByClause = 'ORDER BY p.project_name DESC';
+                orderByClause = 'ORDER BY p.project_name DESC, p.project_id DESC';
                 break;
             default:
-                orderByClause = 'ORDER BY p.created_at DESC';
+                orderByClause = 'ORDER BY p.created_at DESC, p.project_id DESC';
                 break;
         }
     } else {
-        orderByClause = 'ORDER BY p.created_at DESC';
+        orderByClause = 'ORDER BY p.created_at DESC, p.project_id DESC';
     }
 
     const countQuery = `SELECT COUNT(p.project_id) AS total ${baseQuery} ${whereClause}`;
