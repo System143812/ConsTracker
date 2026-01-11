@@ -12,6 +12,10 @@ const defaultImageBackgroundColors = [
     '#F48FB1', '#81D4FA', '#FFF59D', '#A7FFEB', '#FFAB91'
 ];
 
+function roundDecimal(number) {
+    return Math.floor(number * 100) / 100;
+}
+
 function createMaterialCard(material, role, currentUserId, refreshMaterialsContentFn) {
     const card = div(`material-card-${material.item_id}`, 'material-card');
 
@@ -164,9 +168,13 @@ async function createMaterialOverlay(material = null, refreshMaterialsContentFn)
     const materialSizeInput = createInput('text', 'edit', 'Size', 'materialSize', 'size', material?.size || '', 'e.g., 2x4, 1/2 inch', null, 255);
 
     const imageDropAreaContainer = div('imageDropAreaContainer', 'input-box-containers');
+    const imageLabelContainer = div('imageLabelContainer', 'label-container');
     const imageLabel = document.createElement('label');
     imageLabel.className = 'input-labels';
     imageLabel.innerText = 'Material Image';
+    const imageSubLabel = span('imageSubLabel', 'input-sub-labels');
+    imageSubLabel.innerText = 'Optional, but recommended';
+    imageLabelContainer.append(imageLabel);
 
     const imageDropArea = div('imageDropArea', 'image-drop-area');
     const imageDropAreaText = span('', 'image-drop-text');
@@ -192,7 +200,8 @@ async function createMaterialOverlay(material = null, refreshMaterialsContentFn)
     }
 
     imageDropArea.append(imageDropAreaText, imageInput, imagePreview);
-    imageDropAreaContainer.append(imageLabel, imageDropArea);
+    imageDropAreaContainer.append(imageLabelContainer, imageDropArea, imageSubLabel);
+
 
     imageDropArea.addEventListener('click', () => imageInput.click());
     imageInput.addEventListener('change', () => {
@@ -288,8 +297,8 @@ async function createMaterialOverlay(material = null, refreshMaterialsContentFn)
 
         if (imageInput.files[0]) {
             formData.append('image', imageInput.files[0]);
-        } else if (isEditMode && material?.image_url && material.image_url !== 'constrackerWhite.svg') {
-            // Preserve existing image if no new one is uploaded during edit and it's not the default
+        } else if (isEditMode && material?.image_url) {
+            // Preserve existing image if no new one is uploaded during edit
             formData.append('image_url', material.image_url);
         }
 
@@ -805,133 +814,13 @@ async function updateDivContents(divContainer, newContentFn) {
     divContainer.append(await newContentFn());
 }
 
-const tabContents = {
-    dashboard: {
-        generateContent: async(role) => await generateDashboardContent(role),
-        generateGraphs: async() => await initDashboardGraphs()
-    },
-    logs: {
-        generateContent: async(role) => await generateLogsContent(role),
-        generateGraphs: async() => ''
-    },
-    materials: {
-        generateContent: async(role) => await generateMaterialsContent(role),
-        generateGraphs: async() => '' 
-    },
-    project: {
-        generateContent: async(tabName, role) => await generateProjectContent(tabName, role)
-    },
-    settings: {
-        generateContent: async(role) => '',
-        generateGraphs: async() => ''
-    }
-}
-
-export async function displayUserContents(tabName, tabType, role) {
-    let bodyContainer;
-    const pageName = document.getElementById('pageName');
-    if(tabType === 'upperTabs'){
-        const divContent = document.getElementById(`${tabName}BodyContainer`);
-        bodyContainer = divContent;
-        pageName.innerText = formatString(tabName);
-        await tabContents[tabName].generateContent(role);
-    } else {
-        const divContent = document.getElementById('projectsBodyContainer');
-        bodyContainer = divContent;
-        pageName.innerText = 'Projects';
-        await tabContents['project'].generateContent(tabName, role);
-    }
-    bodyContainer.style.display = 'flex';
-    bodyContainer.style.opacity = 1;
-}
-
-async function generateDashboardContent(role) {
-    const dashboardBodyContent = document.getElementById('dashboardBodyContent');
-    if(!requiredRoles.includes(role)){
-        alertPopup('error', 'Unauthorized Role');
-        return window.location.href = '/'
-    } 
-    if(role === 'engineer'){
-        dashboardBodyContent.append(
-            
-        );
-    } else {
-        dashboardBodyContent.append(
-
-        );
-    }
-}
-
-function createLogCard(logData) {
-    const logCard = div('', 'log-cards');
-    const logCardHeader = div('', 'log-card-headers');
-    const logProjectName = span('', 'log-project-names');
-    logProjectName.innerText = logData.project_name;
-    const logDate = span('', 'log-dates');
-    logDate.innerText = dateFormatting(logData.created_at, 'date');
-    
-    if (logData.creator_name) {
-        const logCreatorName = span('', 'log-creator-names');
-        logCreatorName.innerText = `Created by: ${logData.creator_name}`;
-        logCardHeader.append(logCreatorName, logDate);
-    } else {
-        logCardHeader.append(logData.project_id !== 0 ? logProjectName : '', logDate);
-    }
-
-    const logCardBody = div('', 'log-card-bodies');
-    
-    const logCardIcon = span('', 'log-card-icons');
-    const action = logData.action;
-
-    const actionStyles = {
-        edit: { icon: 'editWhite.png', bgColor: '#1976d2' },
-        delete: { icon: 'deleteWhite.png', bgColor: '#d32f2f' },
-        create: { icon: 'addWhite.png', bgColor: '#388e3c' },
-        approved: { icon: 'checkWhite.png', bgColor: '#689f38' },
-        declined: { icon: 'xWhite.png', bgColor: '#f57c00' },
-        requests: { icon: 'weightsWhite.png', bgColor: '#7b1fa2' }
-    };
-
-    const style = actionStyles[action];
-    if (style) {
-        logCardIcon.style.backgroundImage = `url('/assets/icons/${style.icon}')`;
-        logCardIcon.style.backgroundColor = style.bgColor;
-    }
-
-    const logCardName = span('', 'log-card-names');
-    if (logData.type === 'item' && (logData.action === 'approved' || logData.action === 'declined')) {
-        logCardName.innerText = logData.log_name;
-    } else {
-        logCardName.innerText = `${logData.full_name} ${logData.log_name}`;
-    }
-    
-    const logCardFooter = div('', 'log-card-footers');
-    const logDetailsBtn = createButton('logDetailsBtn', 'solid-buttons', 'Details', 'logDetailsText', '', () => {});
-    const logDetailsIcon  = span('logDetailsIcon', 'btn-icons');
-    
-    const clickableActions = ['edit']; // Only 'edit' has a details view now
-    if (clickableActions.includes(logData.action)) {
-        logDetailsBtn.style.cursor = 'pointer';
-        logDetailsBtn.addEventListener('click', () => showLogDetailsOverlay(logData.log_id));
-    } else {
-        logDetailsBtn.style.display = 'none'; // Hide button if not applicable
-    }
-
-    logDetailsBtn.append(logDetailsIcon);
-    logCardFooter.append(logDetailsBtn);
-    logCardBody.append(logCardIcon, logCardName);
-    logCard.append(logCardHeader,logCardBody, logCardFooter);
-    return logCard;
-}
-
-
 async function generateProjectContent(projectTabName, role) { //project1
     const projectId = projectTabName.replace(/project/g, '');
     const projectsBodyContent = document.getElementById('projectsBodyContent');
     await createProjectCard(projectId);
     if(!requiredRoles.includes(role)){
         alertPopup('error', 'Unauthorized Role');
-        return window.location.href = '/';
+        return window.location.href = '/'
     } 
     if(role === 'engineer'){
         projectsBodyContent.append(
@@ -1045,10 +934,6 @@ async function selectionTabRenderEvent(content, tab, newContent, projectId, role
     content.append(await newContent.render(role, projectId));
 }
 
-function roundDecimal(number) {
-    return number * 10 / 10;
-}
-
 async function renderMilestones(role, projectId) {
     const milestoneSectionContainer = div('milestoneSectionContainer');
     const milestoneSectionHeader = div('milestoneSectionHeader');
@@ -1138,9 +1023,7 @@ async function renderMilestones(role, projectId) {
             milestoneCardView.append(milestoneCardViewText, milestoneCardViewIcon);
             milestoneCardView.addEventListener("click", () => {
                 milestoneFullOl(projectId, milestone.id, milestone.milestone_name, async() => {
-                    const projectsOverallPercent = document.getElementById('projectsOverallPercent');
                     const projectsBodyContent = document.getElementById('projectsBodyContent');
-                    projectsOverallPercent.innerHTML = "";
                     projectsBodyContent.innerHTML = "";
                     await generateProjectContent(`project${projectId}`, role);
                 }, role); //eto yung callback na ipapasa sa modal para pag ka save auto update ang ui
@@ -1180,21 +1063,6 @@ async function renderAnalytics() {
     const analyticsSectionContainer = div('analyticsSectionContainer');
     analyticsSectionContainer.innerText = 'Analytics';
     return analyticsSectionContainer;
-}
-
-async function renderLogs(logListContainer, urlParams = new URLSearchParams()) {
-    logListContainer.innerHTML = '<div class="loading-spinner"></div>'; // Show a loading spinner
-    const logs = await fetchData(`/api/logs?${urlParams.toString()}`);
-    logListContainer.innerHTML = '';
-    
-    if (logs === 'error' || logs.length === 0) {
-        showEmptyPlaceholder('../assets/icons/emptyLogs.png', logListContainer, null, "No logs found for the selected filters.");
-        return;
-    }
-
-    logs.forEach(log => {
-        logListContainer.append(createLogCard(log));
-    });
 }
 
 async function generateLogsContent(role) {
@@ -1278,4 +1146,226 @@ async function generateLogsContent(role) {
     filterContainer.append(filters);
 
     await fetchAndRender(new URLSearchParams()); // Initial render without filters
+}
+
+async function generateUserDashboardContent(role) {
+    const dashboardBodyContent = document.getElementById('dashboardBodyContent');
+    if(!requiredRoles.includes(role)){
+        alertPopup('error', 'Unauthorized Role');
+        return window.location.href = '/'
+    } 
+    if(role === 'engineer'){
+        dashboardBodyContent.append(
+            
+        );
+    } else {
+        dashboardBodyContent.append(
+
+        );
+    }
+}
+
+async function initDashboardGraphs() {
+    let progress = 0, planning = 0, completed = 0;
+    const data = await fetchData('/api/projectStatusGraph');
+    if(data === 'error') return;
+    if(data.length > 0){
+        progress = data[0].in_progress;
+        planning =  data[0].planning;
+        completed = data[0].completed;
+    }
+    
+    const projectStatusGraph = document.getElementById('projectStatusGraph').getContext('2d');
+    new Chart(projectStatusGraph, {
+        type: 'doughnut', 
+        data: {
+            labels: ['Completed', 'Progress', 'Planning'],
+            datasets: [{
+                label: 'Project Status',
+                data: [completed, progress, planning],
+                backgroundColor: ['#1A3E72', '#4187bfff', '#97a6c4'],
+                borderColor: ['#f0f0f0', '#f0f0f0'],
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'top',
+                },
+                title: {
+                    display: true,
+                    text: [`Total Projects: ${planning + progress + completed}`],
+                    font: {
+                        size: 12,
+                        weight: 500,
+                        family: 'Inter, Arial'
+                    },
+                    align: 'center',
+                    gap: 10,
+                    color: '#666666',
+                    padding: 20
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const value = context.raw;
+                            const percentage = ((value / total) * 100).toFixed(1);
+                            return `${context.label}: ${percentage}%`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+    const budgetOverviewGraph = document.getElementById('budgetOverviewGraph').getContext('2d');
+    new Chart(budgetOverviewGraph, {
+        type: 'bar', 
+        data: {
+            labels: ['Geanhs', 'City Hall', 'Dali Imus'],
+            datasets: [
+                {
+                    label: 'Budget',
+                    data: [4, 5, 3],
+                    backgroundColor: ['#1A3E72'],
+                    borderColor: ['#f0f0f0'],
+                    borderWidth: 1
+                }, {
+                    label: 'Spent',
+                    data: [2, 1, 2.5],
+                    backgroundColor: ['#4187bfff'],
+                    borderColor: ['#f0f0f0'],
+                    borderWidth: 1
+                }   
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'top',
+                }
+            },
+            scales: {
+                x: {
+                    ticks: {
+                        callback: function(index) {
+                        const label = this.getLabelForValue(index);
+                        const maxLength = 10; 
+
+                        if (label.length > maxLength) {
+                            return label.substring(0, maxLength) + '…';
+                        }
+
+                        return label;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+function createLogCard(logData) {
+    const logCard = div('', 'log-cards');
+    const logCardHeader = div('', 'log-card-headers');
+    const logProjectName = span('', 'log-project-names');
+    logProjectName.innerText = logData.project_name;
+    const logDate = span('', 'log-dates');
+    logDate.innerText = dateFormatting(logData.created_at, 'date');
+    
+    if (logData.creator_name) {
+        const logCreatorName = span('', 'log-creator-names');
+        logCreatorName.innerText = `Created by: ${logData.creator_name}`;
+        logCardHeader.append(logCreatorName, logDate);
+    } else {
+        logCardHeader.append(logData.project_id !== 0 ? logProjectName : '', logDate);
+    }
+
+    const logCardBody = div('', 'log-card-bodies');
+    
+    const logCardIcon = span('', 'log-card-icons');
+    const action = logData.action;
+
+    const actionStyles = {
+        edit: { icon: 'editWhite.png', bgColor: '#1976d2' },
+        delete: { icon: 'deleteWhite.png', bgColor: '#d32f2f' },
+        create: { icon: 'addWhite.png', bgColor: '#388e3c' },
+        approved: { icon: 'checkWhite.png', bgColor: '#689f38' },
+        declined: { icon: 'xWhite.png', bgColor: '#f57c00' },
+        requests: { icon: 'weightsWhite.png', bgColor: '#7b1fa2' }
+    };
+
+    const style = actionStyles[action];
+    if (style) {
+        logCardIcon.style.backgroundImage = `url('/assets/icons/${style.icon}')`;
+        logCardIcon.style.backgroundColor = style.bgColor;
+    }
+
+    const logCardName = span('', 'log-card-names');
+    if (logData.type === 'item' && (logData.action === 'approved' || logData.action === 'declined')) {
+        logCardName.innerText = logData.log_name;
+    } else {
+        logCardName.innerText = `${logData.full_name} ${logData.log_name}`;
+    }
+    
+    const logCardFooter = div('', 'log-card-footers');
+    const logDetailsBtn = createButton('logDetailsBtn', 'solid-buttons', 'Details', 'logDetailsText', '', () => {});
+    const logDetailsIcon  = span('logDetailsIcon', 'btn-icons');
+    
+    const clickableActions = ['edit']; // Only 'edit' has a details view now
+    if (clickableActions.includes(logData.action)) {
+        logDetailsBtn.style.cursor = 'pointer';
+        logDetailsBtn.addEventListener('click', () => showLogDetailsOverlay(logData.log_id));
+    } else {
+        logDetailsBtn.style.display = 'none'; // Hide button if not applicable
+    }
+
+    logDetailsBtn.append(logDetailsIcon);
+    logCardFooter.append(logDetailsBtn);
+    logCardBody.append(logCardIcon, logCardName);
+    logCard.append(logCardHeader,logCardBody, logCardFooter);
+    return logCard;
+}
+
+const tabContents = {
+    dashboard: {
+        generateContent: async(role) => await generateUserDashboardContent(role),
+        generateGraphs: async() => await initDashboardGraphs()
+    },
+    logs: {
+        generateContent: async(role) => await generateLogsContent(role),
+        generateGraphs: async() => ''
+    },
+    materials: {
+        generateContent: async(role) => await generateMaterialsContent(role),
+        generateGraphs: async() => '' 
+    },
+    project: {
+        generateContent: async(tabName, role) => await generateProjectContent(tabName, role)
+    },
+    settings: {
+        generateContent: async(role) => '',
+        generateGraphs: async() => ''
+    }
+}
+
+export async function displayUserContents(tabName, tabType, role) {
+    let bodyContainer;
+    const pageName = document.getElementById('pageName');
+    if(tabType === 'upperTabs'){
+        const divContent = document.getElementById(`${tabName}BodyContainer`);
+        bodyContainer = divContent;
+        pageName.innerText = formatString(tabName);
+        await tabContents[tabName].generateContent(role);
+    } else {
+        const divContent = document.getElementById('projectsBodyContainer');
+        bodyContainer = divContent;
+        pageName.innerText = 'Projects';
+        await tabContents['project'].generateContent(tabName, role);
+    }
+    bodyContainer.style.display = 'flex';
+    bodyContainer.style.opacity = 1;
 }

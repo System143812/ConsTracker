@@ -216,11 +216,49 @@ async function getTask(res, taskId) {
     }
 }
 
+async function updateTask(res, body) {
+    const { id, task_name, task_progress, status, duedate, weights } = body;
+    try {
+        await pool.execute('UPDATE tasks SET task_name = ?, task_progress = ?, status = ?, duedate = ?, weights = ? WHERE id = ?', [task_name, task_progress, status, duedate, weights, id]);
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+}
+
+async function updateMilestone(res, body) {
+    const { id, milestone_name, milestone_description, duedate, weights, status } = body;
+    try {
+        await pool.execute('UPDATE project_milestones SET milestone_name = ?, milestone_description = ?, duedate = ?, weights = ?, status = ? WHERE id = ?', [milestone_name, milestone_description, duedate, weights, status, id]);
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+}
+
+async function updateMilestoneWeights(res, body) {
+    try {
+        for (const milestone of body) {
+            await pool.execute('UPDATE project_milestones SET weights = ? WHERE id = ?', [milestone.value, milestone.id]);
+        }
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+}
+
+async function updateTaskWeights(res, body) {
+    try {
+        for (const task of body) {
+            await pool.execute('UPDATE tasks SET weights = ? WHERE id = ?', [task.value, task.id]);
+        }
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+}
+
 async function getProjectCardData(res, project_id) {
     try {
         const [result] = await pool.execute('SELECT *, (SELECT SUM(weights / 100 * milestone_progress) AS milestone_progress FROM (SELECT p.weights, SUM(t.weights / 100 * t.task_progress) AS milestone_progress FROM project_milestones p JOIN tasks t ON p.id = t.milestone_id WHERE p.project_id = ? GROUP BY p.id) AS m) AS progress FROM projects WHERE project_id = ?;', [project_id, project_id]);
         return result[0];
-    } catch (error) {
+    }  catch (error) {
         failed(res, 500, `Database Error ${error}`);
     }
 }
@@ -285,7 +323,7 @@ async function getInprogressProjects(res) {
 async function getAllProjects(res) {
     try {
         const [result] = await pool.execute(
-            "SELECT p.project_name, p.status as project_status, p.project_location, (SELECT COUNT(*) FROM assigned_projects ap WHERE ap.project_id = p.project_id) AS total_personnel, p.duedate, (SELECT COUNT(*) FROM project_milestones pm WHERE pm.status = 'completed' AND pm.project_id = p.project_id) AS completed_milestone, (SELECT COUNT(*) FROM project_milestones pm WHERE pm.project_id = p.project_id) AS total_milestone FROM projects p;"
+            "SELECT p.project_id, p.project_name, p.status as project_status, p.project_location, (SELECT COUNT(*) FROM assigned_projects ap WHERE ap.project_id = p.project_id) AS total_personnel, p.duedate, (SELECT COUNT(*) FROM project_milestones pm WHERE pm.status = 'completed' AND pm.project_id = p.project_id) AS completed_milestone, (SELECT COUNT(*) FROM project_milestones pm WHERE pm.project_id = p.project_id) AS total_milestone FROM projects p;"
         );
         return result;
     } catch (error) {
@@ -443,7 +481,7 @@ async function getAllMaterials(res, role, assignedProjects, filters) {
 
     if (name && name !== "all") {
         whereClauses.push(`i.item_name LIKE ?`);
-        filterParams.push(`${name}%`);
+        filterParams.push(`%${name}%`);
     }
 
     if (category && category !== "all") {
@@ -638,7 +676,7 @@ function filterLogsQuery(defaultQuery, role, assignedProjects, filters, joinAbr 
 
     if (filters.name && filters.name !== "all") {
         whereClauses.push(`u.full_name LIKE ?`);
-        filterParams.push(`${filters.name}%`);
+        filterParams.push(`%${filters.name}%`);
     }
 
     if (projectsFilter && projectsFilter !== "all") {
@@ -1293,7 +1331,7 @@ app.post('/api/materials/suppliers', authMiddleware(['admin', 'engineer', 'proje
     try {
         const supplierId = await createSupplier(res, { name, address, contact_number, email });
         res.status(201).json({ status: 'success', message: 'Supplier created successfully.', supplierId });
-    } catch (error) {
+    }  catch (error) {
         failed(res, 500, `Database Error: ${error}`);
     }
 });
