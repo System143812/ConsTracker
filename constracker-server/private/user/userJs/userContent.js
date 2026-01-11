@@ -313,13 +313,20 @@ async function createMaterialOverlay(material = null, refreshMaterialsContentFn)
                 hideOverlayWithBg(overlayBackground);
                 return true;
             }
-            alertPopup('success', isEditMode ? 'Material updated successfully!' : 'Material added successfully, awaiting approval!');
+            alertPopup('success', responseData.message);
             hideOverlayWithBg(overlayBackground);
             refreshMaterialsContentFn();
             return true; // Indicate success
         } else {
             const errorData = await response.json();
             alertPopup('error', errorData.message || 'Failed to save material.');
+            if (errorData.message === "Item already exist") {
+                const inputElement = materialNameInput.querySelector('input');
+                inputElement.classList.add('error');
+                inputElement.addEventListener('input', () => {
+                    inputElement.classList.remove('error');
+                }, { once: true });
+            }
             return false; // Indicate failure
         }
     };

@@ -1,13 +1,17 @@
-import { fetchData } from "/js/apiURL.js";
+import { fetchData, fetchPostJson } from "/js/apiURL.js";
 import { formatString, dateFormatting } from "/js/string.js";
 import { alertPopup, warnType, showEmptyPlaceholder } from "/js/popups.js";
-import { createFilterContainer, createButton, createPaginationControls, div, span, createInput, createFilterInput } from "/js/components.js";
+import { div, span, button, createButton, createFilterContainer, createPaginationControls, createInput, createFilterInput, editFormButton } from "/js/components.js";
 import { createMilestoneOl, milestoneFullOl, showLogDetailsOverlay, createOverlayWithBg, hideOverlayWithBg, showDeleteConfirmation, showOverlayWithBg } from "/mainJs/overlays.js";
 
 const defaultImageBackgroundColors = [
     '#B388EB', '#FFD180', '#80CBC4', '#E1BEE7', '#C5E1A5',
     '#F48FB1', '#81D4FA', '#FFF59D', '#A7FFEB', '#FFAB91'
 ];
+
+function roundDecimal(number) {
+    return Math.floor(number * 100) / 100;
+}
 
 function createMaterialCard(material, role, currentUserId, refreshMaterialsContentFn) {
     const card = div(`material-card-${material.item_id}`, 'material-card');
@@ -110,7 +114,7 @@ function createMaterialCard(material, role, currentUserId, refreshMaterialsConte
 
     if (material.status === 'pending') {
         if (isEngineer || isCreator) canEdit = true;
-    } else { // 'approved' or other statuses
+    } else {
         if (isAdmin || isEngineer) canEdit = true;
     }
 
@@ -161,9 +165,13 @@ async function createMaterialOverlay(material = null, refreshMaterialsContentFn)
     const materialSizeInput = createInput('text', 'edit', 'Size', 'materialSize', 'size', material?.size || '', 'e.g., 2x4, 1/2 inch', null, 255);
 
     const imageDropAreaContainer = div('imageDropAreaContainer', 'input-box-containers');
+    const imageLabelContainer = div('imageLabelContainer', 'label-container');
     const imageLabel = document.createElement('label');
     imageLabel.className = 'input-labels';
     imageLabel.innerText = 'Material Image';
+    const imageSubLabel = span('imageSubLabel', 'input-sub-labels');
+    imageSubLabel.innerText = 'Optional, but recommended';
+    imageLabelContainer.append(imageLabel);
 
     const imageDropArea = div('imageDropArea', 'image-drop-area');
     const imageDropAreaText = span('', 'image-drop-text');
@@ -189,7 +197,8 @@ async function createMaterialOverlay(material = null, refreshMaterialsContentFn)
     }
 
     imageDropArea.append(imageDropAreaText, imageInput, imagePreview);
-    imageDropAreaContainer.append(imageLabel, imageDropArea);
+    imageDropAreaContainer.append(imageLabelContainer, imageDropArea, imageSubLabel);
+
 
     imageDropArea.addEventListener('click', () => imageInput.click());
     imageInput.addEventListener('change', () => {
@@ -249,11 +258,11 @@ async function createMaterialOverlay(material = null, refreshMaterialsContentFn)
 
 
     createMaterialFormHeader.append(
+        materialNameInput,
+        materialDescriptionInput,
         categorySelectContainer,
         supplierSelectContainer,
         unitSelectContainer,
-        materialNameInput,
-        materialDescriptionInput,
         materialPriceInput,
         materialSizeInput,
         imageDropAreaContainer
@@ -285,8 +294,8 @@ async function createMaterialOverlay(material = null, refreshMaterialsContentFn)
 
         if (imageInput.files[0]) {
             formData.append('image', imageInput.files[0]);
-        } else if (isEditMode && material?.image_url && material.image_url !== 'constrackerWhite.svg') {
-            // Preserve existing image if no new one is uploaded during edit and it's not the default
+        } else if (isEditMode && material?.image_url) {
+            // Preserve existing image if no new one is uploaded during edit
             formData.append('image_url', material.image_url);
         }
 
@@ -301,13 +310,20 @@ async function createMaterialOverlay(material = null, refreshMaterialsContentFn)
                 hideOverlayWithBg(overlayBackground);
                 return true;
             }
-            alertPopup('success', isEditMode ? 'Material updated successfully!' : 'Material added successfully, awaiting approval!');
+            alertPopup('success', responseData.message);
             hideOverlayWithBg(overlayBackground);
             refreshMaterialsContentFn();
             return true; // Indicate success
         } else {
             const errorData = await response.json();
             alertPopup('error', errorData.message || 'Failed to save material.');
+            if (errorData.message === "Item already exist") {
+                const inputElement = materialNameInput.querySelector('input');
+                inputElement.classList.add('error');
+                inputElement.addEventListener('input', () => {
+                    inputElement.classList.remove('error');
+                }, { once: true });
+            }
             return false; // Indicate failure
         }
     };
@@ -327,6 +343,359 @@ async function createMaterialOverlay(material = null, refreshMaterialsContentFn)
     showOverlayWithBg(overlayBackground);
 }
 
+async function createSupplierOverlay(supplier = null, refreshCallback) {
+    const isEditMode = supplier !== null;
+    const overlayTitle = 'Manage Suppliers';
+
+    const { overlayBackground, overlayHeader, overlayBody } = createOverlayWithBg();
+    const overlayHeaderContainer = div('', 'overlay-header-containers');
+    overlayHeaderContainer.innerText = overlayTitle;
+    
+    const addSupplierBtn = createButton('addSupplierBtn', 'solid-buttons', 'Add Supplier', 'addSupplierBtnText', 'addSupplierBtnIcon');
+    addSupplierBtn.addEventListener('click', () => {
+        renderEditView(null); // Switch to the add/edit view
+    });
+
+    overlayHeader.append(overlayHeaderContainer, addSupplierBtn);
+
+    let suppliers = await fetchData('/api/materials/suppliers');
+    if (suppliers === 'error') {
+        hideOverlayWithBg(overlayBackground);
+        return alertPopup('error', 'Failed to load suppliers.');
+    }
+
+    const renderListView = () => {
+        overlayBody.innerHTML = '';
+        addSupplierBtn.style.display = 'block'; // Show add button in list view
+        overlayHeaderContainer.innerText = 'Manage Suppliers';
+
+        if (suppliers.length === 0) {
+            showEmptyPlaceholder('/assets/icons/person.png', overlayBody, () => renderEditView(null), "No suppliers found.", "Add a Supplier");
+            return;
+        }
+
+        const listContainer = div('supplier-list-container', 'list-container');
+        suppliers.forEach(sup => {
+            const listItem = div(`supplier-item-${sup.id}`, 'list-item');
+            const supplierName = span('', 'item-name');
+            supplierName.innerText = sup.name;
+
+            const actionsContainer = div('', 'item-actions');
+            const editBtn = createButton('editSupplier', 'icon-buttons', '', 'edit-icon', 'editBlack.png');
+            editBtn.addEventListener('click', () => renderEditView(sup));
+            
+            const deleteBtn = createButton('deleteSupplier', 'icon-buttons', '', 'delete-icon', 'deleteBlack.png');
+            deleteBtn.addEventListener('click', () => {
+                showDeleteConfirmation(`Are you sure you want to delete supplier "${sup.name}"?`, async () => {
+                    const response = await fetchData(`/api/materials/suppliers/${sup.id}`, { method: 'DELETE' });
+                    if (response.status === 'success') {
+                        alertPopup('success', 'Supplier deleted successfully!');
+                        // Re-fetch suppliers and re-render the list to reflect changes
+                        suppliers = await fetchData('/api/materials/suppliers');
+                        renderListView(); // Re-render the list
+                    } else {
+                        alertPopup('error', response.message || 'Failed to delete supplier.');
+                    }
+                });
+            });
+
+            actionsContainer.append(editBtn, deleteBtn);
+            listItem.append(supplierName, actionsContainer);
+            listContainer.append(listItem);
+        });
+        overlayBody.append(listContainer);
+    };
+
+    const renderEditView = (sup = null) => {
+        const isEdit = sup !== null;
+        overlayBody.innerHTML = '';
+        addSupplierBtn.style.display = 'none';
+        overlayHeaderContainer.innerText = isEdit ? `Edit Supplier: ${sup.name}` : 'Add New Supplier';
+
+        const form = document.createElement('form');
+        form.id = 'supplierForm';
+        form.classList.add('form-edit-forms');
+
+        const formHeader = div('createFormHeader', 'create-form-headers');
+        const nameInput = createInput('text', 'edit', 'Supplier Name', 'supplierName', 'name', sup?.name || '', 'Enter supplier name', null, 255);
+        const addressInput = createInput('text', 'edit', 'Address', 'supplierAddress', 'address', sup?.address || '', 'Enter address', null, 255);
+        const contactInput = createInput('text', 'edit', 'Contact', 'supplierContact', 'contact', sup?.contact_number || '', 'Enter contact number', null, 50);
+        const emailInput = createInput('email', 'edit', 'Email', 'supplierEmail', 'email', sup?.email || '', 'Enter email address', null, 255);
+        
+        formHeader.append(nameInput, addressInput, contactInput, emailInput);
+
+        const formFooter = div('createFormFooter', 'create-form-footers');
+        const cancelBtn = createButton('cancelBtn', 'wide-buttons', 'Cancel', 'cancelText');
+        cancelBtn.addEventListener('click', renderListView);
+
+        const saveBtn = createButton('saveBtn', 'wide-buttons', isEdit ? 'Save Changes' : 'Create Supplier', 'saveText');
+        saveBtn.addEventListener('click', async () => {
+            const payload = {
+                name: nameInput.querySelector('input').value,
+                address: addressInput.querySelector('input').value,
+                contact_number: contactInput.querySelector('input').value,
+                email: emailInput.querySelector('input').value,
+            };
+
+            if (!payload.name) {
+                return alertPopup('error', 'Supplier name is required.');
+            }
+
+            const url = isEdit ? `/api/materials/suppliers/${sup.id}` : '/api/materials/suppliers';
+            const method = isEdit ? 'PUT' : 'POST';
+
+            const response = await fetchPostJson(url, method, payload);
+
+            if (response.status === 'success') {
+                alertPopup('success', isEdit ? 'Supplier updated!' : 'Supplier created!');
+                hideOverlayWithBg(overlayBackground);
+                refreshCallback();
+            } else {
+                alertPopup('error', response.message || 'Failed to save supplier.');
+            }
+        });
+
+        formFooter.append(cancelBtn, saveBtn);
+        form.append(formHeader, formFooter);
+        overlayBody.append(form);
+    };
+
+    renderListView();
+    showOverlayWithBg(overlayBackground);
+}
+
+async function createCategoryOverlay(category = null, refreshCallback) {
+    const isEditMode = category !== null;
+    const overlayTitle = 'Manage Categories';
+
+    const { overlayBackground, overlayHeader, overlayBody } = createOverlayWithBg();
+    const overlayHeaderContainer = div('', 'overlay-header-containers');
+    overlayHeaderContainer.innerText = overlayTitle;
+    
+    const addCategoryBtn = createButton('addCategoryBtn', 'solid-buttons', 'Add Category', 'addCategoryBtnText', 'addCategoryBtnIcon');
+    addCategoryBtn.addEventListener('click', () => {
+        renderEditView(null);
+    });
+
+    overlayHeader.append(overlayHeaderContainer, addCategoryBtn);
+
+    let categories = await fetchData('/api/materials/categories'); // Changed to let
+    if (categories === 'error') {
+        hideOverlayWithBg(overlayBackground);
+        return alertPopup('error', 'Failed to load categories.');
+    }
+
+    const renderListView = () => {
+        overlayBody.innerHTML = '';
+        addCategoryBtn.style.display = 'block';
+        overlayHeaderContainer.innerText = 'Manage Categories';
+
+        if (categories.length === 0) {
+            showEmptyPlaceholder('/assets/icons/person.png', overlayBody, () => renderEditView(null), "No categories found.", "Add a Category");
+            return;
+        }
+
+        const listContainer = div('category-list-container', 'list-container');
+        categories.forEach(cat => {
+            const listItem = div(`category-item-${cat.id}`, 'list-item');
+            const categoryName = span('', 'item-name');
+            categoryName.innerText = cat.name;
+
+            const actionsContainer = div('', 'item-actions');
+            const editBtn = createButton('editCategory', 'icon-buttons', '', 'edit-icon', 'editBlack.png');
+            editBtn.addEventListener('click', () => renderEditView(cat));
+            
+            const deleteBtn = createButton('deleteCategory', 'icon-buttons', '', 'delete-icon', 'deleteBlack.png');
+            deleteBtn.addEventListener('click', () => {
+                showDeleteConfirmation(`Are you sure you want to delete category "${cat.name}"?`, async () => {
+                    const response = await fetchData(`/api/materials/categories/${cat.id}`, { method: 'DELETE' });
+                    if (response.status === 'success') {
+                        alertPopup('success', 'Category deleted successfully!');
+                        // Update the local categories array
+                        categories = categories.filter(c => c.id !== cat.id);
+                        renderListView(); // Re-render the list
+                        refreshCallback(); // Refresh the main materials content
+                    } else {
+                        alertPopup('error', response.message || 'Failed to delete category.');
+                    }
+                });
+            });
+
+            actionsContainer.append(editBtn, deleteBtn);
+            listItem.append(categoryName, actionsContainer);
+            listContainer.append(listItem);
+        });
+        overlayBody.append(listContainer);
+    };
+
+    const renderEditView = (cat = null) => {
+        const isEdit = cat !== null;
+        overlayBody.innerHTML = '';
+        addCategoryBtn.style.display = 'none';
+        overlayHeaderContainer.innerText = isEdit ? `Edit Category: ${cat.name}` : 'Add New Category';
+
+        const form = document.createElement('form');
+        form.id = 'categoryForm';
+        form.classList.add('form-edit-forms');
+
+        const formHeader = div('createFormHeader', 'create-form-headers');
+        const nameInput = createInput('text', 'edit', 'Category Name', 'categoryName', 'name', cat?.name || '', 'Enter category name', null, 255);
+        
+        formHeader.append(nameInput);
+
+        const formFooter = div('createFormFooter', 'create-form-footers');
+        const cancelBtn = createButton('cancelBtn', 'wide-buttons', 'Cancel', 'cancelText');
+        cancelBtn.addEventListener('click', renderListView);
+
+        const saveBtn = createButton('saveBtn', 'wide-buttons', isEdit ? 'Save Changes' : 'Create Category', 'saveText');
+        saveBtn.addEventListener('click', async () => {
+            const payload = {
+                name: nameInput.querySelector('input').value,
+            };
+
+            if (!payload.name) {
+                return alertPopup('error', 'Category name is required.');
+            }
+
+            const url = isEdit ? `/api/materials/categories/${cat.id}` : '/api/materials/categories';
+            const method = isEdit ? 'PUT' : 'POST';
+
+            const response = await fetchPostJson(url, method, payload);
+
+            if (response.status === 'success') {
+                alertPopup('success', isEdit ? 'Category updated!' : 'Category created!');
+                hideOverlayWithBg(overlayBackground);
+                refreshCallback();
+            } else {
+                alertPopup('error', response.message || 'Failed to save category.');
+            }
+        });
+
+        formFooter.append(cancelBtn, saveBtn);
+        form.append(formHeader, formFooter);
+        overlayBody.append(form);
+    };
+
+    renderListView();
+    showOverlayWithBg(overlayBackground);
+}
+
+async function createUnitOverlay(unit = null, refreshCallback) {
+    const isEditMode = unit !== null;
+    const overlayTitle = 'Manage Units';
+
+    const { overlayBackground, overlayHeader, overlayBody } = createOverlayWithBg();
+    const overlayHeaderContainer = div('', 'overlay-header-containers');
+    overlayHeaderContainer.innerText = overlayTitle;
+    
+    const addUnitBtn = createButton('addUnitBtn', 'solid-buttons', 'Add Unit', 'addUnitBtnText', 'addUnitBtnIcon');
+    addUnitBtn.addEventListener('click', () => {
+        renderEditView(null);
+    });
+
+    overlayHeader.append(overlayHeaderContainer, addUnitBtn);
+
+    let units = await fetchData('/api/materials/units'); // Changed to let
+    if (units === 'error') {
+        hideOverlayWithBg(overlayBackground);
+        return alertPopup('error', 'Failed to load units.');
+    }
+
+    const renderListView = () => {
+        overlayBody.innerHTML = '';
+        addUnitBtn.style.display = 'block';
+        overlayHeaderContainer.innerText = 'Manage Units';
+
+        if (units.length === 0) {
+            showEmptyPlaceholder('/assets/icons/person.png', overlayBody, () => renderEditView(null), "No units found.", "Add a Unit");
+            return;
+        }
+
+        const listContainer = div('unit-list-container', 'list-container');
+        units.forEach(un => {
+            const listItem = div(`unit-item-${un.id}`, 'list-item');
+            const unitName = span('', 'item-name');
+            unitName.innerText = un.name;
+
+            const actionsContainer = div('', 'item-actions');
+            const editBtn = createButton('editUnit', 'icon-buttons', '', 'edit-icon', 'editBlack.png');
+            editBtn.addEventListener('click', () => renderEditView(un));
+            
+            const deleteBtn = createButton('deleteUnit', 'icon-buttons', '', 'delete-icon', 'deleteBlack.png');
+            deleteBtn.addEventListener('click', () => {
+                showDeleteConfirmation(`Are you sure you want to delete unit "${un.name}"?`, async () => {
+                    const response = await fetchData(`/api/materials/units/${un.id}`, { method: 'DELETE' });
+                    if (response.status === 'success') {
+                        alertPopup('success', 'Unit deleted successfully!');
+                        // Update the local units array
+                        units = units.filter(u => u.id !== un.id);
+                        renderListView(); // Re-render the list
+                        refreshCallback(); // Refresh the main materials content
+                    } else {
+                        alertPopup('error', response.message || 'Failed to delete unit.');
+                    }
+                });
+            });
+
+            actionsContainer.append(editBtn, deleteBtn);
+            listItem.append(unitName, actionsContainer);
+            listContainer.append(listItem);
+        });
+        overlayBody.append(listContainer);
+    };
+
+    const renderEditView = (un = null) => {
+        const isEdit = un !== null;
+        overlayBody.innerHTML = '';
+        addUnitBtn.style.display = 'none';
+        overlayHeaderContainer.innerText = isEdit ? `Edit Unit: ${un.name}` : 'Add New Unit';
+
+        const form = document.createElement('form');
+        form.id = 'unitForm';
+        form.classList.add('form-edit-forms');
+
+        const formHeader = div('createFormHeader', 'create-form-headers');
+        const nameInput = createInput('text', 'edit', 'Unit Name', 'unitName', 'name', un?.name || '', 'Enter unit name', null, 255);
+        
+        formHeader.append(nameInput);
+
+        const formFooter = div('createFormFooter', 'create-form-footers');
+        const cancelBtn = createButton('cancelBtn', 'wide-buttons', 'Cancel', 'cancelText');
+        cancelBtn.addEventListener('click', renderListView);
+
+        const saveBtn = createButton('saveBtn', 'wide-buttons', isEdit ? 'Save Changes' : 'Create Unit', 'saveText');
+        saveBtn.addEventListener('click', async () => {
+            const payload = {
+                name: nameInput.querySelector('input').value,
+            };
+
+            if (!payload.name) {
+                return alertPopup('error', 'Unit name is required.');
+            }
+
+            const url = isEdit ? `/api/materials/units/${un.id}` : '/api/materials/units';
+            const method = isEdit ? 'PUT' : 'POST';
+
+            const response = await fetchPostJson(url, method, payload);
+
+            if (response.status === 'success') {
+                alertPopup('success', isEdit ? 'Unit updated!' : 'Unit created!');
+                hideOverlayWithBg(overlayBackground);
+                refreshCallback();
+            } else {
+                alertPopup('error', response.message || 'Failed to save unit.');
+            }
+        });
+
+        formFooter.append(cancelBtn, saveBtn);
+        form.append(formHeader, formFooter);
+        overlayBody.append(form);
+    };
+
+    renderListView();
+    showOverlayWithBg(overlayBackground);
+}
+
 async function generateMaterialsContent(role) {
     const materialsBodyContent = document.getElementById('materialsBodyContainer'); // Assuming a div with this ID in the HTML
     materialsBodyContent.innerHTML = ''; // Clear existing content
@@ -339,23 +708,7 @@ async function generateMaterialsContent(role) {
     const subtitle = span('', 'body-header-subtitle');
     subtitle.innerText = 'Manage and track all construction materials.';
     bodyHeaderContainer.append(title, subtitle);
-
-    const headerActionsContainer = div('headerActionsContainer', 'header-actions-container');
-
-    const textButtonsContainer = div('textButtonsContainer', 'text-buttons-container');
-    const suppliersBtn = span('suppliersTextBtn', 'text-buttons');
-    suppliersBtn.innerText = 'Suppliers';
-    suppliersBtn.addEventListener('click', () => { /* Placeholder for overlay */ });
-
-    const categoriesBtn = span('categoriesTextBtn', 'text-buttons');
-    categoriesBtn.innerText = 'Categories';
-    categoriesBtn.addEventListener('click', () => { /* Placeholder for overlay */ });
-
-    const unitsBtn = span('unitsTextBtn', 'text-buttons');
-    unitsBtn.innerText = 'Units';
-    unitsBtn.addEventListener('click', () => { /* Placeholder for overlay */ });
-
-    textButtonsContainer.append(suppliersBtn, categoriesBtn, unitsBtn);
+    bodyHeader.append(bodyHeaderContainer);
     
     const user = await fetchData('/profile');
     if (user === 'error') {
@@ -370,19 +723,32 @@ async function generateMaterialsContent(role) {
         addMaterialBtn.addEventListener('click', () => {
             createMaterialOverlay(null, () => renderMaterials(new URLSearchParams(), role, currentUserId));
         });
-        headerActionsContainer.append(textButtonsContainer, addMaterialBtn);
-    } else {
-        headerActionsContainer.append(textButtonsContainer);
+        bodyHeader.append(addMaterialBtn);
     }
-    
-    bodyHeader.append(bodyHeaderContainer, headerActionsContainer);
 
     const materialsContainer = div('materials-main-container');
+    const materialsSubHeader = div('materials-sub-header');
+    const suppliersButton = div('suppliers-button', 'sub-header-buttons');
+    suppliersButton.innerText = 'Suppliers';
+    const categoriesButton = div('categories-button', 'sub-header-buttons');
+    categoriesButton.innerText = 'Categories';
+    const unitsButton = div('units-button', 'sub-header-buttons');
+    unitsButton.innerText = 'Units';
+    materialsSubHeader.append(suppliersButton, categoriesButton, unitsButton);
+    suppliersButton.addEventListener('click', () => {
+        createSupplierOverlay(null, () => renderMaterials(new URLSearchParams(), role, currentUserId));
+    });
+    categoriesButton.addEventListener('click', () => {
+        createCategoryOverlay(null, () => renderMaterials(new URLSearchParams(), role, currentUserId));
+    });
+    unitsButton.addEventListener('click', () => {
+        createUnitOverlay(null, () => renderMaterials(new URLSearchParams(), role, currentUserId));
+    });
     const filterContainer = div('materials-filter-container');
     const materialsListContainer = div('materials-list-container');
     const paginationContainer = div('materialsPaginationContainer', 'pagination-container');
     
-    materialsContainer.append(filterContainer, materialsListContainer, paginationContainer);
+    materialsContainer.append(materialsSubHeader, filterContainer, materialsListContainer, paginationContainer);
     materialsBodyContent.append(bodyHeader, materialsContainer);
 
     let currentPage = 1;
@@ -443,23 +809,25 @@ async function generateMaterialsContent(role) {
 }
 
 
+
 async function generateLogsContent() {
     const logsBodyContent = document.getElementById('logsBodyContent');
     logsBodyContent.innerHTML = ''; // Clear existing content
 
     const logsContainer = div('logs-main-container');
     const filterContainer = div('logs-filter-container');
-    const scrollableLogListWrapper = div('scrollable-log-list-wrapper'); // New wrapper for scrolling
+    const scrollableLogListWrapper = div('scrollable-log-list-wrapper');
     const logListContainer = div('logs-list-container');
     const paginationContainer = div('paginationContainer', 'pagination-container');
     
-    scrollableLogListWrapper.append(logListContainer); // logListContainer goes inside the wrapper
-    logsContainer.append(filterContainer, scrollableLogListWrapper, paginationContainer); // Append filter and wrapper
+    scrollableLogListWrapper.append(logListContainer);
+    logsContainer.append(filterContainer, scrollableLogListWrapper, paginationContainer);
     logsBodyContent.append(logsContainer);
 
     let currentPage = 1;
     let itemsPerPage = 10;
-    
+    let allLogs = []; // Cache for all logs
+
     function createLogCard(logData) {
         const logCard = div('', 'log-cards');
         const logCardHeader = div('', 'log-card-headers');
@@ -522,59 +890,69 @@ async function generateLogsContent() {
         return logCard;
     }
 
-    async function renderLogs(urlParams = new URLSearchParams()) {
-        logListContainer.innerHTML = '<div class="loading-spinner"></div>'; // Show a loading spinner
+    function renderPage() {
+        logListContainer.innerHTML = '';
         paginationContainer.innerHTML = '';
 
-        urlParams.set('page', currentPage);
-        urlParams.set('limit', itemsPerPage);
-
-        const data = await fetchData(`/api/logs?${urlParams.toString()}`);
-        logListContainer.innerHTML = '';
-        
-        if (data === 'error' || data.logs.length === 0) {
+        if (allLogs.length === 0) {
             showEmptyPlaceholder('/assets/icons/emptyLogs.png', logListContainer, null, "No logs found for the selected filters.");
             return;
         }
 
-        data.logs.forEach(log => {
+        const start = (currentPage - 1) * itemsPerPage;
+        const end = start + itemsPerPage;
+        const pageLogs = allLogs.slice(start, end);
+
+        pageLogs.forEach(log => {
             logListContainer.append(createLogCard(log));
         });
 
         const paginationControls = createPaginationControls({
             currentPage,
-            totalItems: data.total,
+            totalItems: allLogs.length,
             itemsPerPage,
             onPageChange: (page) => {
                 currentPage = page;
-                renderLogs(urlParams);
+                renderPage();
             },
             onItemsPerPageChange: (limit) => {
                 itemsPerPage = limit;
-                currentPage = 1; // Reset to first page
-                renderLogs(urlParams);
+                currentPage = 1;
+                renderPage();
             }
         });
         paginationContainer.append(paginationControls);
     }
 
-    // New function to be passed as the filter callback
-    async function applyFilterToLogs(filteredUrlParams) {
+    async function fetchAndRender(urlParams = new URLSearchParams()) {
+        logListContainer.innerHTML = '<div class="loading-spinner"></div>';
+        paginationContainer.innerHTML = '';
+
+        const logs = await fetchData(`/api/logs?${urlParams.toString()}`);
+        
+        if (logs === 'error') {
+            logListContainer.innerHTML = '';
+            showEmptyPlaceholder('/assets/icons/emptyLogs.png', logListContainer, null, "An error occurred while fetching logs.");
+            allLogs = [];
+        } else {
+            allLogs = logs;
+        }
+        
         currentPage = 1;
-        await renderLogs(filteredUrlParams);
+        renderPage();
     }
 
     const filters = await createFilterContainer(
-        applyFilterToLogs, // The new applyFilterCallback
+        fetchAndRender,
         'Search by user...', 
-        { name: true, project: true, dateFrom: true, dateTo: true, sort: true }, // Changed 'recent' to 'sort'
+        { name: true, project: true, dateFrom: true, dateTo: true, sort: true },
         'username',
         'newest'
     );
     
     filterContainer.append(filters);
 
-    await renderLogs(new URLSearchParams()); // Initial render without filters
+    await fetchAndRender(new URLSearchParams());
 }
 
 const tabContents = {
@@ -592,10 +970,6 @@ const tabContents = {
             inventorySectionContainer.innerText = 'Inventory Content for Project: ' + projectId + ' (Role: ' + role + ')'; // Example with parameters
             return inventorySectionContainer;
         },
-        generateGraphs: async() => ''
-    },
-    materialsRequest: {
-        generateContent: async() => '',
         generateGraphs: async() => ''
     },
     personnel: {
@@ -621,16 +995,16 @@ export async function displayContents(tabName, tabType, role) {
     const pageName = document.getElementById('pageName');
     if(tabType === 'upperTabs'){
         pageName.innerText = formatString(tabName);
-        await generateContent(tabName);
+        await generateContent(tabName, role);
     } else {
         pageName.innerText = 'Projects'
     }
 }
 
-async function generateContent(tabName) {
+async function generateContent(tabName, role) {
     const bodyContainer = document.getElementById(`${tabName}BodyContainer`);
     const pageData = tabContents[tabName];
-    await pageData.generateContent();
+    await pageData.generateContent(role);
     bodyContainer.style.display = 'flex';
     bodyContainer.style.opacity = 1;
     pageData.generateGraphs();

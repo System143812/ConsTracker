@@ -153,7 +153,7 @@ function failed(res, status, message) {
 }
 function dashboardRoleAccess(req, res) {
     const roles = [
-        {role: 'admin', access: ['dashboard', 'projects', 'inventory', 'materialsRequest', 'personnel', 'logs', 'materials']},
+        {role: 'admin', access: ['dashboard', 'projects', 'inventory', 'personnel', 'logs', 'materials']},
         {role: 'engineer', access: ['dashboard', 'logs', 'materials']},
         {role: 'foreman', access: ['dashboard', 'logs', 'materials']},
         {role: 'project manager', access: ['dashboard', 'logs', 'materials']}
@@ -161,7 +161,7 @@ function dashboardRoleAccess(req, res) {
     const userRole = roles.find(obj => obj.role === req.user.role);
     if(userRole) {
         // Check if user has no assigned projects and if 'materials' is in their access
-        if (req.user.projects && req.user.projects.length === 0 && userRole.access.includes('materials')) {
+        if (req.user.role !== 'admin' && req.user.projects && req.user.projects.length === 0 && userRole.access.includes('materials')) {
             // Remove 'materials' from their access list
             userRole.access = userRole.access.filter(item => item !== 'materials');
         }
@@ -178,6 +178,11 @@ async function getUser(uid) {
 async function isUserExist(email) {
     const [result] = await pool.execute('SELECT * FROM users WHERE email = ?;', [email]);
     return result.length > 0 ? true : false;
+}
+
+async function isMaterialExist(name) {
+    const [result] = await pool.execute('SELECT item_id FROM items WHERE item_name = ?', [name]);
+    return result.length > 0;
 }
 
 async function getAllMilestones(res, projectId) {
@@ -561,7 +566,7 @@ async function getAllMaterials(res, role, assignedProjects, filters) {
 
 async function createMaterial(res, materialData, userId, userRole) {
     const { item_name, item_description, price, unit_id, category_id, supplier_id, size, image_url } = materialData;
-    const status = userRole === 'engineer' ? 'approved' : 'pending';
+    const status = (userRole === 'engineer' || userRole === 'admin') ? 'approved' : 'pending';
     try {
         const [result] = await pool.execute(
             'INSERT INTO items (item_name, item_description, price, unit_id, category_id, supplier_id, size, status, created_by, image_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
@@ -1378,6 +1383,15 @@ app.post('/api/materials', authMiddleware(['admin', 'engineer', 'project manager
     const image_url = req.file ? req.file.filename : 'constrackerWhite.svg'; // Get filename if uploaded
     const { id: userId, role: userRole } = req.user;
 
+    if (await isMaterialExist(item_name)) {
+        if (req.file) {
+            fs.unlink(req.file.path, (err) => {
+                if (err) console.error("Failed to delete uploaded file for duplicate item:", err);
+            });
+        }
+        return failed(res, 409, "Item already exist"); 
+    }
+
     // Validate incoming data
     if (!item_name || !price || !category_id || !supplier_id || !unit_id) {
         // If validation fails and a file was uploaded, delete it to prevent orphaned files
@@ -1405,7 +1419,7 @@ app.post('/api/materials', authMiddleware(['admin', 'engineer', 'project manager
             await createLogs(res, req, logData);
         }
         
-        const message = userRole === 'engineer' ? 'Material created and approved successfully.' : 'Material created successfully, awaiting approval.';
+        const message = (userRole === 'engineer' || userRole === 'admin') ? 'Material created and approved successfully.' : 'Material created successfully, awaiting approval.';
         res.status(201).json({ status: 'success', message, materialId });
     } catch (error) {
         // If an error occurs and a file was uploaded, delete it

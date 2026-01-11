@@ -15,6 +15,10 @@ export async function fetchData(url) { //baka malimutan!!!!! this won't handle e
             alertPopup('error', 'Server Error');
             return 'error';
         } 
+        if(data.status === 'failed') {
+            alertPopup('error', data.message || 'Server operation failed');
+            return 'error';
+        }
         if(data.status === 'invalid token' || data.status === 'missing token' || data.status === 'expired token') {
             window.location.href = '/';
             alertPopup('error', 'Invalid/Expired Token');
