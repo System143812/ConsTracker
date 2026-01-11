@@ -153,15 +153,15 @@ function failed(res, status, message) {
 }
 function dashboardRoleAccess(req, res) {
     const roles = [
-        {role: 'admin', access: ['dashboard', 'projects', 'inventory', 'materialsRequest', 'personnel', 'logs', 'materials']},
-        {role: 'engineer', access: ['dashboard', 'logs', 'materials']},
-        {role: 'foreman', access: ['dashboard', 'logs', 'materials']},
-        {role: 'project manager', access: ['dashboard', 'logs', 'materials']}
+        {role: 'admin', access: ['dashboard', 'projects', 'inventory', 'materials', 'assets', 'personnel', 'reports', 'analytics', 'logs']},
+        {role: 'engineer', access: ['dashboard', 'materials', 'assets', 'reports', 'logs']},
+        {role: 'foreman', access: ['dashboard', 'materials', 'assets', 'reports', 'logs']},
+        {role: 'project manager', access: ['dashboard', 'materials', 'assets', 'reports', 'logs']}
     ];
     const userRole = roles.find(obj => obj.role === req.user.role);
     if(userRole) {
         // Check if user has no assigned projects and if 'materials' is in their access
-        if (req.user.projects && req.user.projects.length === 0 && userRole.access.includes('materials')) {
+        if (req.user.role !== 'admin' && req.user.projects && req.user.projects.length === 0 && userRole.access.includes('materials')) {
             // Remove 'materials' from their access list
             userRole.access = userRole.access.filter(item => item !== 'materials');
         }
@@ -178,6 +178,11 @@ async function getUser(uid) {
 async function isUserExist(email) {
     const [result] = await pool.execute('SELECT * FROM users WHERE email = ?;', [email]);
     return result.length > 0 ? true : false;
+}
+
+async function isMaterialExist(name) {
+    const [result] = await pool.execute('SELECT item_id FROM items WHERE item_name = ?', [name]);
+    return result.length > 0;
 }
 
 async function getAllMilestones(res, projectId) {
@@ -216,11 +221,49 @@ async function getTask(res, taskId) {
     }
 }
 
+async function updateTask(res, body) {
+    const { id, task_name, task_progress, status, duedate, weights } = body;
+    try {
+        await pool.execute('UPDATE tasks SET task_name = ?, task_progress = ?, status = ?, duedate = ?, weights = ? WHERE id = ?', [task_name, task_progress, status, duedate, weights, id]);
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+}
+
+async function updateMilestone(res, body) {
+    const { id, milestone_name, milestone_description, duedate, weights, status } = body;
+    try {
+        await pool.execute('UPDATE project_milestones SET milestone_name = ?, milestone_description = ?, duedate = ?, weights = ?, status = ? WHERE id = ?', [milestone_name, milestone_description, duedate, weights, status, id]);
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+}
+
+async function updateMilestoneWeights(res, body) {
+    try {
+        for (const milestone of body) {
+            await pool.execute('UPDATE project_milestones SET weights = ? WHERE id = ?', [milestone.value, milestone.id]);
+        }
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+}
+
+async function updateTaskWeights(res, body) {
+    try {
+        for (const task of body) {
+            await pool.execute('UPDATE tasks SET weights = ? WHERE id = ?', [task.value, task.id]);
+        }
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+}
+
 async function getProjectCardData(res, project_id) {
     try {
         const [result] = await pool.execute('SELECT *, (SELECT SUM(weights / 100 * milestone_progress) AS milestone_progress FROM (SELECT p.weights, SUM(t.weights / 100 * t.task_progress) AS milestone_progress FROM project_milestones p JOIN tasks t ON p.id = t.milestone_id WHERE p.project_id = ? GROUP BY p.id) AS m) AS progress FROM projects WHERE project_id = ?;', [project_id, project_id]);
         return result[0];
-    } catch (error) {
+    }  catch (error) {
         failed(res, 500, `Database Error ${error}`);
     }
 }
@@ -282,14 +325,88 @@ async function getInprogressProjects(res) {
     }
 }
 
-async function getAllProjects(res) {
+async function getAllProjects(res, filters) {
+    const { page = 1, limit = 10, name, dateFrom, dateTo, sort } = filters;
+    console.log(sort);
+    const pageInt = parseInt(page);
+    const limitInt = parseInt(limit);
+    const offset = (pageInt - 1) * limitInt;
+
+    let baseQuery = `
+        FROM 
+            projects p
+    `;
+    let filterParams = [];
+    let whereClauses = [];
+
+    if (name && name !== "all") {
+        whereClauses.push(`p.project_name LIKE ?`);
+        filterParams.push(`%${name}%`);
+    }
+
+    if (dateFrom && dateFrom !== "all") {
+        whereClauses.push(`p.created_at >= ?`);
+        filterParams.push(dateFrom);
+    }
+
+    if (dateTo && dateTo !== "all") {
+        whereClauses.push(`p.created_at <= ?`);
+        filterParams.push(dateTo);
+    }
+    
+    let whereClause = '';
+    if (whereClauses.length > 0) {
+        whereClause = ` WHERE ` + whereClauses.join(' AND ');
+    }
+
+    let orderByClause = '';
+    if (sort) {
+        switch (sort) {
+            case 'newest':
+                orderByClause = 'ORDER BY p.created_at DESC, p.project_id DESC';
+                break;
+            case 'oldest':
+                orderByClause = 'ORDER BY p.created_at ASC, p.project_id ASC';
+                break;
+            case 'atoz':
+                orderByClause = 'ORDER BY p.project_name ASC, p.project_id ASC';
+                break;
+            case 'ztoa':
+                orderByClause = 'ORDER BY p.project_name DESC, p.project_id DESC';
+                break;
+            default:
+                orderByClause = 'ORDER BY p.created_at DESC, p.project_id DESC';
+                break;
+        }
+    } else {
+        orderByClause = 'ORDER BY p.created_at DESC, p.project_id DESC';
+    }
+
+    const countQuery = `SELECT COUNT(p.project_id) AS total ${baseQuery} ${whereClause}`;
+    
+    const dataQuery = `
+        SELECT 
+            p.project_id, p.project_name, p.status as project_status, p.project_location, p.created_at,
+            (SELECT COUNT(*) FROM assigned_projects ap WHERE ap.project_id = p.project_id) AS total_personnel, 
+            p.duedate, 
+            (SELECT COUNT(*) FROM project_milestones pm WHERE pm.status = 'completed' AND pm.project_id = p.project_id) AS completed_milestone, 
+            (SELECT COUNT(*) FROM project_milestones pm WHERE pm.project_id = p.project_id) AS total_milestone 
+        ${baseQuery}
+        ${whereClause}
+        ${orderByClause}
+        LIMIT ${limitInt}
+        OFFSET ${offset}
+    `;
+
     try {
-        const [result] = await pool.execute(
-            "SELECT p.project_name, p.status as project_status, p.project_location, (SELECT COUNT(*) FROM assigned_projects ap WHERE ap.project_id = p.project_id) AS total_personnel, p.duedate, (SELECT COUNT(*) FROM project_milestones pm WHERE pm.status = 'completed' AND pm.project_id = p.project_id) AS completed_milestone, (SELECT COUNT(*) FROM project_milestones pm WHERE pm.project_id = p.project_id) AS total_milestone FROM projects p;"
-        );
-        return result;
+        const [countResult] = await pool.execute(countQuery, filterParams);
+        const total = countResult[0].total;
+
+        const [projects] = await pool.execute(dataQuery, filterParams);
+        
+        return { projects, total };
     } catch (error) {
-        failed(res, 500, `Database error: ${error}`);
+        failed(res, 500, `Database Error: ${error}`);
     }
 }
 
@@ -443,7 +560,7 @@ async function getAllMaterials(res, role, assignedProjects, filters) {
 
     if (name && name !== "all") {
         whereClauses.push(`i.item_name LIKE ?`);
-        filterParams.push(`${name}%`);
+        filterParams.push(`%${name}%`);
     }
 
     if (category && category !== "all") {
@@ -523,7 +640,7 @@ async function getAllMaterials(res, role, assignedProjects, filters) {
 
 async function createMaterial(res, materialData, userId, userRole) {
     const { item_name, item_description, price, unit_id, category_id, supplier_id, size, image_url } = materialData;
-    const status = userRole === 'engineer' ? 'approved' : 'pending';
+    const status = (userRole === 'engineer' || userRole === 'admin') ? 'approved' : 'pending';
     try {
         const [result] = await pool.execute(
             'INSERT INTO items (item_name, item_description, price, unit_id, category_id, supplier_id, size, status, created_by, image_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
@@ -638,7 +755,7 @@ function filterLogsQuery(defaultQuery, role, assignedProjects, filters, joinAbr 
 
     if (filters.name && filters.name !== "all") {
         whereClauses.push(`u.full_name LIKE ?`);
-        filterParams.push(`${filters.name}%`);
+        filterParams.push(`%${filters.name}%`);
     }
 
     if (projectsFilter && projectsFilter !== "all") {
@@ -1172,7 +1289,7 @@ app.get('/api/projectStatusGraph', authMiddleware(['admin']), async(req, res) =>
 });
 
 app.get('/api/allProjects', authMiddleware(['admin', 'engineer']), async(req, res) => { 
-    res.status(200).json(await getAllProjects(res));
+    res.status(200).json(await getAllProjects(res, req.query));
 });
 
 app.get('/api/inprogressProjects', authMiddleware(['admin']), async(req, res) => { 
@@ -1293,7 +1410,7 @@ app.post('/api/materials/suppliers', authMiddleware(['admin', 'engineer', 'proje
     try {
         const supplierId = await createSupplier(res, { name, address, contact_number, email });
         res.status(201).json({ status: 'success', message: 'Supplier created successfully.', supplierId });
-    } catch (error) {
+    }  catch (error) {
         failed(res, 500, `Database Error: ${error}`);
     }
 });
@@ -1340,6 +1457,15 @@ app.post('/api/materials', authMiddleware(['admin', 'engineer', 'project manager
     const image_url = req.file ? req.file.filename : 'constrackerWhite.svg'; // Get filename if uploaded
     const { id: userId, role: userRole } = req.user;
 
+    if (await isMaterialExist(item_name)) {
+        if (req.file) {
+            fs.unlink(req.file.path, (err) => {
+                if (err) console.error("Failed to delete uploaded file for duplicate item:", err);
+            });
+        }
+        return failed(res, 409, "Item already exist"); 
+    }
+
     // Validate incoming data
     if (!item_name || !price || !category_id || !supplier_id || !unit_id) {
         // If validation fails and a file was uploaded, delete it to prevent orphaned files
@@ -1367,7 +1493,7 @@ app.post('/api/materials', authMiddleware(['admin', 'engineer', 'project manager
             await createLogs(res, req, logData);
         }
         
-        const message = userRole === 'engineer' ? 'Material created and approved successfully.' : 'Material created successfully, awaiting approval.';
+        const message = (userRole === 'engineer' || userRole === 'admin') ? 'Material created and approved successfully.' : 'Material created successfully, awaiting approval.';
         res.status(201).json({ status: 'success', message, materialId });
     } catch (error) {
         // If an error occurs and a file was uploaded, delete it

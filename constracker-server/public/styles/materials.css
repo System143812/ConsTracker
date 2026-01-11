@@ -8,7 +8,7 @@
 }
 
 .sub-header-buttons {
-    font-size: 14px;
+    font-size: 12px;
     font-weight: 500;
     color: var(--grayed-text);
     cursor: pointer;
@@ -247,10 +247,11 @@
     position: absolute;
     top: 0;
     left: 0;
-    background-size: contain; /* or cover, depending on preference */
+    opacity: 0.5;
+    background-size: cover;
     background-position: center;
     background-repeat: no-repeat;
-    display: none; /* Hidden by default */
+    display: none; 
 }
 
 .header-actions-container {
