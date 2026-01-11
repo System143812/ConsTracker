@@ -955,6 +955,64 @@ async function generateLogsContent() {
     await fetchAndRender(new URLSearchParams());
 }
 
+function createProjectCard(projects, num) {
+    const progressCardContainer = div(`projectProgressCards`, 'project-progress-cards');
+    const progressCardHeader = div(`progressCardHeader`, 'progress-card-header');
+    const progressCardName = div(`progressCardName`, 'progress-card-name');
+    progressCardName.innerText = projects.project_name;
+    const progressCardStatus = div(`progressCardStatus`, 'progress-card-status');
+    if(projects.project_status === "planning") warnType(progressCardStatus, "glass", '', '', '');
+    if(projects.project_status === "in progress") warnType(progressCardStatus, "glass", 'yellow', '', '');
+    if(projects.project_status === "completed") warnType(progressCardStatus, "glass", 'green', '', '');
+    progressCardStatus.innerText = projects.project_status;
+    const progressCardBody = div(`progressCardBody`, 'progress-card-body');
+    const progressCardLocation = div(`progressCardLocation`, 'progress-card-location');
+    const locationCardIcon = div(`locationCardIcon`, 'light-icons');
+    const locationCardName = div(`locationCardName`, 'location-card-name');
+    locationCardName.innerText = projects.project_location;
+    const progressCardPersonnel = div(`progressCardPersonnel`, 'progress-card-personnel');
+    const personnelCardIcon = div(`personnelCardIcon`, 'light-icons');
+    const personnelCardCount = div(`personnelCardCount`, 'personnel-card-count');
+    personnelCardCount.innerText =  `${projects.total_personnel} personnel`;
+    const progressCardDue = div(`progressCardDue`, 'progress-card-due');
+    const dueCardIcon = div(`dueCardIcon`, 'light-icons');
+    const dueCardDate = div(`dueCardDate`, 'due-card-date');
+    dueCardDate.innerText = `Due ${dateFormatting(projects.duedate, 'date')}`
+
+    const progressCardFooter = div(`progressCardFooter`, 'progress-card-footer');
+    const progressUpperSection = div(`progressUpperSection`, 'progress-upper-section');
+    const progressText = div(`progressText`,'progress-text');
+    progressText.innerText = 'Progress';
+    const progressPercent = div(`progressPercent`, 'progress-percent');
+    const pctString = projects.total_milestone > 0 ? `${Math.floor(projects.completed_milestone / projects.total_milestone * 100)}%` : '0%';
+    progressPercent.innerText = pctString;
+    const progressLowerSection = div(`progressLowerSection`, 'progress-lower-section');
+    const style = document.createElement('style');
+    style.innerHTML = `
+    @keyframes progressBarAnim${num} {
+        0% { width: 0%; }
+        100% { width: ${pctString}; }
+    }`;
+    document.head.appendChild(style);
+    const progressBar = div(`progressBar`, 'progress-bar');
+    progressBar.style.width = pctString;
+    progressBar.style.animation = `progressBarAnim${num} 1s ease`;
+    progressBar.addEventListener("animationend", () => {
+        style.remove();
+    }, {once: true})
+    num ++;
+    progressLowerSection.append(progressBar);
+    progressUpperSection.append(progressText, progressPercent);
+    progressCardFooter.append(progressUpperSection, progressLowerSection);
+    progressCardDue.append(dueCardIcon, dueCardDate);
+    progressCardPersonnel.append(personnelCardIcon, personnelCardCount);
+    progressCardLocation.append(locationCardIcon, locationCardName);
+    progressCardBody.append(progressCardLocation, progressCardPersonnel, progressCardDue);
+    progressCardHeader.append(progressCardName, progressCardStatus);
+    progressCardContainer.append(progressCardHeader, progressCardBody, progressCardFooter);
+    return progressCardContainer;
+}
+
 const tabContents = {
     dashboard: {
         generateContent: async() => await generateDashboardContent(),
@@ -1024,135 +1082,73 @@ async function generateProjectsContent() {
     const projectsBodyContent = document.getElementById('projectsBodyContent');
     projectsBodyContent.innerHTML = ''; // Clear existing content
 
+    const filterContainer = div('materials-filter-container');
     const projectsContainer = div('projects-main-container');
-    const projectListContainer = div('project-list-container');
-    const projectDetailsContainer = div('project-details-container');
+    const paginationContainer = div('materialsPaginationContainer', 'pagination-container');
+    
+    projectsBodyContent.append(filterContainer, projectsContainer, paginationContainer);
 
-    projectsContainer.append(projectListContainer, projectDetailsContainer);
-    projectsBodyContent.append(projectsContainer);
+    let currentPage = 1;
+    let itemsPerPage = 10;
 
-    const projects = await fetchData('/api/allProjects');
-    if (projects === 'error' || projects.length === 0) {
-        showEmptyPlaceholder(null, projectListContainer, null, "No projects found.");
-        return;
-    }
+    async function renderProjects(urlParams = new URLSearchParams()) {
+        projectsContainer.innerHTML = '<div class="loading-spinner"></div>';
+        paginationContainer.innerHTML = '';
 
-    const projectList = div('project-list');
-    projects.forEach(project => {
-        const projectItem = div(`project-item-${project.project_id}`, 'project-list-item');
-        projectItem.textContent = project.project_name;
-        projectItem.addEventListener('click', () => {
-            document.querySelectorAll('.project-list-item').forEach(item => item.classList.remove('selected'));
-            projectItem.classList.add('selected');
-            showProjectDetails(project.project_id, projectDetailsContainer);
-        });
-        projectList.append(projectItem);
-    });
+        urlParams.set('page', currentPage);
+        urlParams.set('limit', itemsPerPage);
 
-    projectListContainer.append(projectList);
-
-    // Show the first project's details by default
-    if (projects.length > 0) {
-        projectList.children[0].classList.add('selected');
-        showProjectDetails(projects[0].project_id, projectDetailsContainer);
-    }
-}
-
-async function showProjectDetails(projectId, container) {
-    // New helper function to update project percentage
-    async function updateProjectPercentage() {
-        const data = await fetchData(`/api/getProjectCard/${projectId}`);
-        if(data === 'error') return alertPopup('error', 'Network Connection Error');
-        const projectsOverallPercent = document.getElementById('projectsOverallPercent');
-        if (projectsOverallPercent) { // Ensure element exists before updating
-            projectsOverallPercent.innerText = `${Math.round(data.progress)}%`;
-        }
-    }
-
-    // New helper function to refresh the content of the currently active tab
-    async function refreshActiveTabContent(currentProjectId, role) { // currentProjectId and role passed to ensure context
-        await updateProjectPercentage(currentProjectId); // Update project percentage
-
-        const selectionTabContent = document.getElementById('selectionTabContent');
-        if (!selectionTabContent) return; // Should not happen if initialized correctly
-
-        const activeTab = selectionTabContent.closest('.selection-tab-container')?.querySelector('.selection-tabs.selected');
-
-        let currentRenderFunction;
-        let currentTabData;
-
-        // Retrieve the render function and tab data from the active tab element
-        if (activeTab && activeTab.tabData) {
-            currentTabData = activeTab.tabData;
-            currentRenderFunction = currentTabData.render;
-        } else {
-            // Default to milestones if no tab is active or tabData is missing
-            currentTabData = {id: "selectionTabMilestones", label: "Milestones", render: generateMilestonesContent};
-            currentRenderFunction = generateMilestonesContent;
-        }
+        const data = await fetchData(`/api/allProjects?${urlParams.toString()}`);
+        projectsContainer.innerHTML = '';
         
-        // Clear the current content and append the refreshed content
-        selectionTabContent.innerHTML = '';
-        selectionTabContent.append(await currentRenderFunction(currentProjectId, role, refreshActiveTabContent));
-    }
+        if (data === 'error' || data.projects.length === 0) {
+            showEmptyPlaceholder('/assets/icons/projects.png', projectsContainer, null, "No projects found.");
+            return;
+        }
 
-
-    let selectionTabContainer = container.querySelector('#selectionTabContainer'); // Try to find it inside the container
-
-    if (!selectionTabContainer) {
-        // If selectionTabContainer doesn't exist, create it once
-        container.innerHTML = ''; // Clear previous details before appending new structure
-        selectionTabContainer = createSectionTabs('admin', projectId, refreshActiveTabContent); // Pass refresh function here
-        container.append(selectionTabContainer);
-    } else {
-        // If it exists, ensure its body content is cleared before re-rendering new content for the selected tab
-        const selectionTabContent = selectionTabContainer.querySelector('#selectionTabContent');
-        selectionTabContent.innerHTML = '';
-    }
-
-    // Now, call the initial rendering of the active tab content
-    await refreshActiveTabContent(projectId, 'admin'); // Initial refresh for the current project
-}
-
-async function generateMilestonesContent(projectId, role, refreshActiveTabContentFn) {
-    const milestonesBody = div('milestones-body');
-    const milestones = await fetchData(`/api/milestones/${projectId}`);
-
-    if (milestones === 'error' || milestones.length === 0) {
-        showEmptyPlaceholder('/assets/icons/noMilestones.png', milestonesBody, () => createMilestoneOl(projectId, refreshActiveTabContentFn), "No milestones found for this project.", "Create Milestones", projectId);
-    } else {
-        milestones.forEach(milestone => {
-            const milestoneCard = div(`milestone-card-${milestone.id}`, 'milestone-card');
-            const milestoneName = div('milestone-name');
-            milestoneName.textContent = milestone.milestone_name;
-            const milestoneActions = div('milestone-actions');
-            const deleteBtn = createButton(`delete-milestone-${milestone.id}`, 'icon-buttons', '', 'delete-milestone-txt', 'deleteIcon');
-            
-            milestoneCard.addEventListener('click', (e) => {
-                if (e.target.closest('.icon-buttons')) return;
-                milestoneFullOl(projectId, milestone.id, milestone.milestone_name, refreshActiveTabContentFn, role); // Pass refreshActiveTabContentFn
-            });
-
-            deleteBtn.addEventListener('click', async () => {
-                showDeleteConfirmation(milestone.milestone_name, async () => {
-                    const response = await fetch(`/api/milestones/${milestone.id}`, { method: 'DELETE' });
-                    if (response.ok) {
-                        alertPopup('success', 'Milestone deleted successfully!');
-                        await refreshActiveTabContentFn(projectId, role); // Use refreshActiveTabContentFn
-                    } else {
-                        alertPopup('error', 'Failed to delete milestone.');
-                    }
-                });
-            });
-
-            milestoneActions.append(deleteBtn);
-            milestoneCard.append(milestoneName, milestoneActions);
-            milestonesBody.append(milestoneCard);
+        let num = 1;
+        data.projects.forEach(project => {
+            const projectCard = createProjectCard(project, num);
+            projectsContainer.append(projectCard);
+            num++;
         });
+
+        const paginationControls = createPaginationControls({
+            currentPage,
+            totalItems: data.total,
+            itemsPerPage,
+            onPageChange: (page) => {
+                currentPage = page;
+                renderProjects(urlParams);
+            },
+            onItemsPerPageChange: (limit) => {
+                itemsPerPage = limit;
+                currentPage = 1;
+                renderProjects(urlParams);
+            }
+        });
+        paginationContainer.append(paginationControls);
     }
 
-    return milestonesBody; // Only return the body
+    async function applyFilterToProjects(filteredUrlParams) {
+        currentPage = 1;
+        await renderProjects(filteredUrlParams);
+    }
+
+    const filters = await createFilterContainer(
+        applyFilterToProjects,
+        'Search by project name...', 
+        { name: true, dateFrom: true, dateTo: true, sort: true },
+        'name',
+        'newest'
+    );
+    
+    filterContainer.append(filters);
+
+    await renderProjects(new URLSearchParams());
 }
+
+
 
 async function dashboardSummaryCards() {
     const dashboardSummaryCards = div('dashboardSummaryCards', 'summary-cards');
@@ -1386,61 +1382,9 @@ async function dashboardActiveProjects(filter) {
     } 
     let num  = 1;
     for (const projects of data) {
-        const progressCardContainer = div(`projectProgressCards`, 'project-progress-cards');
-        const progressCardHeader = div(`progressCardHeader`, 'progress-card-header');
-        const progressCardName = div(`progressCardName`, 'progress-card-name');
-        progressCardName.innerText = projects.project_name;
-        const progressCardStatus = div(`progressCardStatus`, 'progress-card-status');
-        if(projects.project_status === "planning") warnType(progressCardStatus, "glass", '', '', '');
-        if(projects.project_status === "in progress") warnType(progressCardStatus, "glass", 'yellow', '', '');
-        if(projects.project_status === "completed") warnType(progressCardStatus, "glass", 'green', '', '');
-        progressCardStatus.innerText = projects.project_status;
-        const progressCardBody = div(`progressCardBody`, 'progress-card-body');
-        const progressCardLocation = div(`progressCardLocation`, 'progress-card-location');
-        const locationCardIcon = div(`locationCardIcon`, 'light-icons');
-        const locationCardName = div(`locationCardName`, 'location-card-name');
-        locationCardName.innerText = projects.project_location;
-        const progressCardPersonnel = div(`progressCardPersonnel`, 'progress-card-personnel');
-        const personnelCardIcon = div(`personnelCardIcon`, 'light-icons');
-        const personnelCardCount = div(`personnelCardCount`, 'personnel-card-count');
-        personnelCardCount.innerText =  `${projects.total_personnel} personnel`;
-        const progressCardDue = div(`progressCardDue`, 'progress-card-due');
-        const dueCardIcon = div(`dueCardIcon`, 'light-icons');
-        const dueCardDate = div(`dueCardDate`, 'due-card-date');
-        dueCardDate.innerText = `Due ${dateFormatting(projects.duedate, 'date')}`
-
-        const progressCardFooter = div(`progressCardFooter`, 'progress-card-footer');
-        const progressUpperSection = div(`progressUpperSection`, 'progress-upper-section');
-        const progressText = div(`progressText`,'progress-text');
-        progressText.innerText = 'Progress';
-        const progressPercent = div(`progressPercent`, 'progress-percent');
-        const pctString = `${Math.floor(projects.completed_milestone / projects.total_milestone * 100)}%`;
-        progressPercent.innerText = pctString;
-        const progressLowerSection = div(`progressLowerSection`, 'progress-lower-section');
-        const style = document.createElement('style');
-        style.innerHTML = `
-        @keyframes progressBarAnim${num} {
-            0% { width: 0%; }
-            100% { width: ${pctString}; }
-        }`;
-        document.head.appendChild(style);
-        const progressBar = div(`progressBar`, 'progress-bar');
-        progressBar.style.width = pctString;
-        progressBar.style.animation = `progressBarAnim${num} 1s ease`;
-        progressBar.addEventListener("animationend", () => {
-            style.remove();
-        }, {once: true})
-        num ++;
-        progressLowerSection.append(progressBar);
-        progressUpperSection.append(progressText, progressPercent);
-        progressCardFooter.append(progressUpperSection, progressLowerSection);
-        progressCardDue.append(dueCardIcon, dueCardDate);
-        progressCardPersonnel.append(personnelCardIcon, personnelCardCount);
-        progressCardLocation.append(locationCardIcon, locationCardName);
-        progressCardBody.append(progressCardLocation, progressCardPersonnel, progressCardDue);
-        progressCardHeader.append(progressCardName, progressCardStatus);
-        progressCardContainer.append(progressCardHeader, progressCardBody, progressCardFooter);
-        activeProjectsBody.append(progressCardContainer);  
+        const projectCard = createProjectCard(projects, num);
+        activeProjectsBody.append(projectCard);
+        num++;
     }
     activeProjectsHeader.append(activeProjectsTitle, activeProjectsSubtitle);
     activeProjectsContainer.append(activeProjectsHeader, activeProjectsBody);

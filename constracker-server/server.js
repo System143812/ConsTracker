@@ -325,14 +325,88 @@ async function getInprogressProjects(res) {
     }
 }
 
-async function getAllProjects(res) {
+async function getAllProjects(res, filters) {
+    const { page = 1, limit = 10, name, dateFrom, dateTo, sort } = filters;
+    console.log(sort);
+    const pageInt = parseInt(page);
+    const limitInt = parseInt(limit);
+    const offset = (pageInt - 1) * limitInt;
+
+    let baseQuery = `
+        FROM 
+            projects p
+    `;
+    let filterParams = [];
+    let whereClauses = [];
+
+    if (name && name !== "all") {
+        whereClauses.push(`p.project_name LIKE ?`);
+        filterParams.push(`%${name}%`);
+    }
+
+    if (dateFrom && dateFrom !== "all") {
+        whereClauses.push(`p.created_at >= ?`);
+        filterParams.push(dateFrom);
+    }
+
+    if (dateTo && dateTo !== "all") {
+        whereClauses.push(`p.created_at <= ?`);
+        filterParams.push(dateTo);
+    }
+    
+    let whereClause = '';
+    if (whereClauses.length > 0) {
+        whereClause = ` WHERE ` + whereClauses.join(' AND ');
+    }
+
+    let orderByClause = '';
+    if (sort) {
+        switch (sort) {
+            case 'newest':
+                orderByClause = 'ORDER BY p.created_at DESC';
+                break;
+            case 'oldest':
+                orderByClause = 'ORDER BY p.created_at ASC';
+                break;
+            case 'atoz':
+                orderByClause = 'ORDER BY p.project_name ASC';
+                break;
+            case 'ztoa':
+                orderByClause = 'ORDER BY p.project_name DESC';
+                break;
+            default:
+                orderByClause = 'ORDER BY p.created_at DESC';
+                break;
+        }
+    } else {
+        orderByClause = 'ORDER BY p.created_at DESC';
+    }
+
+    const countQuery = `SELECT COUNT(p.project_id) AS total ${baseQuery} ${whereClause}`;
+    
+    const dataQuery = `
+        SELECT 
+            p.project_id, p.project_name, p.status as project_status, p.project_location, p.created_at,
+            (SELECT COUNT(*) FROM assigned_projects ap WHERE ap.project_id = p.project_id) AS total_personnel, 
+            p.duedate, 
+            (SELECT COUNT(*) FROM project_milestones pm WHERE pm.status = 'completed' AND pm.project_id = p.project_id) AS completed_milestone, 
+            (SELECT COUNT(*) FROM project_milestones pm WHERE pm.project_id = p.project_id) AS total_milestone 
+        ${baseQuery}
+        ${whereClause}
+        ${orderByClause}
+        LIMIT ${limitInt}
+        OFFSET ${offset}
+    `;
+
     try {
-        const [result] = await pool.execute(
-            "SELECT p.project_id, p.project_name, p.status as project_status, p.project_location, (SELECT COUNT(*) FROM assigned_projects ap WHERE ap.project_id = p.project_id) AS total_personnel, p.duedate, (SELECT COUNT(*) FROM project_milestones pm WHERE pm.status = 'completed' AND pm.project_id = p.project_id) AS completed_milestone, (SELECT COUNT(*) FROM project_milestones pm WHERE pm.project_id = p.project_id) AS total_milestone FROM projects p;"
-        );
-        return result;
+        const [countResult] = await pool.execute(countQuery, filterParams);
+        const total = countResult[0].total;
+
+        const [projects] = await pool.execute(dataQuery, filterParams);
+        
+        return { projects, total };
     } catch (error) {
-        failed(res, 500, `Database error: ${error}`);
+        failed(res, 500, `Database Error: ${error}`);
     }
 }
 
@@ -1215,7 +1289,7 @@ app.get('/api/projectStatusGraph', authMiddleware(['admin']), async(req, res) =>
 });
 
 app.get('/api/allProjects', authMiddleware(['admin', 'engineer']), async(req, res) => { 
-    res.status(200).json(await getAllProjects(res));
+    res.status(200).json(await getAllProjects(res, req.query));
 });
 
 app.get('/api/inprogressProjects', authMiddleware(['admin']), async(req, res) => { 
