@@ -1721,6 +1721,35 @@ app.delete('/api/materials/:materialId', authMiddleware(['admin', 'engineer']), 
     }
 });
 
+app.post('/api/projects', authMiddleware(['admin']), upload.single('image'), async(req, res) => {
+    const { project_name, project_location, project_budget, duedate, status } = req.body;
+    const image = req.file ? req.file.filename : 'default.jpg';
+
+    if (!project_name || !project_location || !project_budget || !duedate) {
+        if (req.file) {
+            fs.unlink(req.file.path, (err) => {
+                if (err) console.error("Failed to delete uploaded file for invalid project creation:", err);
+            });
+        }
+        return failed(res, 400, 'Missing required fields.');
+    }
+
+    try {
+        const [result] = await pool.execute(
+            'INSERT INTO projects (project_name, project_location, project_budget, duedate, status, image) VALUES (?, ?, ?, ?, ?, ?)',
+            [project_name, project_location, project_budget, duedate, status || 'planning', image]
+        );
+        res.status(201).json({ status: 'success', message: 'Project created successfully', projectId: result.insertId });
+    } catch (error) {
+        if (req.file) {
+            fs.unlink(req.file.path, (err) => {
+                if (err) console.error("Failed to delete uploaded file on db error:", err);
+            });
+        }
+        failed(res, 500, `Database Error: ${error}`);
+    }
+});
+
 app.get('/access', authMiddleware(['all']), (req, res) => {
     dashboardRoleAccess(req, res);
 });

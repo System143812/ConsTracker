@@ -45,11 +45,13 @@ function showInputErr(inputField) {
     if(errSpan) errSpan.classList.add("show");
 }
 
-function validateInput(inputEl) {
+export function validateInput(inputEl) {
     if (inputEl.value.trim() === '') {
         showInputErr(inputEl);
+        return false;
     } else {
         hideInputErr(inputEl);
+        return true;
     }
 }
 

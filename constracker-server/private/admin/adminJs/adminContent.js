@@ -1,7 +1,7 @@
 import { fetchData, fetchPostJson } from "/js/apiURL.js";
 import { formatString, dateFormatting } from "/js/string.js";
 import { alertPopup, warnType, showEmptyPlaceholder } from "/js/popups.js";
-import { div, span, button, createButton, createFilterContainer, createPaginationControls, createInput, createFilterInput, editFormButton } from "/js/components.js";
+import { div, span, button, createButton, createFilterContainer, createPaginationControls, createInput, createFilterInput, editFormButton, validateInput } from "/js/components.js";
 import { createMilestoneOl, milestoneFullOl, showLogDetailsOverlay, createOverlayWithBg, hideOverlayWithBg, showDeleteConfirmation, showOverlayWithBg } from "/mainJs/overlays.js";
 
 const defaultImageBackgroundColors = [
@@ -272,19 +272,46 @@ async function createMaterialOverlay(material = null, refreshMaterialsContentFn)
     cancelBtn.addEventListener('click', () => hideOverlayWithBg(overlayBackground));
 
     const saveMaterialData = async () => {
+        const itemNameEl = materialNameInput.querySelector('input');
+        const priceEl = materialPriceInput.querySelector('input');
+
+        let isValid = true;
+        if (!validateInput(itemNameEl)) isValid = false;
+        if (!validateInput(priceEl)) isValid = false;
+
+        // Validation for select dropdowns
+        if (!categorySelect.dataset.value || categorySelect.dataset.value === 'all') {
+            categorySelect.classList.add('error');
+            isValid = false;
+        } else {
+            categorySelect.classList.remove('error');
+        }
+        if (!supplierSelect.dataset.value || supplierSelect.dataset.value === 'all') {
+            supplierSelect.classList.add('error');
+            isValid = false;
+        } else {
+            supplierSelect.classList.remove('error');
+        }
+        if (!unitSelect.dataset.value || unitSelect.dataset.value === 'all') {
+            unitSelect.classList.add('error');
+            isValid = false;
+        } else {
+            unitSelect.classList.remove('error');
+        }
+
         const payload = {
-            item_name: materialNameInput.querySelector('input').value,
+            item_name: itemNameEl.value,
             item_description: materialDescriptionInput.querySelector('textarea').value,
-            price: parseFloat(materialPriceInput.querySelector('input').value),
+            price: parseFloat(priceEl.value),
             size: materialSizeInput.querySelector('input').value,
             category_id: parseInt(categorySelect.dataset.value),
             supplier_id: parseInt(supplierSelect.dataset.value),
             unit_id: parseInt(unitSelect.dataset.value)
         };
         
-        if (!payload.item_name || isNaN(payload.price) || payload.price <= 0 || !payload.category_id || !payload.supplier_id || !payload.unit_id) {
+        if (!isValid || isNaN(payload.price) || payload.price <= 0) {
             alertPopup('error', 'Please fill in all required fields correctly (ensure price is a positive number).');
-            return false; // Indicate failure
+            return false;
         }
 
         const formData = new FormData();
@@ -430,16 +457,17 @@ async function createSupplierOverlay(supplier = null, refreshCallback) {
 
         const saveBtn = createButton('saveBtn', 'wide-buttons', isEdit ? 'Save Changes' : 'Create Supplier', 'saveText');
         saveBtn.addEventListener('click', async () => {
+            const nameEl = nameInput.querySelector('input');
+            if (!validateInput(nameEl)) {
+                return alertPopup('error', 'Supplier name is required.');
+            }
+
             const payload = {
-                name: nameInput.querySelector('input').value,
+                name: nameEl.value,
                 address: addressInput.querySelector('input').value,
                 contact_number: contactInput.querySelector('input').value,
                 email: emailInput.querySelector('input').value,
             };
-
-            if (!payload.name) {
-                return alertPopup('error', 'Supplier name is required.');
-            }
 
             const url = isEdit ? `/api/materials/suppliers/${sup.id}` : '/api/materials/suppliers';
             const method = isEdit ? 'PUT' : 'POST';
@@ -549,13 +577,13 @@ async function createCategoryOverlay(category = null, refreshCallback) {
 
         const saveBtn = createButton('saveBtn', 'wide-buttons', isEdit ? 'Save Changes' : 'Create Category', 'saveText');
         saveBtn.addEventListener('click', async () => {
-            const payload = {
-                name: nameInput.querySelector('input').value,
-            };
-
-            if (!payload.name) {
+            const nameEl = nameInput.querySelector('input');
+            if (!validateInput(nameEl)) {
                 return alertPopup('error', 'Category name is required.');
             }
+            const payload = {
+                name: nameEl.value,
+            };
 
             const url = isEdit ? `/api/materials/categories/${cat.id}` : '/api/materials/categories';
             const method = isEdit ? 'PUT' : 'POST';
@@ -665,13 +693,13 @@ async function createUnitOverlay(unit = null, refreshCallback) {
 
         const saveBtn = createButton('saveBtn', 'wide-buttons', isEdit ? 'Save Changes' : 'Create Unit', 'saveText');
         saveBtn.addEventListener('click', async () => {
-            const payload = {
-                name: nameInput.querySelector('input').value,
-            };
-
-            if (!payload.name) {
+            const nameEl = nameInput.querySelector('input');
+            if (!validateInput(nameEl)) {
                 return alertPopup('error', 'Unit name is required.');
             }
+            const payload = {
+                name: nameEl.value,
+            };
 
             const url = isEdit ? `/api/materials/units/${un.id}` : '/api/materials/units';
             const method = isEdit ? 'PUT' : 'POST';
@@ -1067,7 +1095,7 @@ export async function displayContents(tabName, tabType, role) {
         pageName.innerText = formatString(tabName);
         await generateContent(tabName, role);
     } else {
-        pageName.innerText = 'Projects'
+        await generateProjectContent(tabName, role);
     }
 }
 
@@ -1114,9 +1142,198 @@ async function generateDashboardContent() {
     );
 }
 
-async function generateProjectsContent() {
+async function createProjectOverlay(refreshCallback) {
+    const isEditMode = false; // For now, only create mode
+    const overlayTitle = 'Add New Project';
+
+    const { overlayBackground, overlayHeader, overlayBody } = createOverlayWithBg();
+    const overlayHeaderContainer = div('', 'overlay-header-containers');
+    overlayHeaderContainer.innerText = overlayTitle;
+    overlayHeader.append(overlayHeaderContainer);
+
+    const form = document.createElement('form');
+    form.id = 'projectForm';
+    form.classList.add('form-edit-forms');
+    form.enctype = 'multipart/form-data';
+
+    const createProjectFormHeader = div('createProjectFormHeader', 'create-form-headers');
+    const createProjectFormFooter = div('createProjectFormFooter', 'create-form-footers');
+
+    const projectNameInput = createInput('text', 'edit', 'Project Name', 'projectName', 'project_name', '', 'Enter project name', null, 150);
+    const projectLocationInput = createInput('text', 'edit', 'Location', 'projectLocation', 'project_location', '', 'Enter project location', null, 150);
+    const projectBudgetInput = createInput('text', 'edit', 'Budget (₱)', 'projectBudget', 'project_budget', '', '0.00', 0.01, 999999999999.99, 'decimal', 'Minimum 0.01');
+    const projectDueDateInput = createInput('date', 'edit', 'Due Date', 'projectDueDate', 'duedate', '', '');
+    
+    const imageDropAreaContainer = div('imageDropAreaContainer', 'input-box-containers');
+    const imageLabelContainer = div('imageLabelContainer', 'label-container');
+    const imageLabel = document.createElement('label');
+    imageLabel.className = 'input-labels';
+    imageLabel.innerText = 'Project Image';
+    const imageSubLabel = span('imageSubLabel', 'input-sub-labels');
+    imageSubLabel.innerText = 'Optional, but recommended';
+    imageLabelContainer.append(imageLabel);
+
+    const imageDropArea = div('imageDropArea', 'image-drop-area');
+    const imageDropAreaText = span('', 'image-drop-text');
+    imageDropAreaText.innerText = 'Drag & drop an image or click to select';
+    const imageInput = document.createElement('input');
+    imageInput.type = 'file';
+    imageInput.name = 'image';
+    imageInput.accept = 'image/*';
+    imageInput.style.display = 'none';
+
+    const imagePreview = div('imagePreview', 'image-preview');
+    imagePreview.style.display = 'none';
+
+    imageDropArea.append(imageDropAreaText, imageInput, imagePreview);
+    imageDropAreaContainer.append(imageLabelContainer, imageDropArea, imageSubLabel);
+
+
+    imageDropArea.addEventListener('click', () => imageInput.click());
+    imageInput.addEventListener('change', () => {
+        const file = imageInput.files[0];
+        if (file) {
+            imageDropAreaText.innerText = file.name;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                imagePreview.style.backgroundImage = `url(${e.target.result})`;
+                imagePreview.style.display = 'block';
+            };
+            reader.readAsDataURL(file);
+        } else {
+            imageDropAreaText.innerText = 'Drag & drop an image or click to select';
+            imagePreview.style.backgroundImage = 'none';
+            imagePreview.style.display = 'none';
+        }
+    });
+    // Drag and Drop listeners
+    ['dragover', 'dragleave', 'drop'].forEach(eventName => {
+        imageDropArea.addEventListener(eventName, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (eventName === 'dragover') imageDropArea.classList.add('drag-over');
+            if (eventName === 'dragleave' || eventName === 'drop') imageDropArea.classList.remove('drag-over');
+            if (eventName === 'drop') {
+                const file = e.dataTransfer.files[0];
+                 if (file) {
+                    imageInput.files = e.dataTransfer.files;
+                    imageDropAreaText.innerText = file.name;
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        imagePreview.style.backgroundImage = `url(${e.target.result})`;
+                        imagePreview.style.display = 'block';
+                    };
+                    reader.readAsDataURL(file);
+                }
+            }
+        });
+    });
+
+    createProjectFormHeader.append(
+        projectNameInput,
+        projectLocationInput,
+        projectBudgetInput,
+        projectDueDateInput,
+        imageDropAreaContainer
+    );
+
+    const cancelBtn = createButton('cancelCreateBtn', 'wide-buttons', 'Cancel', 'cancelCreateText');
+    cancelBtn.addEventListener('click', () => hideOverlayWithBg(overlayBackground));
+
+    const saveProjectData = async () => {
+        const projectNameEl = projectNameInput.querySelector('input');
+        const projectLocationEl = projectLocationInput.querySelector('input');
+        const projectBudgetEl = projectBudgetInput.querySelector('input');
+        const projectDueDateEl = projectDueDateInput.querySelector('input');
+
+        const isNameValid = validateInput(projectNameEl);
+        const isLocationValid = validateInput(projectLocationEl);
+        const isBudgetValid = validateInput(projectBudgetEl);
+        const isDueDateValid = validateInput(projectDueDateEl);
+
+        if (!isNameValid || !isLocationValid || !isBudgetValid || !isDueDateValid) {
+            alertPopup('error', 'Please fill in all required fields correctly.');
+            return false;
+        }
+
+        const payload = {
+            project_name: projectNameEl.value,
+            project_location: projectLocationEl.value,
+            project_budget: parseFloat(projectBudgetEl.value),
+            duedate: projectDueDateEl.value
+        };
+
+        if (isNaN(payload.project_budget) || payload.project_budget <= 0) {
+            alertPopup('error', 'Please enter a valid positive number for the budget.');
+            return false;
+        }
+        
+        if (!payload.project_name || !payload.project_location || isNaN(payload.project_budget) || !payload.duedate) {
+            alertPopup('error', 'Please fill in all required fields correctly.');
+            return false;
+        }
+
+        const formData = new FormData();
+        for (const key in payload) {
+            if (payload[key]) formData.append(key, payload[key]);
+        }
+
+        if (imageInput.files[0]) {
+            formData.append('image', imageInput.files[0]);
+        }
+
+        const url = '/api/projects';
+        const method = 'POST';
+
+        const response = await fetch(url, { method, body: formData });
+
+        if (response.ok) {
+            const responseData = await response.json();
+            alertPopup('success', responseData.message);
+            hideOverlayWithBg(overlayBackground);
+            refreshCallback();
+            return true;
+        } else {
+            const errorData = await response.json();
+            alertPopup('error', errorData.message || 'Failed to create project.');
+            return false;
+        }
+    };
+
+    const actionButton = createButton('createBtn', 'wide-buttons', 'Create Project', 'createBtnText');
+    createProjectFormFooter.append(cancelBtn, actionButton);
+
+    actionButton.addEventListener('click', async () => {
+        await saveProjectData();
+    });
+
+    form.append(createProjectFormHeader, createProjectFormFooter);
+    overlayBody.append(form);
+
+    showOverlayWithBg(overlayBackground);
+}
+
+async function generateProjectsContent(role) {
+    const adminProjectsBodyHeader = document.getElementById('adminProjectsBodyHeader');
+    adminProjectsBodyHeader.innerHTML = ''; // Clear existing detail view header
+    adminProjectsBodyHeader.style.backgroundImage = ''; // Clear any background image set by detail view
+
+    const projectsHeaderContainer = div('projectsHeaderContainer', 'body-header-container');
+    const projectsHeaderTitle = div('projectsHeaderTitle', 'body-header-title');
+    projectsHeaderTitle.innerText = 'Project Management';
+    const projectsHeaderSubtitle = div('projectsHeaderSubtitle', 'body-header-subtitle');
+    projectsHeaderSubtitle.innerText = 'Create and manage construction projects and milestones';
+    
+    projectsHeaderContainer.append(projectsHeaderTitle, projectsHeaderSubtitle);
+    adminProjectsBodyHeader.append(projectsHeaderContainer);
+    const createProjectBtn = createButton('createProjectBtn', 'solid-buttons', 'Create Project', 'createProjectBtnText', 'createProjectBtnIcon');
+    createProjectBtn.addEventListener('click', () => {
+        createProjectOverlay(() => generateProjectsContent(role));
+    });
+    adminProjectsBodyHeader.append(createProjectBtn);
     const projectsBodyContent = document.getElementById('projectsBodyContent');
     projectsBodyContent.innerHTML = ''; // Clear existing content
+    adminProjectsBodyHeader.style.padding = '1.5rem';
 
     const filterContainer = div('materials-filter-container');
     const projectsContainer = div('projects-main-container');
@@ -1145,6 +1362,8 @@ async function generateProjectsContent() {
         let num = 1;
         data.projects.forEach(project => {
             const projectCard = createProjectCard(project, num);
+            projectCard.addEventListener('click', () => generateProjectContent(`project${project.project_id}`, role));
+            projectCard.classList.add('hoverable');
             projectsContainer.append(projectCard);
             num++;
         });
@@ -1464,7 +1683,7 @@ async function recentMaterialsRequest() {
         const requestCardName = div(`requestCardName`, `request-card-name`);
         requestCardName.innerText = `Requested by ${requests.requested_by} • `;
         const requestCardItemCount = div(`requestCardItemCount`, `request-card-item-count`);
-        requestCardItemCount.innerText = `${requests.item_count} items • `;
+        requestCardItemCount.innerText = `${requests.item_count} items • `; 
         const requestCardCost = div(`requestCardCost`, `request-card-cost`);
         requestCardCost.innerText = `₱${requests.cost}`;
         const requestCardRight = div(`requestCardRight`, `request-card-right`);
@@ -1491,4 +1710,326 @@ async function recentMaterialsRequest() {
         requestStatusContainer.append(requestStatusIcon, requestStatusLabel);
     }
     return recentRequestContainer;
+}
+
+async function generateProjectContent(projectTabName, role) { //project1
+    const projectId = projectTabName.replace(/project/g, '');
+    const projectsBodyContent = document.getElementById('projectsBodyContent');
+    projectsBodyContent.innerHTML = '';
+
+    const adminProjectsBodyHeader = document.getElementById('adminProjectsBodyHeader');
+    adminProjectsBodyHeader.innerHTML = ''; 
+
+    const projectsBodyHeader = div('projectsBodyHeader');
+    
+    // --- Start of back button addition ---
+    const backButton = div('projectDetailBackBtn', 'icons-with-bg');
+    backButton.style.backgroundImage = 'url(/assets/icons/backWhite.png)';
+    backButton.style.cursor = 'pointer';
+    backButton.addEventListener('click', () => {
+        generateProjectsContent(role); 
+    });
+
+    // --- End of back button addition ---
+    const projectsHeaderContainer = div('projectsHeaderContainer', 'body-header-container');
+    const projectsHeaderTitle = div('projectsHeaderTitle', 'body-header-title');
+    const projectsHeaderLocation = div('projectsHeaderLocation');
+    const projectsHeaderIcon = div('projectsHeaderIcon', 'icons');
+    const projectsHeaderSubtitle = div('projectsHeaderSubtitle', 'body-header-subtitle');
+    const projectsHeaderStatus = div('projectsHeaderStatus', 'status');
+    const projectsOverallPercent = div('projectsOverallPercent');
+
+    projectsHeaderLocation.append(projectsHeaderIcon, projectsHeaderSubtitle);
+    projectsHeaderContainer.append(projectsHeaderTitle, projectsHeaderLocation, projectsHeaderStatus);
+
+    projectsBodyHeader.append(backButton, projectsHeaderContainer, projectsOverallPercent);
+    adminProjectsBodyHeader.append(projectsBodyHeader);
+    adminProjectsBodyHeader.style.padding = '0';
+    await createProjectDetailCard(projectId);
+    projectsBodyContent.append(createSectionTabs(role, projectId));
+    const selectionTabContent = document.getElementById('selectionTabContent'); //initial tab dat u will see on selectionTabs
+    const milestoneTab = document.getElementById('selectionTabMilestones');
+    const render = {label: "Milestones", render: renderMilestones};
+    selectionTabRenderEvent(selectionTabContent, milestoneTab, render, projectId, role);
+}
+
+async function createProjectDetailCard(projectId) {
+    const data = await fetchData(`/api/getProjectCard/${projectId}`);
+    if(data === 'error') return alertPopup('error', 'Network Connection Error');
+
+    const projectsBodyHeader = document.getElementById('projectsBodyHeader');
+    projectsBodyHeader.style.backgroundImage = `url(/image/${data.image})`;
+
+    const projectsOverallPercent = document.getElementById('projectsOverallPercent');
+    projectsOverallPercent.innerText = `${Math.round(data.progress)}%`;
+
+    const projectsHeaderTitle = document.getElementById('projectsHeaderTitle');
+    projectsHeaderTitle.innerText = data.project_name;
+    projectsHeaderTitle.style.color = 'var(--white-ishy-text)';
+
+    const projectsHeaderIcon = document.getElementById('projectsHeaderIcon');
+    projectsHeaderIcon.style.backgroundImage = 'url(/assets/icons/locationWhite.png)';
+    
+    const projectsHeaderSubtitle = document.getElementById('projectsHeaderSubtitle');
+    projectsHeaderSubtitle.innerText = data.project_location;
+    projectsHeaderSubtitle.style.color = `#cccccc`;
+    
+    const projectsHeaderStatus = document.getElementById('projectsHeaderStatus'); 
+    if(data.status === 'in progress') warnType(projectsHeaderStatus, 'glass', 'yellow');
+    if(data.status === 'planning') warnType(projectsHeaderStatus, 'glass', 'white');
+    if(data.status === 'completed') warnType(projectsHeaderStatus, 'glass', 'green');
+    projectsHeaderStatus.innerText = data.status;
+}
+
+function createSectionTabs(role, projectId) {
+    const newContents = [
+        {id: "selectionTabMilestones", label: "Milestones", render: renderMilestones},
+        {id: "selectionTabWorkers", label: "Personnel", render: renderWorker},
+    ]
+
+    const selectionTabContent = div('selectionTabContent');
+    selectionTabContent.id = 'selectionTabContent';
+    const selectionTabContainer = div('selectionTabContainer');
+    selectionTabContainer.id = 'selectionTabContainer';
+    const selectionTabHeader = div('selectionTabHeader');
+
+    for (const contents of newContents) {
+        const elem = div(contents.id, 'selection-tabs');
+        elem.id = contents.id;
+        elem.innerText = contents.label;
+        elem.addEventListener("click", async() => {
+            await selectionTabRenderEvent(selectionTabContent, elem, contents, projectId, role)
+        });
+        selectionTabHeader.append(elem);
+    }
+    selectionTabContainer.append(selectionTabHeader, selectionTabContent);
+    return selectionTabContainer;
+}
+
+function hideSelectionContents(contentContainer, tabClassName) { //done refactoring this, ready to use na anywhere
+    const sameClassTabs = document.querySelectorAll(`.${tabClassName}`);
+    for (const tab of sameClassTabs) {
+        tab.classList.remove('selected');
+    }
+    contentContainer.innerHTML = "";
+}
+
+async function selectionTabRenderEvent(content, tab, newContent, projectId, role) {
+    hideSelectionContents(content, tab.className);
+    tab.classList.add('selected');
+    content.append(await newContent.render(role, projectId));
+}
+
+async function renderMilestones(role, projectId) {
+    const milestoneSectionContainer = div('milestoneSectionContainer');
+    const milestoneSectionHeader = div('milestoneSectionHeader');
+    const milestoneHeaderTitle = div('milestoneHeaderTitle');
+    const milestoneHeaderText = span('milestoneHeaderText');
+    milestoneHeaderText.innerText = 'Project Milestones';
+    const milestoneSubheaderText = span('milestoneSubheaderText');
+    milestoneSubheaderText.innerText = 'Track progress across construction milestones and tasks';
+    let milestoneAddBtn = div('emptyDiv');
+    if(role !== 'foreman') {
+        milestoneAddBtn = createButton('milestoneAddBtn', 'solid-buttons', 'Create', 'milestoneAddText', 'milestoneAddIcon');
+        milestoneAddBtn.addEventListener("click", () => { createMilestoneOl(projectId, () => refreshAdminProjectContent(projectId, role)) });
+    }
+    const milestoneSectionBody = div('milestoneSectionBody');
+    const data = await fetchData(`/api/milestones/${projectId}`);
+    if(data === "error") return alertPopup('error', 'Network Connection Error');
+    if(data.length === 0) {
+        if(role !== 'foreman') {
+            showEmptyPlaceholder('/assets/icons/noMilestones.png', milestoneSectionBody, () => createMilestoneOl(projectId, () => refreshAdminProjectContent(projectId, role)), "There are no milestones yet", "Create Milestones", projectId);
+        } else {
+            showEmptyPlaceholder('/assets/icons/noMilestones.png', milestoneSectionBody, null, "There are no milestones yet", null, projectId);
+        }
+    } else {
+        let counter = 1;
+        let interval = 100;
+        for (const milestone of data) {
+            const milestonePartContainer = div('', 'milestone-part-container');
+            const milestoneProgressContainer = div('', 'milestone-vertical-container');
+            const milestoneProgressBar = div('', 'milestone-progress-bar');
+            milestoneProgressBar.style.setProperty('--progress', `0%`);
+            setTimeout(() => {
+                requestAnimationFrame(() => {
+                    milestoneProgressBar.style.setProperty(
+                        '--progress',
+                        `${roundDecimal(milestone.milestone_progress)}%`
+                    );
+                });
+            }, interval);
+            interval += 500;
+            const milestoneProgressPoint = div('', 'milestone-progress-point')
+            if(milestone.status === 'completed') milestoneProgressPoint.classList.add('completed');
+            const milestoneCard = div('', 'milestone-cards');
+            if(counter % 2 === 0) {
+                milestoneCard.style.transform = 'translate(calc(0% + 1.5rem))';
+                milestoneCard.classList.add("lefty");
+            }
+            if(counter % 2 !== 0) {
+                milestoneCard.style.transform = 'translate(calc(-100% + -1.5rem))';
+                milestoneCard.classList.remove("lefty");
+            }
+            const milestoneCardHeader = div('', 'milestone-card-header');
+            const milestoneCardName = div('', 'milestone-card-name');
+            milestoneCardName.innerText = milestone.milestone_name;
+            const milestoneCardStatus = div('', 'milestone-card-status');
+            milestoneCardStatus.classList.add('status');
+            milestoneCardStatus.innerText = milestone.status;
+            milestoneCard.addEventListener("mouseenter", () => {
+                const startWidth = milestoneCardStatus.offsetWidth;
+                milestoneCardStatus.innerText = `${roundDecimal(milestone.milestone_progress)}%`;
+                const endWidth = milestoneCardStatus.offsetWidth;
+                milestoneCardStatus.style.width = `${startWidth}px`;
+                milestoneCardStatus.offsetWidth;
+                milestoneCardStatus.style.width = `${endWidth}px`;
+            });
+            milestoneCard.addEventListener("mouseleave", () => {
+                const startWidth = milestoneCardStatus.offsetWidth;
+                milestoneCardStatus.innerText = milestone.status;
+                const endWidth = milestoneCardStatus.offsetWidth;
+                milestoneCardStatus.style.width = `${startWidth}px`;
+                milestoneCardStatus.offsetWidth;
+                milestoneCardStatus.style.width = `${endWidth}px`;
+            });
+            milestoneCard.addEventListener("transitionend", () => {
+                milestoneCardStatus.style.width = 'auto';
+            });
+            if(milestone.status === 'not started') warnType(milestoneCardStatus, 'solid', 'white');
+            if(milestone.status === 'in progress') warnType(milestoneCardStatus, 'solid', 'yellow');
+            if(milestone.status === 'completed') warnType(milestoneCardStatus, 'solid', 'green');
+            if(milestone.status === 'overdue') warnType(milestoneCardStatus, 'solid', 'red');
+            const milestoneCardDescription = div('', 'milestone-card-description');
+            milestoneCardDescription.innerText = milestone.milestone_description;
+            const milestoneCardBody = div('', 'milestone-card-body');
+            const milestoneCardView = div('', 'milestone-card-view');
+            const milestoneCardViewText = span('milestoneCardViewText', 'btn-texts');
+            milestoneCardViewText.innerText = 'View More';
+            const milestoneCardViewIcon = span('milestoneCardViewIcon', 'btn-icons');
+            milestoneCardView.append(milestoneCardViewText, milestoneCardViewIcon);
+            milestoneCardView.addEventListener("click", () => {
+                milestoneFullOl(projectId, milestone.id, milestone.milestone_name, async() => {
+                    const projectsBodyContent = document.getElementById('projectsBodyContent');
+                    projectsBodyContent.innerHTML = "";
+                    await generateProjectContent(`project${projectId}`, role);
+                }, role); //eto yung callback na ipapasa sa modal para pag ka save auto update ang ui
+            });
+
+            milestoneSectionHeader.append(milestoneHeaderTitle, milestoneAddBtn);
+            milestoneHeaderTitle.append(milestoneHeaderText, milestoneSubheaderText);
+            milestoneCardBody.append(milestoneCardView);
+            milestoneCardHeader.append(milestoneCardName, milestoneCardStatus);
+            milestoneCard.append(milestoneCardHeader, milestoneCardDescription, milestoneCardBody);
+            milestoneProgressContainer.append(milestoneProgressBar, milestoneProgressPoint);
+            milestonePartContainer.append(milestoneProgressContainer, milestoneCard);
+            milestoneSectionBody.append(milestonePartContainer);
+            counter ++;
+        }
+    }
+    
+
+    milestoneSectionContainer.append(milestoneSectionHeader, milestoneSectionBody);
+    
+    return milestoneSectionContainer;
+}
+
+async function renderWorker(role, projectId) {
+    const workerSectionContainer = div('workerSectionContainer');
+
+    const filterContainer = div('personnel-filter-container');
+    const personnelContainer = div('personnel-main-container');
+    const paginationContainer = div('personnelPaginationContainer', 'pagination-container');
+    
+    workerSectionContainer.append(filterContainer, personnelContainer, paginationContainer);
+
+    let currentPage = 1;
+    let itemsPerPage = 10;
+
+    async function renderPersonnel(urlParams = new URLSearchParams()) {
+        personnelContainer.innerHTML = '<div class="loading-spinner"></div>';
+        paginationContainer.innerHTML = '';
+
+        urlParams.set('page', currentPage);
+        urlParams.set('limit', itemsPerPage);
+        urlParams.set('projectId', projectId);
+
+        const data = await fetchData(`/api/personnel/project?${urlParams.toString()}`);
+        personnelContainer.innerHTML = '';
+        
+        if (data === 'error' || data.personnel.length === 0) {
+            showEmptyPlaceholder('/assets/icons/personnel.png', personnelContainer, null, "No personnel found for this project.");
+            return;
+        }
+
+        data.personnel.forEach(person => {
+            personnelContainer.append(createPersonnelCard(person, () => renderPersonnel(urlParams)));
+        });
+
+        const paginationControls = createPaginationControls({
+            currentPage,
+            totalItems: data.total,
+            itemsPerPage,
+            onPageChange: (page) => {
+                currentPage = page;
+                renderPersonnel(urlParams);
+            },
+            onItemsPerPageChange: (limit) => {
+                itemsPerPage = limit;
+                currentPage = 1;
+                renderPersonnel(urlParams);
+            }
+        });
+        paginationContainer.append(paginationControls);
+    }
+
+    async function applyFilterToPersonnel(filteredUrlParams) {
+        currentPage = 1;
+        await renderPersonnel(filteredUrlParams);
+    }
+
+    const filters = await createFilterContainer(
+        applyFilterToPersonnel,
+        'Search by name...', 
+        { name: true, sort: true, role: true }, // Added role filter
+        'name',
+        'newest'
+    );
+    
+    filterContainer.append(filters);
+
+    await renderPersonnel(new URLSearchParams());
+
+    return workerSectionContainer;
+}
+
+async function refreshAdminProjectContent(currentProjectId, role) {
+    await createProjectDetailCard(currentProjectId);
+
+    const selectionTabContent = document.getElementById('selectionTabContent');
+    if (!selectionTabContent) return;
+
+    const selectionTabContainer = document.getElementById('selectionTabContainer');
+    if (!selectionTabContainer) return;
+
+    const activeTab = selectionTabContainer.querySelector('.selection-tabs.selected');
+
+    let currentRenderFunction;
+    const newContents = [
+        {id: "selectionTabMilestones", label: "Milestones", render: renderMilestones},
+        {id: "selectionTabWorkers", label: "Personnel", render: renderWorker},
+    ];
+
+    if (activeTab) {
+        const foundTab = newContents.find(item => item.id === activeTab.id);
+        if (foundTab) {
+            currentRenderFunction = foundTab.render;
+        }
+    }
+    
+    if (!currentRenderFunction) { 
+        currentRenderFunction = renderMilestones; 
+    }
+
+    selectionTabContent.innerHTML = '';
+    selectionTabContent.append(await currentRenderFunction(role, currentProjectId));
 }

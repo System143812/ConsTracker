@@ -395,7 +395,7 @@
     background-image: url('/assets/icons/deleteWhite.png');
 }
 
-#addMaterialBtnIcon {
+#addMaterialBtnIcon, #createProjectBtnIcon {
     background-image: url('/assets/icons/addWhite.png');
 }
 
@@ -488,11 +488,11 @@
     background-color: var(--gray-low-opacity);
 }
 
-#editBtnText, #saveBtnText, #deleteBtnText, #weightsBtnText, #createBtnText, #addMaterialBtnText {
+#editBtnText, #saveBtnText, #deleteBtnText, #weightsBtnText, #createBtnText, #addMaterialBtnText, #createProjectBtnText {
     color: var(--white-ishy-text);
 }
 
-#addMaterialBtnText {
+#addMaterialBtnText, #createProjectBtnText {
     font-size: 12px;
 }
 
@@ -538,7 +538,7 @@ textarea {
     display: flex;
     width: 100%;
     min-width: fit-content;
-    padding: 0.25rem 0.5rem;
+    padding: 0.5rem 0.5rem;
     pointer-events: auto;
     border-radius: 3px;
     font-size: 12px;
@@ -662,7 +662,7 @@ input:focus, textarea:focus {
 }
 
 input[type='date'] {
-    padding: 0.25rem 1rem;
+    padding: 0.5rem 1rem;
     background-color: var(--gray-no-opacity);
     border: solid #999999 1px;
     border-radius: 3px;
@@ -672,10 +672,10 @@ input[type='date'] {
 
 .select-option-dropdowns {
     display: flex;
-    max-width: 200px;
+    width: 100%;
     position: relative;
     align-items: center;
-    padding: 0.25rem 1rem;
+    padding: 0.5rem 1rem;
     border: solid #999999 1px;
     border-radius: 3px;
     gap: 0.5rem;
@@ -723,6 +723,11 @@ input[type='date'] {
     gap: 1rem;
     background-color: var(--gray-no-opacity);
     transition: all 0.15s ease;
+}
+
+.select-option-dropdowns.error {
+    border: solid var(--red-border) 1px;
+    background-color: var(--red-background);
 }
 
 .option-cards.selected {    
