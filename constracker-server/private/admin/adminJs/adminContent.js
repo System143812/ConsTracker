@@ -1,7 +1,7 @@
 import { fetchData, fetchPostJson } from "/js/apiURL.js";
 import { formatString, dateFormatting } from "/js/string.js";
 import { alertPopup, warnType, showEmptyPlaceholder } from "/js/popups.js";
-import { div, span, button, createButton, createFilterContainer, createPaginationControls, createInput, createFilterInput, editFormButton } from "/js/components.js";
+import { div, span, button, createButton, createFilterContainer, createPaginationControls, createInput, createFilterInput, editFormButton, validateInput } from "/js/components.js";
 import { createMilestoneOl, milestoneFullOl, showLogDetailsOverlay, createOverlayWithBg, hideOverlayWithBg, showDeleteConfirmation, showOverlayWithBg } from "/mainJs/overlays.js";
 
 const defaultImageBackgroundColors = [
@@ -272,19 +272,46 @@ async function createMaterialOverlay(material = null, refreshMaterialsContentFn)
     cancelBtn.addEventListener('click', () => hideOverlayWithBg(overlayBackground));
 
     const saveMaterialData = async () => {
+        const itemNameEl = materialNameInput.querySelector('input');
+        const priceEl = materialPriceInput.querySelector('input');
+
+        let isValid = true;
+        if (!validateInput(itemNameEl)) isValid = false;
+        if (!validateInput(priceEl)) isValid = false;
+
+        // Validation for select dropdowns
+        if (!categorySelect.dataset.value || categorySelect.dataset.value === 'all') {
+            categorySelect.classList.add('error');
+            isValid = false;
+        } else {
+            categorySelect.classList.remove('error');
+        }
+        if (!supplierSelect.dataset.value || supplierSelect.dataset.value === 'all') {
+            supplierSelect.classList.add('error');
+            isValid = false;
+        } else {
+            supplierSelect.classList.remove('error');
+        }
+        if (!unitSelect.dataset.value || unitSelect.dataset.value === 'all') {
+            unitSelect.classList.add('error');
+            isValid = false;
+        } else {
+            unitSelect.classList.remove('error');
+        }
+
         const payload = {
-            item_name: materialNameInput.querySelector('input').value,
+            item_name: itemNameEl.value,
             item_description: materialDescriptionInput.querySelector('textarea').value,
-            price: parseFloat(materialPriceInput.querySelector('input').value),
+            price: parseFloat(priceEl.value),
             size: materialSizeInput.querySelector('input').value,
             category_id: parseInt(categorySelect.dataset.value),
             supplier_id: parseInt(supplierSelect.dataset.value),
             unit_id: parseInt(unitSelect.dataset.value)
         };
         
-        if (!payload.item_name || isNaN(payload.price) || payload.price <= 0 || !payload.category_id || !payload.supplier_id || !payload.unit_id) {
+        if (!isValid || isNaN(payload.price) || payload.price <= 0) {
             alertPopup('error', 'Please fill in all required fields correctly (ensure price is a positive number).');
-            return false; // Indicate failure
+            return false;
         }
 
         const formData = new FormData();
@@ -430,16 +457,17 @@ async function createSupplierOverlay(supplier = null, refreshCallback) {
 
         const saveBtn = createButton('saveBtn', 'wide-buttons', isEdit ? 'Save Changes' : 'Create Supplier', 'saveText');
         saveBtn.addEventListener('click', async () => {
+            const nameEl = nameInput.querySelector('input');
+            if (!validateInput(nameEl)) {
+                return alertPopup('error', 'Supplier name is required.');
+            }
+
             const payload = {
-                name: nameInput.querySelector('input').value,
+                name: nameEl.value,
                 address: addressInput.querySelector('input').value,
                 contact_number: contactInput.querySelector('input').value,
                 email: emailInput.querySelector('input').value,
             };
-
-            if (!payload.name) {
-                return alertPopup('error', 'Supplier name is required.');
-            }
 
             const url = isEdit ? `/api/materials/suppliers/${sup.id}` : '/api/materials/suppliers';
             const method = isEdit ? 'PUT' : 'POST';
@@ -549,13 +577,13 @@ async function createCategoryOverlay(category = null, refreshCallback) {
 
         const saveBtn = createButton('saveBtn', 'wide-buttons', isEdit ? 'Save Changes' : 'Create Category', 'saveText');
         saveBtn.addEventListener('click', async () => {
-            const payload = {
-                name: nameInput.querySelector('input').value,
-            };
-
-            if (!payload.name) {
+            const nameEl = nameInput.querySelector('input');
+            if (!validateInput(nameEl)) {
                 return alertPopup('error', 'Category name is required.');
             }
+            const payload = {
+                name: nameEl.value,
+            };
 
             const url = isEdit ? `/api/materials/categories/${cat.id}` : '/api/materials/categories';
             const method = isEdit ? 'PUT' : 'POST';
@@ -665,13 +693,13 @@ async function createUnitOverlay(unit = null, refreshCallback) {
 
         const saveBtn = createButton('saveBtn', 'wide-buttons', isEdit ? 'Save Changes' : 'Create Unit', 'saveText');
         saveBtn.addEventListener('click', async () => {
-            const payload = {
-                name: nameInput.querySelector('input').value,
-            };
-
-            if (!payload.name) {
+            const nameEl = nameInput.querySelector('input');
+            if (!validateInput(nameEl)) {
                 return alertPopup('error', 'Unit name is required.');
             }
+            const payload = {
+                name: nameEl.value,
+            };
 
             const url = isEdit ? `/api/materials/units/${un.id}` : '/api/materials/units';
             const method = isEdit ? 'PUT' : 'POST';
@@ -1114,6 +1142,177 @@ async function generateDashboardContent() {
     );
 }
 
+async function createProjectOverlay(refreshCallback) {
+    const isEditMode = false; // For now, only create mode
+    const overlayTitle = 'Add New Project';
+
+    const { overlayBackground, overlayHeader, overlayBody } = createOverlayWithBg();
+    const overlayHeaderContainer = div('', 'overlay-header-containers');
+    overlayHeaderContainer.innerText = overlayTitle;
+    overlayHeader.append(overlayHeaderContainer);
+
+    const form = document.createElement('form');
+    form.id = 'projectForm';
+    form.classList.add('form-edit-forms');
+    form.enctype = 'multipart/form-data';
+
+    const createProjectFormHeader = div('createProjectFormHeader', 'create-form-headers');
+    const createProjectFormFooter = div('createProjectFormFooter', 'create-form-footers');
+
+    const projectNameInput = createInput('text', 'edit', 'Project Name', 'projectName', 'project_name', '', 'Enter project name', null, 150);
+    const projectLocationInput = createInput('text', 'edit', 'Location', 'projectLocation', 'project_location', '', 'Enter project location', null, 150);
+    const projectBudgetInput = createInput('text', 'edit', 'Budget (₱)', 'projectBudget', 'project_budget', '', '0.00', 0.01, 999999999999.99, 'decimal', 'Minimum 0.01');
+    const projectDueDateInput = createInput('date', 'edit', 'Due Date', 'projectDueDate', 'duedate', '', '');
+    
+    const imageDropAreaContainer = div('imageDropAreaContainer', 'input-box-containers');
+    const imageLabelContainer = div('imageLabelContainer', 'label-container');
+    const imageLabel = document.createElement('label');
+    imageLabel.className = 'input-labels';
+    imageLabel.innerText = 'Project Image';
+    const imageSubLabel = span('imageSubLabel', 'input-sub-labels');
+    imageSubLabel.innerText = 'Optional, but recommended';
+    imageLabelContainer.append(imageLabel);
+
+    const imageDropArea = div('imageDropArea', 'image-drop-area');
+    const imageDropAreaText = span('', 'image-drop-text');
+    imageDropAreaText.innerText = 'Drag & drop an image or click to select';
+    const imageInput = document.createElement('input');
+    imageInput.type = 'file';
+    imageInput.name = 'image';
+    imageInput.accept = 'image/*';
+    imageInput.style.display = 'none';
+
+    const imagePreview = div('imagePreview', 'image-preview');
+    imagePreview.style.display = 'none';
+
+    imageDropArea.append(imageDropAreaText, imageInput, imagePreview);
+    imageDropAreaContainer.append(imageLabelContainer, imageDropArea, imageSubLabel);
+
+
+    imageDropArea.addEventListener('click', () => imageInput.click());
+    imageInput.addEventListener('change', () => {
+        const file = imageInput.files[0];
+        if (file) {
+            imageDropAreaText.innerText = file.name;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                imagePreview.style.backgroundImage = `url(${e.target.result})`;
+                imagePreview.style.display = 'block';
+            };
+            reader.readAsDataURL(file);
+        } else {
+            imageDropAreaText.innerText = 'Drag & drop an image or click to select';
+            imagePreview.style.backgroundImage = 'none';
+            imagePreview.style.display = 'none';
+        }
+    });
+    // Drag and Drop listeners
+    ['dragover', 'dragleave', 'drop'].forEach(eventName => {
+        imageDropArea.addEventListener(eventName, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (eventName === 'dragover') imageDropArea.classList.add('drag-over');
+            if (eventName === 'dragleave' || eventName === 'drop') imageDropArea.classList.remove('drag-over');
+            if (eventName === 'drop') {
+                const file = e.dataTransfer.files[0];
+                 if (file) {
+                    imageInput.files = e.dataTransfer.files;
+                    imageDropAreaText.innerText = file.name;
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        imagePreview.style.backgroundImage = `url(${e.target.result})`;
+                        imagePreview.style.display = 'block';
+                    };
+                    reader.readAsDataURL(file);
+                }
+            }
+        });
+    });
+
+    createProjectFormHeader.append(
+        projectNameInput,
+        projectLocationInput,
+        projectBudgetInput,
+        projectDueDateInput,
+        imageDropAreaContainer
+    );
+
+    const cancelBtn = createButton('cancelCreateBtn', 'wide-buttons', 'Cancel', 'cancelCreateText');
+    cancelBtn.addEventListener('click', () => hideOverlayWithBg(overlayBackground));
+
+    const saveProjectData = async () => {
+        const projectNameEl = projectNameInput.querySelector('input');
+        const projectLocationEl = projectLocationInput.querySelector('input');
+        const projectBudgetEl = projectBudgetInput.querySelector('input');
+        const projectDueDateEl = projectDueDateInput.querySelector('input');
+
+        const isNameValid = validateInput(projectNameEl);
+        const isLocationValid = validateInput(projectLocationEl);
+        const isBudgetValid = validateInput(projectBudgetEl);
+        const isDueDateValid = validateInput(projectDueDateEl);
+
+        if (!isNameValid || !isLocationValid || !isBudgetValid || !isDueDateValid) {
+            alertPopup('error', 'Please fill in all required fields correctly.');
+            return false;
+        }
+
+        const payload = {
+            project_name: projectNameEl.value,
+            project_location: projectLocationEl.value,
+            project_budget: parseFloat(projectBudgetEl.value),
+            duedate: projectDueDateEl.value
+        };
+
+        if (isNaN(payload.project_budget) || payload.project_budget <= 0) {
+            alertPopup('error', 'Please enter a valid positive number for the budget.');
+            return false;
+        }
+        
+        if (!payload.project_name || !payload.project_location || isNaN(payload.project_budget) || !payload.duedate) {
+            alertPopup('error', 'Please fill in all required fields correctly.');
+            return false;
+        }
+
+        const formData = new FormData();
+        for (const key in payload) {
+            if (payload[key]) formData.append(key, payload[key]);
+        }
+
+        if (imageInput.files[0]) {
+            formData.append('image', imageInput.files[0]);
+        }
+
+        const url = '/api/projects';
+        const method = 'POST';
+
+        const response = await fetch(url, { method, body: formData });
+
+        if (response.ok) {
+            const responseData = await response.json();
+            alertPopup('success', responseData.message);
+            hideOverlayWithBg(overlayBackground);
+            refreshCallback();
+            return true;
+        } else {
+            const errorData = await response.json();
+            alertPopup('error', errorData.message || 'Failed to create project.');
+            return false;
+        }
+    };
+
+    const actionButton = createButton('createBtn', 'wide-buttons', 'Create Project', 'createBtnText');
+    createProjectFormFooter.append(cancelBtn, actionButton);
+
+    actionButton.addEventListener('click', async () => {
+        await saveProjectData();
+    });
+
+    form.append(createProjectFormHeader, createProjectFormFooter);
+    overlayBody.append(form);
+
+    showOverlayWithBg(overlayBackground);
+}
+
 async function generateProjectsContent(role) {
     const adminProjectsBodyHeader = document.getElementById('adminProjectsBodyHeader');
     adminProjectsBodyHeader.innerHTML = ''; // Clear existing detail view header
@@ -1127,9 +1326,14 @@ async function generateProjectsContent(role) {
     
     projectsHeaderContainer.append(projectsHeaderTitle, projectsHeaderSubtitle);
     adminProjectsBodyHeader.append(projectsHeaderContainer);
-    adminProjectsBodyHeader.style.padding = '1.5rem';
+    const createProjectBtn = createButton('createProjectBtn', 'solid-buttons', 'Create Project', 'createProjectBtnText', 'createProjectBtnIcon');
+    createProjectBtn.addEventListener('click', () => {
+        createProjectOverlay(() => generateProjectsContent(role));
+    });
+    adminProjectsBodyHeader.append(createProjectBtn);
     const projectsBodyContent = document.getElementById('projectsBodyContent');
     projectsBodyContent.innerHTML = ''; // Clear existing content
+    adminProjectsBodyHeader.style.padding = '1.5rem';
 
     const filterContainer = div('materials-filter-container');
     const projectsContainer = div('projects-main-container');
