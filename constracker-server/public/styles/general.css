@@ -146,6 +146,7 @@
 .solid-buttons, .wide-buttons {
     background-color: var(--blue-border);
     border: solid var(--blue-border) 1px;
+    border-radius: 3px;
 }
 
 .wide-buttons {
