@@ -1,0 +1,246 @@
+html, body {
+    height: 100%;
+    width: 100%;
+}
+
+body {
+    display: flex;
+    position: relative;
+    background-color: rgba(0, 0, 0, 1);
+}
+
+#loginImageContainer {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    position: relative;
+    align-items: center;
+    justify-content: center;
+    width: 50vw;
+    padding: 2rem 0;
+    gap: 1rem;
+    background-image: url("../assets/pictures/signupBg3.jpg");
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-position: center;
+}
+
+#loginImageContainer::before {
+    display: flex;
+    position: absolute;
+    z-index: 1;
+    content: "";
+    height: 100%;
+    width: 100%;
+    background: linear-gradient(to bottom, rgba(2, 11, 21, 0.75), rgba(11, 36, 67, 0.95));
+}
+
+#brandLogo {
+    display: flex;
+    opacity: 0;
+    height: 75px;
+    width: 70%;
+    max-width: 70%;
+    background-image: url("../assets/pictures/constrackerWhite.svg");
+    background-position: center;
+    background-size: contain;
+    background-repeat: no-repeat;
+    z-index: 2;
+    transition: all 0.5s ease;
+}
+
+#brandInfo {
+    display: flex;
+    opacity: 0;
+    text-align: center;
+    justify-content: center;
+    word-wrap: break-word;
+    font-size: clamp(16px, 1vw, 20px);
+    width: 100%;
+    font-weight: 500;
+    padding: 0 4rem;
+    color: #f0f0f0;
+    z-index: 2;
+    transition: all 0.75s ease;
+}
+
+#loginFormContainer {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: #fdfdfd;
+    flex: 1;
+}
+
+.login-form {
+    display: flex;
+    flex: 1;
+    opacity: 0;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 300px;
+    max-width: 600px;
+    padding: 4rem 4rem;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 1s ease;
+}
+
+#formHeaderContainer, #formFooterContainer {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+#formHeader {
+    text-align: center;
+    font-weight: 700;
+    color: #3e3e3e;
+}
+
+#formHeaderContainer {
+    margin-bottom: 2rem;
+}
+
+#formSubheader, #formFooter {
+    color: #666666;
+}
+
+.input-containers {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    /* border: solid red 1px; */
+}
+
+.labels {
+    margin-bottom: 0.25rem;
+    font-size: small;
+}
+
+.login-form input {
+    background-color: rgba(253, 253, 253, 0.75);
+    border: solid rgba(102, 102, 102, 0.75) 0.1px;
+    border-radius: 3px;
+    padding: 0.5rem 0.75rem;
+    width: 100%;
+}
+
+.login-form input:focus {
+    outline: none;
+    border: solid var(--blue-border) 1px !important; 
+    box-shadow: 0 0 2px 2px #608abd;
+}
+
+#formFooterContainer {
+    margin-top: 1rem;
+}
+
+#loginBtn {
+    font-size: small;
+    font-weight: 500;
+    border-radius: 3px;
+    color: #f0f0f0;
+    border: solid #0b2443 1px;
+    background-color: #0b2443;
+    width: 100%;
+    /* margin-top: 1rem; */
+    padding: 0.75rem 1.25rem;
+    transform: scale(100%);
+    transition: all 0.5s ease;
+}
+
+#loginBtn:hover {
+    background-color: var(--blue-border);
+}
+
+#loginBtn:active {
+    opacity: 0.65;
+    transform: scale(96%);
+}
+
+#infoCard {
+    display: flex;
+    width: 100%;
+    gap: 1rem;
+    margin-top: 0.5rem;
+    padding: 1rem 1rem;
+    background-color:rgba(23, 63, 112, 0.05);
+    border-radius: 5px;
+    transition: all 0.2s ease;
+}
+
+#infoCard:hover {
+    background-color:rgba(23, 63, 112, 0.1);
+}
+
+#warningIcon  {
+    height: 25px;
+    width: 25px;
+    background-image: url("../assets/icons/warningBlue.png");
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: cover;
+}
+
+#infoCardText {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    flex: 1;
+    word-wrap: break-word;
+}
+
+#infoCardTextHeader, #infoCardTextBody {
+    font-size: small;
+    color: var(--blue-border);
+}
+
+#infoCardTextBody {
+    color: #666666;
+
+}
+
+.error-message {
+    display: flex;
+    opacity: 0;
+    pointer-events: none;
+    font-size: small;
+    margin-top: 0.25rem;
+    color: rgb(211, 9, 9);
+    transition: all 0.25s ease;
+}
+
+.error-message.show-error-message {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.login-form input.show-error-box {
+    border: solid rgb(231, 42, 42) 1px;
+    background-color: rgba(231, 42, 42, 0.1);
+    transition: all 0.25s ease;
+}
+
+
+
+@media (max-width: 850px) {
+    #loginImageContainer {
+        display: none;
+    }
+}
+
+@media (max-width: 992px){
+    #loginImageContainer {
+        gap: 0.5rem;
+    }
+    #brandInfo {
+        font-size: 14px;
+    }
+    .login-form{
+        padding: 4rem 3rem;
+    }
+}
