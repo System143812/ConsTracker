@@ -461,8 +461,8 @@ body {
     justify-content: space-between !important;
     align-items: center;
     width: 100%;
-    padding: 1rem 2rem;
-    box-sizing: border-box;
+    height: fit-content;
+    padding: 1.5rem;
 }
 
 #projectsBodyHeader {
