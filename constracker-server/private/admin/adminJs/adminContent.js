@@ -725,7 +725,7 @@ async function createUnitOverlay(unit = null, refreshCallback) {
 }
 
 async function generateMaterialsContent(role) {
-    const materialsBodyContent = document.getElementById('materialsBodyContainer'); // Assuming a div with this ID in the HTML
+    const materialsBodyContent = document.getElementById('materialsBodyContainer'); 
     materialsBodyContent.innerHTML = ''; // Clear existing content
 
     // New Header
@@ -776,8 +776,8 @@ async function generateMaterialsContent(role) {
     const materialsListContainer = div('materials-list-container');
     const paginationContainer = div('materialsPaginationContainer', 'pagination-container');
     
-    materialsContainer.append(materialsSubHeader, filterContainer, materialsListContainer, paginationContainer);
-    materialsBodyContent.append(bodyHeader, materialsContainer);
+    materialsContainer.append(filterContainer, materialsListContainer, paginationContainer);
+    materialsBodyContent.append(materialsSubHeader, bodyHeader, materialsContainer);
 
     let currentPage = 1;
     let itemsPerPage = 10;
@@ -1012,7 +1012,8 @@ function createProjectCard(projects, num) {
     const progressText = div(`progressText`,'progress-text');
     progressText.innerText = 'Progress';
     const progressPercent = div(`progressPercent`, 'progress-percent');
-    const pctString = projects.total_milestone > 0 ? `${Math.floor(projects.completed_milestone / projects.total_milestone * 100)}%` : '0%';
+    const percent = projects.total_milestone > 0 ? Math.floor(projects.completed_milestone / projects.total_milestone * 100) : 0;
+    const pctString = `${percent}%`;
     progressPercent.innerText = pctString;
     const progressLowerSection = div(`progressLowerSection`, 'progress-lower-section');
     const style = document.createElement('style');
@@ -1023,6 +1024,9 @@ function createProjectCard(projects, num) {
     }`;
     document.head.appendChild(style);
     const progressBar = div(`progressBar`, 'progress-bar');
+    if (percent === 100) {
+        progressBar.style.backgroundColor = 'var(--dark-green-text)';
+    }
     progressBar.style.width = pctString;
     progressBar.style.animation = `progressBarAnim${num} 1s ease`;
     progressBar.addEventListener("animationend", () => {
@@ -1683,7 +1687,7 @@ async function recentMaterialsRequest() {
         const requestCardName = div(`requestCardName`, `request-card-name`);
         requestCardName.innerText = `Requested by ${requests.requested_by} • `;
         const requestCardItemCount = div(`requestCardItemCount`, `request-card-item-count`);
-        requestCardItemCount.innerText = `${requests.item_count} items • `; 
+        requestCardItemCount.innerText = `${requests.item_count} items • `;
         const requestCardCost = div(`requestCardCost`, `request-card-cost`);
         requestCardCost.innerText = `₱${requests.cost}`;
         const requestCardRight = div(`requestCardRight`, `request-card-right`);
@@ -1784,7 +1788,7 @@ async function createProjectDetailCard(projectId) {
 function createSectionTabs(role, projectId) {
     const newContents = [
         {id: "selectionTabMilestones", label: "Milestones", render: renderMilestones},
-        {id: "selectionTabWorkers", label: "Personnel", render: renderWorker},
+        {id: "selectionTabWorkers", label: "Personnel & Workers", render: renderWorker},
     ]
 
     const selectionTabContent = div('selectionTabContent');
@@ -1935,12 +1939,19 @@ async function renderMilestones(role, projectId) {
 
 async function renderWorker(role, projectId) {
     const workerSectionContainer = div('workerSectionContainer');
+    const workerSectionHeader = div('workerSectionHeader');
+    const workerHeaderTitle = div('workerHeaderTitle');
+    workerHeaderTitle.innerText = 'Personnel & Workers';
+    const addPeopleBtn = createButton('addPeopleBtn', 'text-buttons', 'Add People', 'addPeopleText');
+    
+    workerSectionHeader.append(workerHeaderTitle, addPeopleBtn);
 
     const filterContainer = div('personnel-filter-container');
     const personnelContainer = div('personnel-main-container');
+    personnelContainer.id = 'personnel-main-container';
     const paginationContainer = div('personnelPaginationContainer', 'pagination-container');
     
-    workerSectionContainer.append(filterContainer, personnelContainer, paginationContainer);
+    workerSectionContainer.append(workerSectionHeader, filterContainer, personnelContainer, paginationContainer);
 
     let currentPage = 1;
     let itemsPerPage = 10;
@@ -1990,7 +2001,7 @@ async function renderWorker(role, projectId) {
     const filters = await createFilterContainer(
         applyFilterToPersonnel,
         'Search by name...', 
-        { name: true, sort: true, role: true }, // Added role filter
+        { name: true, sort: true, role: true },
         'name',
         'newest'
     );
@@ -1998,8 +2009,27 @@ async function renderWorker(role, projectId) {
     filterContainer.append(filters);
 
     await renderPersonnel(new URLSearchParams());
-
+    
     return workerSectionContainer;
+}
+
+function createPersonnelCard(person, refreshCallback) {
+    const card = div(`personnel-card-${person.user_id}`, 'personnel-card');
+
+    const profileIcon = div('profileIcon', 'personnel-profile-icon');
+    profileIcon.innerText = person.username.charAt(0).toUpperCase();
+
+    const infoContainer = div('personnel-info-container');
+    const name = span('personnelName', 'personnel-name');
+    name.innerText = person.username;
+    const email = span('personnelEmail', 'personnel-email');
+    email.innerText = person.email;
+    const role = span('personnelRole', 'personnel-role');
+    role.innerText = person.role;
+
+    infoContainer.append(name, email, role);
+    card.append(profileIcon, infoContainer);
+    return card;
 }
 
 async function refreshAdminProjectContent(currentProjectId, role) {

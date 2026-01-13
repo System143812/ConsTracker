@@ -371,6 +371,10 @@ async function renderEditTask(projectId, milestoneId, milestoneName, taskId, upd
             task_progress: taskProgress,
         };
 
+        if (parseFloat(taskProgress) === 100) {
+            updatedTask.status = 'completed';
+        }
+
         const response = await fetchPostJson(`/api/tasks/${taskId}`, 'PUT', updatedTask, null);
         if (response !== 'error') {
             alertPopup('success', 'Task updated successfully!');
@@ -432,11 +436,15 @@ async function renderViewTask(projectId, milestoneId, milestoneName, updateUiFn,
             if(task.status === 'in progress') warnType(taskStatus, 'solid', 'yellow');
             if(task.status === 'not started') warnType(taskStatus, 'solid', 'white');
             const taskProgressBarContainer = div('', 'task-progress-bar-containers');
-            const taskProgressBar =  div('', 'task-progress-bars');
-            taskProgressBar.style.setProperty(`--progress`, `0%`);
+            const taskProgressBar =  div('', 'progress-bar');
+            taskProgressBar.style.width = '0%';
             setTimeout(() => {
                 requestAnimationFrame(() => {
-                    taskProgressBar.style.setProperty(`--progress`, `${roundDecimal(task.task_progress)}%`);
+                    const progress = roundDecimal(task.task_progress);
+                    taskProgressBar.style.width = `${progress}%`;
+                    if (progress === 100) {
+                        taskProgressBar.style.backgroundColor = 'var(--dark-green-text)';
+                    }
                 });
             }, 200);
             const taskProgressBarData = div('', 'task-progress-bar-data');

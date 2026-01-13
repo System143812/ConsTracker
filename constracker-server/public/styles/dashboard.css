@@ -492,8 +492,8 @@ body {
 
 #projectDetailBackBtn {
     display: flex;
-    width: 15px;
-    height: 15px;
+    width: 20px;
+    height: 20px;
     z-index: 1;
     margin-right: 1.5rem;
 }
@@ -803,6 +803,11 @@ body {
     background: linear-gradient(to bottom, var(--blue-border),  var(--light-blue));
     border-radius: 2px;
     transition: all 0.5s ease;
+}
+
+
+.milestone-progress-bar.completed {
+    background: var(--dark-green-text);
 }
 
 .milestone-progress-point {
@@ -1131,14 +1136,14 @@ body {
 }
 
 .project-progress-cards.hoverable {
-    background-color: var(--gray-no-opacity);
+    transform: translateY(0);
+    box-shadow: none;
     cursor: pointer;
-    transform: scale(100%);
 }
 
 .project-progress-cards.hoverable:hover {
-    background-color: var(--gray-low-opacity);
-    transform: scale(97%);
+    transform: translateY(-5px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
 }
 
 .progress-card-header {
@@ -1211,16 +1216,17 @@ body {
 
 .progress-lower-section {
     width: 100%;
-    background-color: var(--light-blue-background);
+    background-color: var(--light-border);
     border-radius: 5px;
     overflow: hidden;
 }
 
 .progress-bar {
     display: flex;
-    height: 10px; 
+    height: 6px; 
     background-color: rgb(23, 63, 112);
     transition: all 0.5s ease;
+    border-radius: 5px;
 }
 
 .request-card-container {
@@ -1476,10 +1482,314 @@ body {
 
 .projects-main-container {
 
+
+
     display: grid;
+
+
 
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
 
+
+
     gap: 1rem;
 
+
+
 }
+
+
+
+
+
+
+
+.workerSectionHeader {
+
+
+
+    display: flex;
+
+
+
+    justify-content: space-between;
+
+
+
+    align-items: center;
+
+
+
+    padding: 1rem;
+
+
+
+    border-bottom: 1px solid var(--light-border);
+
+
+
+}
+
+
+
+
+
+
+
+.text-buttons {
+
+
+
+    background-color: transparent;
+
+
+
+    border: none;
+
+
+
+    color: var(--blue-border);
+
+
+
+    cursor: pointer;
+
+
+
+    font-size: 12px;
+
+
+
+    font-weight: 600;
+
+
+
+    padding: 0.5rem 1rem;
+
+
+
+    border-radius: 5px;
+
+
+
+    transition: all 0.15s ease;
+
+
+
+}
+
+
+
+
+
+
+
+.text-buttons:hover {
+
+
+
+    background-color: var(--gray-low-opacity);
+
+
+
+}
+
+
+
+
+
+
+
+#personnel-main-container {
+
+
+
+    display: grid;
+
+
+
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+
+
+
+    gap: 1rem;
+
+
+
+    padding: 1rem;
+
+
+
+}
+
+
+
+
+
+
+
+.personnel-card {
+
+
+
+    display: flex;
+
+
+
+    align-items: center;
+
+
+
+    gap: 1rem;
+
+
+
+    padding: 1rem;
+
+
+
+    border: 1px solid var(--light-border);
+
+
+
+    border-radius: 10px;
+
+
+
+    background-color: var(--gray-no-opacity);
+
+
+
+    transition: all 0.15s ease;
+
+
+
+}
+
+
+
+
+
+
+
+.personnel-card:hover {
+
+
+
+    background-color: var(--gray-low-opacity);
+
+
+
+    transform: scale(97%);
+
+
+
+}
+
+
+
+
+
+
+
+.personnel-profile-icon {
+
+
+
+    display: flex;
+
+
+
+    justify-content: center;
+
+
+
+    align-items: center;
+
+
+
+    font-weight: 700;
+
+
+
+    height: 40px;
+
+
+
+    width: 40px;
+
+
+
+    color: var(--blue-border);
+
+
+
+    background-color: var(--light-blue-background);
+
+
+
+    border-radius: 50%;
+
+
+
+}
+
+
+
+
+
+
+
+.personnel-info-container {
+
+
+
+    display: flex;
+
+
+
+    flex-direction: column;
+
+
+
+    gap: 0.25rem;
+
+
+
+}
+
+
+
+
+
+
+
+.personnel-name {
+
+
+
+    font-weight: 600;
+
+
+
+}
+
+
+
+
+
+
+
+.personnel-email, .personnel-role {
+
+
+
+    color: var(--grayed-text);
+
+
+
+}
+
+
+
+

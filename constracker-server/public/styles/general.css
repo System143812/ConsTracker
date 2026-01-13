@@ -9,8 +9,10 @@
     --yellow-background: rgba(217, 119, 6, 0.1);
     --yellow-bg-light: rgba(217, 119, 6, 0.05);
     --yellow-text: rgb(217, 119, 6);
+    --dark-green-text: #138843;
     --grayed-text: rgb(102, 102, 102);
     --gray-low-opacity: rgba(102, 102, 102, 0.1);
+    --gray-very-low-opacity: rgba(120, 120, 120, 0.05);
     --default-black-color: #2a2f3a;
     --default-black-text: #3e3e3e;
     --gray-no-opacity: rgba(102, 102, 102, 0);
@@ -702,8 +704,8 @@ input[type='date'] {
     pointer-events: none;
     background-color: #f0f0f0;
     box-shadow: var(--btn-shadow);
-    border-bottom-left-radius: 5px;
-    border-bottom-right-radius: 5px;
+    border-bottom-left-radius: 10px;
+    border-bottom-right-radius: 10px;
     flex-direction: column;
     position: absolute;
     overflow-y: auto;

@@ -981,7 +981,13 @@ async function renderMilestones(role, projectId) {
             }, interval);
             interval += 500;
             const milestoneProgressPoint = div('', 'milestone-progress-point')
-            if(milestone.status === 'completed') milestoneProgressPoint.classList.add('completed');
+
+            if (roundDecimal(milestone.milestone_progress) === 100) {
+                milestoneProgressBar.classList.add('completed');
+                milestoneProgressPoint.classList.add('completed');
+            } else if(milestone.status === 'completed') {
+                milestoneProgressPoint.classList.add('completed');
+            }
             const milestoneCard = div('', 'milestone-cards');
             if(counter % 2 === 0) {
                 milestoneCard.style.transform = 'translate(calc(0% + 1.5rem))';
