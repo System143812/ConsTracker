@@ -457,7 +457,9 @@ body {
 }
 
 .body-header {
-    display: flex;
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center;
     width: 100%;
     height: fit-content;
     padding: 1.5rem;
@@ -1482,4 +1484,171 @@ body {
 
     gap: 1rem;
 
+}
+
+
+/* Container */
+.personnel-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.5rem;
+    padding: 1rem 0;
+}
+/* Card */
+.personnel-card {
+    background: white;
+    border: 1px solid var(--light-border);
+    border-radius: 12px;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.personnel-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 10px 20px rgba(0,0,0,0.05);
+}
+
+
+
+/* Avatar & Status Bubble */
+.avatar-wrapper {
+    position: relative;
+    width: 80px;
+    height: 80px;
+    margin-bottom: 15px;
+}
+
+.personnel-avatar {
+    width: 100%;
+    height: 100%;
+    background: #f0f2f5;
+    color: #4A90E2;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    font-weight: 700;
+}
+
+.status-bubble {
+    position: absolute;
+    bottom: 5px;
+    right: 5px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 3px solid white;
+}
+
+.status-active { 
+    background-color: greenyellow; 
+
+}
+.status-inactive { 
+    background-color: gray
+
+}
+
+/* Text Content */
+.personnel-name { font-weight: 700; font-size: 18px; color: #333; margin-bottom: 4px; }
+.personnel-role-tag { font-size: 12px; color: #4A90E2; text-transform: uppercase; font-weight: 600; margin-bottom: 8px; }
+.personnel-email { font-size: 13px; color: #888; margin-bottom: 20px; }
+
+/* Buttons */
+.card-actions { display: flex; gap: 10px; width: 100%; }
+.btn-edit-card, .btn-terminate-card {
+    flex: 1;
+    padding: 10px;
+    border-radius: 10px;
+    border: none;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+}
+.btn-edit-card { background: #f0f7ff; color: #007bff; }
+.btn-terminate-card { background: #fff5f5; color: #ff4d4d; }
+
+
+
+
+
+/* Anchors the dropdown to your filter container */
+.filter-containers {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modern-dropdown {
+    position: absolute;
+    top: 50px; /* Adjust based on your header height */
+    right: 0;
+    background: white;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    border-radius: 8px;
+    border: 1px solid var(--light-border);
+    width: 200px;
+    display: none;
+    z-index: 1000;
+}
+
+.modern-dropdown.show {
+    display: block;
+}
+
+/* Specifically target the blue solid buttons for Personnel and Materials */
+.solid-buttons.blue {
+    background-color: var(--blue-border) !important;
+    color: #ffffff !important; /* Forces white text */
+}
+
+.solid-buttons.blue:hover {
+    background-color: var(--blue-text) !important;
+}
+
+
+/* This targets the ID specifically to ensure no dark text remains */
+/* Force white text specifically inside the Personnel container */
+#personnel-main-container .solid-buttons.white,
+#materialsBodyContainer .solid-buttons.white,
+#addPersonnelBtn {
+    color: #ffffff !important;
+}
+
+/* Ensure the plus sign or icon also stays white */
+#addPersonnelBtn {
+    white-space: nowrap;
+    height: fit-content;
+    padding: 10px 20px;
+    align-self: center;
+}
+
+
+/* Wrapper to align search bar and button */
+.filter-action-wrapper {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    width: 100%;
+}
+
+/* Ensure the filter area takes up the available space */
+#personnel-filter-container {
+    flex: 1;
+}
+
+/* Make sure the button doesn't shrink or stretch weirdly */
+
+/* Responsive: Stack them on small screens */
+@media (max-width: 768px) {
+    .filter-action-wrapper {
+        flex-direction: column;
+        align-items: stretch;
+    }
 }

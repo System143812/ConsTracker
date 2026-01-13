@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/styles/general.css">
+    <link rel="stylesheet" href="/styles/login.css">
+    <link rel="icon" href="/assets/pictures/constracker-logo-colored.png">
+    <title>ConsTracker - Register</title>
+</head>
+<body class="register-page">
+    <div id="loadingOverlay"></div>
+    
+    <div id="loginImageContainer">
+        <div id="brandLogo"></div>
+        <p id="brandInfo">Building Smarter, Tracking Faster.</p>
+    </div>
+
+    <div id="loginFormContainer">
+        <form class="login-form" id="registerForm" autocomplete="on">
+            <div id="formHeaderContainer">
+                <h2 id="formHeader">Register for ConsTracker</h2>
+                <h5 id="formSubheader">Enter your email to generate a password</h5>
+            </div>
+
+            <div id="emailContainer" class="input-containers">
+                <label class="labels" for="emailBox">Email</label>
+                <input type="email" id="emailBox" name="email" placeholder="Enter your work email">
+                <p id="emailError" class="error-message"></p>
+            </div>
+
+            <div id="passwordContainer" class="input-containers">
+                <label class="labels" for="passwordBox">Generated Password</label>
+                <input type="text" id="passwordBox" name="password" placeholder="**********" readonly>
+                <p id="passwordError" class="error-message"></p>
+            </div>
+        
+            <div id="formFooterContainer">
+                <button type="button" id="generatePasswordBtn" class="primary-btn">Generate Password</button>
+                <button type="button" id="okBtn" class="secondary-btn" disabled>Return to Login</button>
+
+                <div id="infoCard">
+                    <div id="warningIcon"></div>
+                    <div id="infoCardText">
+                        <p id="infoCardTextHeader">Important Notice</p>
+                        <p id="infoCardTextBody">After registration, you'll receive a password via email. Use that password to login.</p>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <div id="toast" class="toast">Password generated successfully!</div>  
+</body>
+</html>
+
+<script type="module" src="/js/register.js"></script>

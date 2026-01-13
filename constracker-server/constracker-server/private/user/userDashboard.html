@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/styles/general.css">
+    <link rel="stylesheet" href="/styles/dashboard.css">
+    <link rel="stylesheet" href="/styles/overlay.css">
+    <link rel="stylesheet" href="/styles/materials.css">
+    <link rel="icon" href="/assets/pictures/constracker-logo-colored.png">
+    <title>ConsTracker</title>
+</head>
+<body>
+    <div id="loadingOverlay"></div>
+    <div id="sidebarOverlay"></div>
+    <div id="outerContainer">
+        <div id="sidebarContainer">
+            <div id="sidebarHeaderContainer">
+                <div id="brandLogo"></div>
+            </div>
+            <div id="sidebarRoleContainer">
+                <div id="sidebarRoleIcon" class="icons"></div>
+                <div id="sidebarRole">
+                    <div id="sidebarRoleName"></div>
+                    <div id="sidebarRoleEmail"><p id="roleEmail"></p></div>
+                </div>
+            </div>
+            <div id="sidebarContentContainer">
+                <div id="sidebarProjectHeader">MENU</div>
+            </div>
+            <div id="sidebarProjectContainer">
+                <div id="sidebarProjectHeader">PROJECTS</div>
+            </div>
+            <div id="sidebarFooterContainer">
+                <div id="settingsTab" class="sidebar-tabs">
+                    <div id="settingsIcon" class="tab-icons"></div>
+                    <p id="settingsName" class="tab-names">Settings</p>
+                </div>
+                <div id="logoutTab" class="sidebar-tabs">
+                    <div id="logoutIcon" class="tab-icons"></div>
+                    <p id="logoutName" class="tab-names">Logout</p>
+                </div>
+            </div>
+        </div>
+        <div id="contentContainer">
+            <div id="headerContainer">
+                <div id="headerLeftContent">
+                    <div id="hamburgerButton" class="icons-with-bg"></div>
+                    <div id="pageName"></div>
+                </div>
+                <div id="headerRightContent">
+                    <div id="dateTime"></div>
+                    <div id="profile">
+                        <div id="profileIcon"></div>
+                        <div id="profileName"></div>
+                    </div>
+                </div>
+            </div>
+            <div id="dashboardBodyContainer" class="body-container">
+                <div id="dashboardBodyHeader" class="body-header">
+                    <div id="dashboardHeaderContainer" class="body-header-container">
+                        <div id="dashboardHeaderTitle" class="body-header-title">Project Dashboard</div>
+                        <div id="dashboardHeaderSubtitle" class="body-header-subtitle">Real-time overview of all construction projects and operations</div>     
+                    </div>
+                </div>
+                <div id="dashboardBodyContent" class="body-content"></div>
+            </div>
+            <div id="logsBodyContainer" class="body-container">
+                <div id="logsBodyHeader" class="body-header">
+                    <div id="logsHeaderContainer" class="body-header-container">
+                        <div id="logsHeaderTitle" class="body-header-title">Activity Logs</div>
+                        <div id="logsHeaderSubtitle" class="body-header-subtitle">Detailed record of system and project events</div>     
+                    </div>
+                </div>
+                <div id="logsBodyContent" class="body-content"></div>
+            </div>
+            <div id="assetsBodyContainer" class="body-container">
+                <div id="assetsBodyHeader" class="body-header">
+                    <div id="assetsHeaderContainer" class="body-header-container">
+                        <div id="assetsHeaderTitle" class="body-header-title">My Assets</div>
+                        <div id="assetsHeaderSubtitle" class="body-header-subtitle">Track and manage your assigned assets</div>     
+                    </div>
+                </div>
+                <div id="assetsBodyContent" class="body-content"></div>
+            </div>
+            <div id="reportsBodyContainer" class="body-container">
+                <div id="reportsBodyHeader" class="body-header">
+                    <div id="reportsHeaderContainer" class="body-header-container">
+                        <div id="reportsHeaderTitle" class="body-header-title">My Reports</div>
+                        <div id="reportsHeaderSubtitle" class="body-header-subtitle">Generate and view your project reports</div>     
+                    </div>
+                </div>
+                <div id="reportsBodyContent" class="body-content"></div>
+            </div>
+            <div id="projectsBodyContainer" class="body-container">
+                <div id="projectsBodyHeader" class="body-header">
+                    <div id="projectsHeaderContainer" class="body-header-container">
+                        <div id="projectsHeaderTitle" class="body-header-title"></div>
+                        <div id="projectsHeaderLocation">
+                            <div id="projectsHeaderIcon" class="icons"></div>
+                            <div id="projectsHeaderSubtitle" class="body-header-subtitle"></div>
+                        </div>
+                        <div id="projectsHeaderStatus" class="status"></div>     
+                    </div>
+                    <div id="projectsOverallPercent"></div>
+                </div>
+                <div id="projectsBodyContent" class="body-content"></div>
+            </div>
+            <!-- New Materials Body Container -->
+            <div id="materialsBodyContainer" class="body-container">
+                <div id="materialsBodyHeader" class="body-header">
+                    <div id="materialsHeaderContainer" class="body-header-container">
+                        <div id="materialsHeaderTitle" class="body-header-title">Materials</div>
+                        <div id="materialsHeaderSubtitle" class="body-header-subtitle">Manage construction materials and inventory</div>     
+                    </div>
+                </div>
+                <div id="materialsBodyContent" class="body-content"></div>
+            </div>
+            <div id="settingsBodyContainer" class="body-container">
+                <div id="settingsBodyHeader" class="body-header">
+                    <div id="settingsHeaderContainer" class="body-header-container">
+                        <div id="settingsHeaderTitle" class="body-header-title">Settings</div>
+                        <div id="settingsHeaderSubtitle" class="body-header-subtitle">Configure system & personal settings</div>     
+                    </div>
+                </div>
+                <div id="settingsBodyContent" class="body-content"></div>
+            </div>
+        </div>
+    </div>
+</body>
+<script src="/js/chart.umd.js"></script>
+<script type="module" src="/user/userDashboard.js"></script>
+</html>
