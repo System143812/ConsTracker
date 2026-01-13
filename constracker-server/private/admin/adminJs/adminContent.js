@@ -393,7 +393,7 @@ async function createMaterialOverlay(material = null, refreshMaterialsContentFn)
 
 
 
-    showOverlayWithBg(overlayBackground);
+    overlayShow(overlayBackground);
 }
 
 async function createSupplierOverlay(supplier = null, refreshCallback) {
@@ -773,7 +773,7 @@ async function generateMaterialsContent(role) {
     // Add Material Button (Admin, PM, Engineer, Foreman)
     const allowedRolesForAdd = ['admin', 'engineer', 'project manager', 'foreman'];
     if (allowedRolesForAdd.includes(role)) {
-        const addMaterialBtn = createButton('addMaterialBtn', 'solid-buttons', 'Add Material', 'addMaterialBtnText', 'addMaterialBtnIcon');
+        const addMaterialBtn = createButton('addMaterialBtn', 'solid-buttons blue white', 'Add Material', 'addMaterialBtnText', 'addMaterialBtnIcon');
         addMaterialBtn.addEventListener('click', () => {
             createMaterialOverlay(null, () => renderMaterials(new URLSearchParams(), role, currentUserId));
         });
@@ -1123,13 +1123,35 @@ const tabContents = {
 export async function displayContents(tabName, tabType, role) {
     if(role !== 'admin') return alertPopup('error', 'Unauthorized Role');
     const pageName = document.getElementById('pageName');
+    
     if(tabType === 'upperTabs'){
         pageName.innerText = formatString(tabName);
-        await generateContent(tabName, role);
+        
+        // Handle the Personnel tab specifically
+        if (tabName === 'personnel') {
+            const personnelContainer = document.getElementById('personnelBodyContent');
+            const personnelBody = document.getElementById('personnelBodyContainer');
+            
+            // 1. Clear the "Coming Soon" text
+            personnelContainer.innerHTML = ''; 
+            
+            // 2. Build the new UI (Add Button + Filters)
+            const content = await displayPersonnel('personnelBodyContent', role);
+            personnelContainer.append(content);
+
+            // 3. Show the container (matching your sidebar logic)
+            personnelBody.style.display = 'flex';
+            setTimeout(() => { personnelBody.style.opacity = 1; }, 50);
+        } else {
+            // Default behavior for other tabs (Dashboard, Materials, etc.)
+            await generateContent(tabName, role);
+        }
     } else {
         await generateProjectContent(tabName, role);
     }
 }
+
+
 
 async function generateContent(tabName, role) {
     const bodyContainer = document.getElementById(`${tabName}BodyContainer`);
@@ -1144,6 +1166,245 @@ async function generatePersonnelContent() {
     const personnelBodyContent = document.getElementById('personnelBodyContent');
     personnelBodyContent.innerHTML = '';
     showEmptyPlaceholder('/assets/icons/personnel.png', personnelBodyContent, null, "Personnel Content Coming Soon");
+}
+
+export async function renderPersonnel(params) {
+    const workerSectionContainer = div('workerSectionContainer', 'worker-section');
+    
+    // Create Add User Button
+    const addUserBtn = createButton('addUserBtn', 'primary-btn', 'Add New Personnel');
+    addUserBtn.style.marginBottom = '20px';
+    
+    addUserBtn.addEventListener('click', () => {
+        const { overlayBackground, overlayHeader, overlayBody } = createOverlayWithBg();
+        
+        overlayHeader.innerText = "Register Staff Member";
+        
+        const emailInput = createInput('regEmail', 'email', 'Staff Email Address');
+        const submitBtn = createButton('regSubmitBtn', 'primary-btn', 'Generate & Send Credentials');
+        const statusText = div('regStatus', 'info-message');
+        
+        // Secure Mask Display
+        const maskInput = createInput('regMask', 'text', '**********');
+        maskInput.readOnly = true;
+        maskInput.style.textAlign = 'center';
+        maskInput.style.letterSpacing = '4px';
+
+        overlayBody.append(emailInput, maskInput, submitBtn, statusText);
+        showOverlayWithBg(overlayBackground);
+
+        submitBtn.addEventListener('click', async () => {
+            const email = emailInput.value.trim();
+            if(!email) return alertPopup('warn', 'Please enter an email');
+
+            submitBtn.disabled = true;
+            submitBtn.innerText = "Processing...";
+            maskInput.value = "********"; 
+
+            try {
+                const response = await fetch('/api/register/generate-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email })
+                });
+                const data = await response.json();
+
+                if(data.success) {
+                    maskInput.value = "****************"; // Masked for security
+                    submitBtn.innerText = "Email Sent!";
+                    alertPopup('success', 'User created and email sent!');
+                    // Optionally refresh the personnel list here
+                } else {
+                    throw new Error(data.message);
+                }
+            } catch (error) {
+                submitBtn.disabled = false;
+                submitBtn.innerText = "Try Again";
+                alertPopup('error', error.message);
+            }
+        });
+    });
+
+    workerSectionContainer.append(addUserBtn);
+
+    
+    return workerSectionContainer;
+}
+
+// Ensure this is at the top of your file
+
+export async function displayPersonnel(container, parentId, role) {
+    const target = typeof container === 'string' ? document.getElementById(container) : container;
+    if (!target) return;
+    
+    target.innerHTML = ''; 
+
+    // --- 1. THE HEADER (Title only) ---
+    const bodyHeader = div('', 'body-header');
+    const headerTextContainer = div('', 'body-header-container');
+    const title = span('', 'body-header-title', 'Personnel');
+    const subtitle = span('', 'body-header-subtitle', 'Manage team members and system access.');
+    headerTextContainer.append(title, subtitle);
+    target.append(bodyHeader);
+
+    // --- 2. THE FILTER & ACTION LINE ---
+    const personnelMainContainer = div('personnel-main-container', 'materials-main-container');
+    
+    // Create a wrapper for Search Bar + Add Button
+    const filterActionWrapper = div('', 'filter-action-wrapper');
+    const filterArea = div('personnel-filter-container', 'materials-filter-container');
+    
+    const addBtn = createButton('addPersonnelBtn', 'solid-buttons blue white', 'Add Personnel +');
+    addBtn.style.setProperty('color', '#ffffff', 'important');
+    addBtn.addEventListener('click', () => showAddUserOverlay());
+
+    // Put both in the wrapper
+    filterActionWrapper.append(filterArea, addBtn);
+
+    const listGrid = div('userListContainer', 'personnel-grid');
+    personnelMainContainer.append(filterActionWrapper, listGrid);
+    target.append(personnelMainContainer);
+
+    let allPersonnel = [];
+
+    // --- 3. THE RENDER ENGINE ---
+    const renderPersonnelCards = (keyword = '', sortOrder = 'asc', status = 'all') => {
+        listGrid.innerHTML = '';
+        let filtered = allPersonnel.filter(user => {
+            const nameMatch = (user.full_name || "").toLowerCase().includes(keyword.toLowerCase());
+            const statusMatch = (status === 'all') || 
+                                (status === 'active' && user.is_active == 1) || 
+                                (status === 'inactive' && user.is_active == 0);
+            return nameMatch && statusMatch;
+        });
+
+        filtered.sort((a, b) => {
+            const valA = (a.full_name || "").toUpperCase();
+            const valB = (b.full_name || "").toUpperCase();
+            return sortOrder === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+        });
+
+        if (filtered.length === 0) {
+            showEmptyPlaceholder('/assets/icons/personnel.png', listGrid, null, "No personnel found matching your search.");
+            return;
+        }
+
+        filtered.forEach(user => {
+            listGrid.append(createPersonnelCard(user));
+        });
+    };
+
+    // --- 4. THE FILTER BAR ---
+    const filterBar = await createFilterContainer(
+        (urlParams) => {
+            const keyword = urlParams.get('itemName') || ''; 
+            const sort = urlParams.get('sort') || 'asc';
+            const status = urlParams.get('status') || 'all';
+            renderPersonnelCards(keyword, sort, status);
+        },
+        'Search personnel by name...', 
+        { name: true, sort: true, status: true },
+        'itemName', 
+        'asc'
+    );
+
+    filterArea.append(filterBar);
+
+    // --- 5. DATA FETCH ---
+    const users = await fetchData('/api/users');
+    if (users !== 'error') {
+        allPersonnel = users;
+        renderPersonnelCards();
+    }
+}
+
+// Helper to create the Dribbble-like card
+function createPersonnelCard(user) {
+    const card = div(null, 'personnel-card');
+    const nameParts = user.full_name ? user.full_name.trim().split(' ') : ["?"];
+    const initials = nameParts.length > 1 
+        ? (nameParts[0][0] + nameParts[nameParts.length - 1][0]).toUpperCase()
+        : nameParts[0][0].toUpperCase();
+
+    const statusClass = user.is_active == 1 ? 'status-active' : 'status-inactive';
+
+    card.innerHTML = `
+        <div class="avatar-wrapper">
+            <div class="personnel-avatar">${initials}</div>
+            <div class="status-bubble ${statusClass}"></div>
+        </div>
+        <div class="personnel-info" style="text-align: center;">
+            <div class="personnel-name">${user.full_name}</div>
+            <div class="personnel-role-tag" style="font-size: 11px; color: var(--blue-text); font-weight: 600; text-transform: uppercase;">${formatString(user.role)}</div>
+            <div class="personnel-email" style="font-size: 12px; color: var(--grayed-text);">${user.email}</div>
+        </div>
+        <div class="card-actions" style="margin-top: 15px; display: flex; gap: 8px; width: 100%;">
+            <button class="warn-glass" style="flex: 1; font-size: 11px; padding: 8px;" onclick="editCredentials('${user.user_id}')">Edit</button>
+            <button class="warn-glass red" style="flex: 1; font-size: 11px; padding: 8px;" onclick="terminatePersonnel('${user.user_id}')">Terminate</button>
+        </div>
+    `;
+    return card;
+}
+
+async function fetchAndRenderUsers(container) {
+    container.innerHTML = ""; // Clear current list
+    
+    try {
+        const users = await fetchData('/api/users');
+        
+        // Safety check: ensure users is an array
+        if (!Array.isArray(users)) {
+            console.error("Expected array from /api/users but got:", users);
+            container.innerHTML = `<p style="padding: 20px; color: gray;">No personnel found or error loading data.</p>`;
+            return;
+        }
+
+        // Create the Dribbble-style Grid
+        const grid = div(null, 'personnel-grid');
+        
+        users.forEach(user => {
+            const card = div(null, 'personnel-card');
+
+            // 1. Generate Initials (First letter of first and last name)
+            // e.g. "Juan Dela Cruz" -> "JC"
+            const nameParts = user.full_name ? user.full_name.trim().split(' ') : ["?"];
+            const initials = nameParts.length > 1 
+                ? (nameParts[0][0] + nameParts[nameParts.length - 1][0]).toUpperCase()
+                : nameParts[0][0].toUpperCase();
+
+            // 2. Status Color (is_active is 1 or 0 in your DB)
+            const statusClass = user.is_active == 1 ? 'status-active' : 'status-inactive';
+
+            card.innerHTML = `
+                <div class="avatar-wrapper">
+                    <div class="personnel-avatar">${initials}</div>
+                    <div class="status-bubble ${statusClass}"></div>
+                </div>
+                <div class="personnel-info">
+                    <div class="personnel-name">${user.full_name || 'Unnamed User'}</div>
+                    <div class="personnel-role-tag">${formatString(user.role)}</div>
+                    <div class="personnel-email">${user.email}</div>
+                </div>
+                <div class="card-actions">
+                    <button class="btn-edit-card" onclick="editCredentials('${user.user_id}')">Edit Credentials</button>
+                    <button class="btn-terminate-card" onclick="terminatePersonnel('${user.user_id}')">Terminate</button>
+                </div>
+            `;
+            
+            grid.append(card);
+        });
+        
+        container.append(grid);
+    } catch (error) {
+        console.error("Error rendering users:", error);
+        container.innerHTML = `<p style="color: red; padding: 20px;">Failed to load personnel.</p>`;
+    }
+}
+
+async function generateAssetsContent() {
+    const assetsBodyContent = document.getElementById('assetsBodyContent');
+    assetsBodyContent.innerHTML = '';
+    showEmptyPlaceholder('/assets/icons/inventory.png', assetsBodyContent, null, "Assets Content Coming Soon");
 }
 
 async function generateReportsContent() {
@@ -1510,6 +1771,63 @@ function createSummaryCards(cardData) {
     cardContent.append(cardValue, cardInfo);
     return cardContainer;
 }
+
+function showAddPersonnelOverlay() {
+    const { overlayBackground, overlayHeader, overlayBody } = createOverlayWithBg();
+    
+    overlayHeader.innerText = "Register New Personnel";
+    
+    // Create the Form Elements
+    const emailInput = createInput('regEmail', 'email', 'Enter staff email');
+    const generateBtn = createButton('regGenerateBtn', 'primary-btn', 'Generate & Send Password');
+    const statusMsg = div('regStatus', 'error-message'); // Reuse your error class
+    
+    // The "Masked" Password Display
+    const maskDisplay = createInput('regMask', 'text', '**********');
+    maskDisplay.readOnly = true;
+    maskDisplay.style.textAlign = "center";
+    maskDisplay.style.fontSize = "20px";
+    maskDisplay.style.letterSpacing = "5px";
+
+    overlayBody.append(emailInput, maskDisplay, generateBtn, statusMsg);
+    showOverlayWithBg(overlayBackground);
+
+    // Logic for Generation
+    generateBtn.addEventListener('click', async () => {
+        const email = emailInput.value.trim();
+        if (!email) return alert("Please enter an email");
+
+        generateBtn.disabled = true;
+        generateBtn.innerText = "Processing...";
+        maskDisplay.value = "********"; 
+
+        try {
+            const response = await fetch('/api/register/generate-password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                maskDisplay.value = "****************"; // Keep it masked
+                generateBtn.innerText = "Email Sent!";
+                statusMsg.style.color = "#28a745";
+                statusMsg.innerText = "Credentials sent successfully.";
+                statusMsg.style.display = "block";
+            } else {
+                throw new Error(data.message);
+            }
+        } catch (error) {
+            generateBtn.disabled = false;
+            generateBtn.innerText = "Try Again";
+            statusMsg.innerText = error.message;
+            statusMsg.style.display = "block";
+        }
+    });
+}
+
 
 function dashboardGraphContainer() {
     const projectOverviewContainer = div('projectOverviewContainer');

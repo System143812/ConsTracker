@@ -11,11 +11,14 @@ import cookieParser from 'cookie-parser';
 import multer from 'multer'; // Import multer
 import fs from 'fs'; // Import fs module
 import crypto from 'crypto';
+import nodemailer from 'nodemailer';
+
 
 const __fileName = fileURLToPath(import.meta.url);
 const __dirName = path.dirname(__fileName);
 
 dotenv.config({ path: path.join(__dirName, '.env') });
+console.log("CRITICAL DEBUG -> EMAIL_USER is:", process.env.EMAIL_USER);
 const PORT = process.env.PORT;
 const app = express();
 app.use(express.json());
@@ -45,6 +48,16 @@ const limitRegistration = rateLimit({
     message: "Too many requests"
 });
 
+
+const transporter = nodemailer.createTransport({
+    host: 'smtp.gmail.com',
+    port: 465,
+    secure: true, // Use SSL
+    auth: { 
+        user: process.env.EMAIL_USER, 
+        pass: process.env.EMAIL_PASS 
+    }
+});
 app.use('/', express.static(indexDir));
 
 function authMiddleware(role){
@@ -100,6 +113,99 @@ function authMiddleware(role){
         }
     };   
 }
+
+// Generate random password
+function generatePassword() {
+    const length = 12;
+    const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*';
+    let password = '';
+    
+    // Ensure at least one of each required character type
+    password += 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.charAt(Math.floor(Math.random() * 26));
+    password += 'abcdefghijklmnopqrstuvwxyz'.charAt(Math.floor(Math.random() * 26));
+    password += '0123456789'.charAt(Math.floor(Math.random() * 10));
+    password += '!@#$%^&*'.charAt(Math.floor(Math.random() * 8));
+    
+    // Fill the rest
+    for (let i = 4; i < length; i++) {
+        password += charset.charAt(Math.floor(Math.random() * charset.length));
+    }
+    
+    // Shuffle the password
+    return password.split('').sort(() => Math.random() - 0.5).join('');
+}
+
+// Register route
+app.post('/api/register/generate-password', async (req, res) => {
+    try {
+        const { email, role, fullName } = req.body;
+        
+        // Debugging logs (Remove these once it works)
+        console.log("Checking Credentials:");
+        console.log("USER:", process.env.EMAIL_USER ? "Present" : "MISSING");
+        console.log("PASS:", process.env.EMAIL_PASS ? "Present" : "MISSING");
+
+        // 1. Validation
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!email || !emailRegex.test(email)) {
+            return res.status(400).json({ success: false, message: 'Invalid email' });
+        }
+        if (!fullName || !fullName.trim()) {
+            return res.status(400).json({ success: false, message: 'Full Name is required' });
+        }
+
+        // 2. Generate and Hash Password
+        const password = crypto.randomBytes(6).toString('hex'); 
+        const hashedPassword = await bcrypt.hash(password, 10);
+        
+        // 3. Database Update
+        // Note: Using is_active = 1 to match your SQL schema
+        await pool.execute(
+            `INSERT INTO users (email, password, role, full_name, is_active) 
+             VALUES (?, ?, ?, ?, 1) 
+             ON DUPLICATE KEY UPDATE 
+                password = VALUES(password), 
+                role = VALUES(role), 
+                full_name = VALUES(full_name)`,
+            [email, hashedPassword, role, fullName]
+        );
+        
+        // 4. Nodemailer Setup
+        const transporter = nodemailer.createTransport({
+            service: 'gmail',
+            auth: { 
+                user: process.env.EMAIL_USER, 
+                pass: process.env.EMAIL_PASS 
+            }
+        });
+
+        // 5. Send Email
+        await transporter.sendMail({
+            from: `"ConsTracker System" <${process.env.EMAIL_USER}>`,
+            to: email,
+            subject: 'Account Created - ConsTracker Access',
+            html: `
+                <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #eee;">
+                    <h2 style="color: #333;">Welcome, ${fullName}!</h2>
+                    <p>Your personnel account has been set up successfully.</p>
+                    <p><strong>Login Email:</strong> ${email}</p>
+                    <p><strong>Temporary Password:</strong> <code>${password}</code></p>
+                    <p><strong>Assigned Role:</strong> ${role}</p>
+                    <br>
+                    <p style="color: #666; font-size: 12px;">Please change your password upon your first login.</p>
+                </div>
+            `
+        });
+
+        res.json({ success: true, message: 'Personnel registered and email sent!' });
+        
+    } catch (error) {
+        console.error("Registration Error:", error);
+        // Sending the specific error message back to the frontend for debugging
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
 
 async function clearCookies(req, res) {
     const cookieToken = req.cookies.token;
@@ -876,11 +982,56 @@ async function getCategories(res) {
     }
 }
 
+
+app.get('/register', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'register.html'));
+});
+
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
 app.get('/api/selection/:type', authMiddleware(['all']), async(req, res) => {
     if (req.params.type === 'category') {
         res.status(200).json(await getCategories(res));
     } else {
         res.status(200).json(await getSelection(res, req, req.params.type));    
+    }
+});
+
+app.get('/api/users/all', async (req, res) => {
+    try {
+        // Correct column names: user_id instead of id
+        const [rows] = await pool.execute(
+            'SELECT user_id, full_name, email, is_active FROM users ORDER BY full_name ASC'
+        );
+        res.json(rows);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: 'Database error' });
+    }
+});
+
+app.get('/api/users', async (req, res) => {
+    try {
+        // Fetch users from database
+        // We select full_name, email, role, and is_active (the column in your SQL)
+        const [rows] = await pool.execute(
+            'SELECT user_id, full_name, email, role, is_active FROM users ORDER BY full_name ASC'
+        );
+        res.json(rows);
+    } catch (error) {
+        console.error('Error fetching users:', error);
+        res.status(500).json({ success: false, message: 'Internal Server Error' });
+    }
+});
+
+app.get('/api/roles', async (req, res) => {
+    try {
+        const [rows] = await pool.execute('SELECT DISTINCT role FROM users WHERE role IS NOT NULL');
+        res.json(rows.map(row => row.role)); 
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Could not fetch roles' });
     }
 });
 
