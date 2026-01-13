@@ -1401,11 +1401,7 @@ async function fetchAndRenderUsers(container) {
     }
 }
 
-async function generateAssetsContent() {
-    const assetsBodyContent = document.getElementById('assetsBodyContent');
-    assetsBodyContent.innerHTML = '';
-    showEmptyPlaceholder('/assets/icons/inventory.png', assetsBodyContent, null, "Assets Content Coming Soon");
-}
+
 
 async function generateReportsContent() {
     const reportsBodyContent = document.getElementById('reportsBodyContent');
@@ -1417,6 +1413,65 @@ async function generateAnalyticsContent() {
     const analyticsBodyContent = document.getElementById('analyticsBodyContent');
     analyticsBodyContent.innerHTML = '';
     showEmptyPlaceholder('/assets/icons/analytics.png', analyticsBodyContent, null, "Analytics Content Coming Soon");
+}
+
+async function recentMaterialsRequest() {
+    const recentRequestContainer = div('recentRequestContainer', 'recent-request', 'content-cards');
+    const recentRequestHeader = div('recentRequestHeader', 'content-card-header');
+    const recentRequestTitle = div('recentRequestTitle', 'content-card-title');
+    recentRequestTitle.innerText = 'Recent Material Requests';
+    const recentRequestSubtitle = div('recentRequestSubtitle', 'content-card-subtitle');
+    recentRequestSubtitle.innerText = "Monitor recent material requests";
+    const recentRequestViewMore = createButton('recentRequestViewMore', 'text-buttons', 'View More', 'recentRequestMoreText');
+    
+    recentRequestViewMore.addEventListener('click', () => {
+        const materialRequestsTab = document.getElementById('material-requestsTab');
+        if (materialRequestsTab) {
+            materialRequestsTab.click();
+        }
+    });
+    recentRequestHeader.append(recentRequestTitle, recentRequestSubtitle, recentRequestViewMore);
+
+    const recentRequestBody = div('recentRequestBody', 'content-card-body');
+    const data = await fetchData('/api/recentMatReqs');
+
+    if (data === 'error' || data.length === 0) {
+        showEmptyPlaceholder('/assets/icons/materialsRequest.png', recentRequestBody, null, "No recent material requests found.");
+    } else {
+        const table = document.createElement('table');
+        table.classList.add('recent-requests-table');
+        const thead = document.createElement('thead');
+        thead.innerHTML = `
+            <tr>
+                <th>Project</th>
+                <th>Status</th>
+                <th>Requested By</th>
+                <th>Items</th>
+                <th>Cost</th>
+                <th>Date</th>
+            </tr>
+        `;
+        const tbody = document.createElement('tbody');
+        data.slice(0, 5).forEach(req => {
+            const row = document.createElement('tr');
+            const statusClass = req.status.toLowerCase().replace(/\s+/g, '-');
+            
+            row.innerHTML = `
+                <td>${req.project_name}</td>
+                <td><span class="status-pill status-${statusClass}">${formatString(req.status)}</span></td>
+                <td>${req.requested_by}</td>
+                <td>${req.item_count}</td>
+                <td>₱${parseFloat(req.cost).toLocaleString()}</td>
+                <td>${dateFormatting(req.request_date, 'date')}</td>
+            `;
+            tbody.appendChild(row);
+        });
+        table.append(thead, tbody);
+        recentRequestBody.append(table);
+    }
+    
+    recentRequestContainer.append(recentRequestHeader, recentRequestBody);
+    return recentRequestContainer;
 }
 
 async function generateDashboardContent() {
@@ -1996,70 +2051,7 @@ async function dashboardActiveProjects(filter) {
     
 }
 
-async function recentMaterialsRequest() {
-    const recentRequestContainer = div(`recentRequestContainer`, `recent-request-container`);
-    const recentRequestHeader = div(`recentRequestHeader`, `content-card-header`);
-    const recentRequestBody = div(`recentRequestBody`,  `content-card-body`);
-    const recentRequestTitle = div(`recentRequestTitle`, `content-card-title`);
-    recentRequestTitle.innerText = 'Recent Material Requests';
-    const recentRequestSubtitle = div(`recentRequestSubtitle`, `content-card-subtitle`);
-    recentRequestSubtitle.innerText = 'Latest material requests requiring attention';
-    
-    const data = await fetchData(`/api/recentMatReqs`);
-    if(data === 'error') return;
-    if(data.length === 0){
-        const requestCardContainer = div(`requestCardContainer`, `request-card-container`);
-        requestCardContainer.innerText = 'There are no requests so far';
-        recentRequestContainer.append(recentRequestHeader, recentRequestBody);
-        recentRequestHeader.append(recentRequestTitle, recentRequestSubtitle);
-        recentRequestBody.append(requestCardContainer);
 
-        return recentRequestContainer;
-    }
-    for (const requests of data) {
-
-        const requestCardContainer = div(`requestCardContainer`, `request-card-container`);
-        const requestCardLeft = div(`requestCardLeft`, `request-card-left`);
-        const requestCardHeader = div(`requestCardHeader`, `request-card-header`);
-        const requestCardTitle = div(`requestCardTitle`, `request-card-title`);
-        requestCardTitle.innerText = `${requests.project_name}`;
-        const requestCardPriority = div(`requestCardPriority`, `request-card-priority`);
-        if(requests.priority_level === "medium") warnType(requestCardPriority, "solid", 'yellow', '', '');
-        if(requests.priority_level === "low") warnType(requestCardPriority, "solid", 'green', '', '');
-        if(requests.priority_level === "high") warnType(requestCardPriority, "solid", 'red', '', '');
-        requestCardPriority.innerText = `${formatString(requests.priority_level)} Priority`;
-        const requestCardBody = div(`requestCardBody`, `request-card-body`);
-        const requestCardName = div(`requestCardName`, `request-card-name`);
-        requestCardName.innerText = `Requested by ${requests.requested_by} • `;
-        const requestCardItemCount = div(`requestCardItemCount`, `request-card-item-count`);
-        requestCardItemCount.innerText = `${requests.item_count} items • `;
-        const requestCardCost = div(`requestCardCost`, `request-card-cost`);
-        requestCardCost.innerText = `₱${requests.cost}`;
-        const requestCardRight = div(`requestCardRight`, `request-card-right`);
-        const requestStatusContainer = div(`requestStatusContainer`, `request-status-container`);
-        const requestStatusIcon = div(`requestStatusIcon`, `request-status-icon`);
-        requestStatusIcon.classList.add('icons');
-        const requestStatusLabel = div(`requestStatusLabel`, `request-status-label`);
-        if(requests.status === "pending") warnType(requestStatusContainer, "", 'yellow', requestStatusIcon, requestStatusLabel);
-        if(requests.status === "approved") warnType(requestStatusContainer, "", 'green', requestStatusIcon, requestStatusLabel);
-        if(requests.status === "rejected") warnType(requestStatusContainer, "", 'red', requestStatusIcon, requestStatusLabel);
-        requestStatusLabel.innerText = `${requests.status}`;
-        const requestCardDate = div(`requestCardDate`, `request-card-date`);
-        requestCardDate.innerText = `${dateFormatting(requests.request_date, 'dateTime')}`; 
-        
-
-        recentRequestContainer.append(recentRequestHeader, recentRequestBody);
-        recentRequestHeader.append(recentRequestTitle, recentRequestSubtitle);
-        recentRequestBody.append(requestCardContainer);
-        requestCardContainer.append(requestCardLeft, requestCardRight);
-        requestCardLeft.append(requestCardHeader, requestCardBody, requestCardDate);
-        requestCardHeader.append(requestCardTitle, requestCardPriority);
-        requestCardBody.append(requestCardName, requestCardItemCount, requestCardCost);
-        requestCardRight.append(requestStatusContainer);
-        requestStatusContainer.append(requestStatusIcon, requestStatusLabel);
-    }
-    return recentRequestContainer;
-}
 
 async function generateProjectContent(projectTabName, role) { //project1
     const projectId = projectTabName.replace(/project/g, '');
@@ -2438,7 +2430,7 @@ async function renderWorker(role, projectId) {
         }
 
         data.personnel.forEach(person => {
-            personnelContainer.append(createPersonnelCard(person, () => renderPersonnel(urlParams)));
+            personnelContainer.append(createProjectPersonnelCard(person, () => renderPersonnel(urlParams)));
         });
 
         const paginationControls = createPaginationControls({
@@ -2478,7 +2470,7 @@ async function renderWorker(role, projectId) {
     return workerSectionContainer;
 }
 
-function createPersonnelCard(person, refreshCallback) {
+function createProjectPersonnelCard(person, refreshCallback) {
     const card = div(`personnel-card-${person.user_id}`, 'personnel-card');
 
     const profileIcon = div('profileIcon', 'personnel-profile-icon');
