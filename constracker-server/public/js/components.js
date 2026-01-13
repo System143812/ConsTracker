@@ -712,6 +712,41 @@ export function createInput(inputType, mode, label, inputId, name, defaultVal, p
     return inputBoxContainer;
 }
 
+export function createItemSearch(onItemSelected) {
+    const container = div('', 'item-search-container');
+    const searchInput = createInput('text', 'edit', 'Search Item', 'itemSearchInput', 'item_search', '', 'Search by name...');
+    const resultsContainer = div('', 'item-search-results');
+    
+    let debounceTimer;
+    searchInput.querySelector('input').addEventListener('input', () => {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(async () => {
+            const searchTerm = searchInput.querySelector('input').value;
+            if (searchTerm.length < 2) {
+                resultsContainer.innerHTML = '';
+                return;
+            }
+            const items = await fetchData(`/api/materials?name=${searchTerm}`);
+            resultsContainer.innerHTML = '';
+            if (items !== 'error' && items.materials.length > 0) {
+                items.materials.forEach(item => {
+                    const itemEl = div('', 'item-search-result');
+                    itemEl.innerText = item.item_name;
+                    itemEl.addEventListener('click', () => {
+                        onItemSelected(item);
+                        searchInput.querySelector('input').value = '';
+                        resultsContainer.innerHTML = '';
+                    });
+                    resultsContainer.append(itemEl);
+                });
+            }
+        }, 300);
+    });
+
+    container.append(searchInput, resultsContainer);
+    return container;
+}
+
 export function createPaginationControls({
     currentPage,
     totalItems,

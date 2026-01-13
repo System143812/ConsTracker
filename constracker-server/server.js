@@ -153,10 +153,10 @@ function failed(res, status, message) {
 }
 function dashboardRoleAccess(req, res) {
     const roles = [
-        {role: 'admin', access: ['dashboard', 'projects', 'inventory', 'materials', 'assets', 'personnel', 'reports', 'analytics', 'logs']},
-        {role: 'engineer', access: ['dashboard', 'materials', 'assets', 'reports', 'logs']},
-        {role: 'foreman', access: ['dashboard', 'materials', 'assets', 'reports', 'logs']},
-        {role: 'project manager', access: ['dashboard', 'materials', 'assets', 'reports', 'logs']}
+        {role: 'admin', access: ['dashboard', 'projects', 'inventory', 'materials', 'material-requests', 'assets', 'personnel', 'reports', 'analytics', 'logs']},
+        {role: 'engineer', access: ['dashboard', 'materials', 'material-requests', 'assets', 'reports', 'logs']},
+        {role: 'foreman', access: ['dashboard', 'materials', 'material-requests', 'assets', 'reports', 'logs']},
+        {role: 'project manager', access: ['dashboard', 'materials', 'material-requests', 'assets', 'reports', 'logs']}
     ];
     const userRole = roles.find(obj => obj.role === req.user.role);
     if(userRole) {
@@ -288,7 +288,19 @@ async function getAssignedProject(res, user_id, user_role) {
 async function getSummaryCards(res, tabName) {
     const tabSqlQueries = {
         dashboard: {
-            getQuery: () => { return "SELECT COUNT(project_id) AS active_projects, (SELECT COUNT(project_id) FROM projects) AS total_projects, (SELECT COUNT(user_id) FROM users WHERE is_active) AS active_personnel, (SELECT COUNT(user_id) FROM users) AS total_personnel, (SELECT COUNT(id) FROM material_requests WHERE status = 'pending') AS pending_requests FROM projects WHERE status = 'in progress';"; }
+            getQuery: () => { 
+                return `
+                    SELECT 
+                        (SELECT COUNT(project_id) FROM projects WHERE status = 'in progress') AS active_projects, 
+                        (SELECT COUNT(project_id) FROM projects) AS total_projects, 
+                        (SELECT COUNT(user_id) FROM users WHERE is_active) AS active_personnel, 
+                        (SELECT COUNT(user_id) FROM users) AS total_personnel, 
+                        (SELECT COUNT(id) FROM material_requests WHERE status = 'pending') AS pending_requests,
+                        (SELECT COUNT(id) FROM material_requests WHERE current_stage IN ('ordered', 'awaiting_delivery')) AS awaiting_deliveries,
+                        (SELECT COUNT(id) FROM material_requests WHERE current_stage = 'partially_verified') AS partially_verified,
+                        (SELECT COUNT(id) FROM material_requests WHERE current_stage = 'disputed') AS disputed_requests
+                `;
+            }
         },
         inventory:  () => {},
         maetrialsRequest: () => {},
@@ -639,12 +651,12 @@ async function getAllMaterials(res, role, assignedProjects, filters) {
 
 
 async function createMaterial(res, materialData, userId, userRole) {
-    const { item_name, item_description, price, unit_id, category_id, supplier_id, size, image_url } = materialData;
+    const { item_name, item_description, price, unit_id, category_id, supplier_id, size, image_url, item_type, track_condition } = materialData;
     const status = (userRole === 'engineer' || userRole === 'admin') ? 'approved' : 'pending';
     try {
         const [result] = await pool.execute(
-            'INSERT INTO items (item_name, item_description, price, unit_id, category_id, supplier_id, size, status, created_by, image_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            [item_name, item_description, price, unit_id, category_id, supplier_id, size, status, userId, image_url || 'constrackerWhite.svg']
+            'INSERT INTO items (item_name, item_description, price, unit_id, category_id, supplier_id, size, status, created_by, image_url, item_type, track_condition) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [item_name, item_description, price, unit_id, category_id, supplier_id, size, status, userId, image_url || 'constrackerWhite.svg', item_type, track_condition]
         );
         return result.insertId;
     } catch (error) {
@@ -665,11 +677,11 @@ async function approveMaterial(res, materialId, userId) {
 }
 
 async function updateMaterial(res, materialId, materialData, userId) {
-    const { item_name, item_description, price, unit_id, category_id, supplier_id, size, image_url } = materialData;
+    const { item_name, item_description, price, unit_id, category_id, supplier_id, size, image_url, item_type, track_condition } = materialData;
     try {
         const [result] = await pool.execute(
-            'UPDATE items SET item_name = ?, item_description = ?, price = ?, unit_id = ?, category_id = ?, supplier_id = ?, size = ?, updated_by = ?, image_url = ? WHERE item_id = ?',
-            [item_name, item_description, price, unit_id, category_id, supplier_id, size, userId, image_url || 'constrackerWhite.svg', materialId]
+            'UPDATE items SET item_name = ?, item_description = ?, price = ?, unit_id = ?, category_id = ?, supplier_id = ?, size = ?, updated_by = ?, image_url = ?, item_type = ?, track_condition = ? WHERE item_id = ?',
+            [item_name, item_description, price, unit_id, category_id, supplier_id, size, userId, image_url || 'constrackerWhite.svg', item_type, track_condition, materialId]
         );
         return result.affectedRows > 0;
     } catch (error) {
@@ -1447,13 +1459,593 @@ app.delete('/api/materials/suppliers/:supplierId', authMiddleware(['admin', 'eng
     }
 });
 
+app.get('/api/inventory', authMiddleware(['admin', 'engineer', 'project manager']), async (req, res) => {
+    try {
+        const [rows] = await pool.execute(`
+            SELECT
+                i.item_id,
+                i.item_name,
+                i.item_description,
+                mc.category_name,
+                u.unit_name,
+                SUM(CASE WHEN im.movement_type = 'in' THEN im.quantity ELSE 0 END) as total_in,
+                SUM(CASE WHEN im.movement_type = 'out' THEN im.quantity ELSE 0 END) as total_out,
+                (SUM(CASE WHEN im.movement_type = 'in' THEN im.quantity ELSE 0 END) - SUM(CASE WHEN im.movement_type = 'out' THEN im.quantity ELSE 0 END)) as stock_balance
+            FROM
+                items i
+            LEFT JOIN
+                inventory_movements im ON i.item_id = im.item_id AND im.project_id IS NULL
+            LEFT JOIN
+                material_categories mc ON i.category_id = mc.category_id
+            LEFT JOIN
+                units u ON i.unit_id = u.unit_id
+            GROUP BY
+                i.item_id, i.item_name, i.item_description, mc.category_name, u.unit_name
+            ORDER BY
+                i.item_name;
+        `);
+        res.status(200).json(rows);
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+});
+
+app.get('/api/inventory/project/:projectId', authMiddleware(['admin', 'engineer', 'project manager', 'foreman']), async (req, res) => {
+    const { projectId } = req.params;
+    try {
+        const [rows] = await pool.execute(`
+            SELECT
+                i.item_id,
+                i.item_name,
+                i.item_description,
+                mc.category_name,
+                u.unit_name,
+                SUM(CASE WHEN im.movement_type = 'in' THEN im.quantity ELSE 0 END) as total_in,
+                SUM(CASE WHEN im.movement_type = 'out' THEN im.quantity ELSE 0 END) as total_out,
+                (SUM(CASE WHEN im.movement_type = 'in' THEN im.quantity ELSE 0 END) - SUM(CASE WHEN im.movement_type = 'out' THEN im.quantity ELSE 0 END)) as stock_balance
+            FROM
+                items i
+            LEFT JOIN
+                inventory_movements im ON i.item_id = im.item_id
+            LEFT JOIN
+                material_categories mc ON i.category_id = mc.category_id
+            LEFT JOIN
+                units u ON i.unit_id = u.unit_id
+            WHERE
+                im.project_id = ?
+            GROUP BY
+                i.item_id, i.item_name, i.item_description, mc.category_name, u.unit_name
+            ORDER BY
+                i.item_name;
+        `, [projectId]);
+        res.status(200).json(rows);
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+});
+
+app.get('/api/material-requests', authMiddleware(['all']), async (req, res) => {
+    const { page = 1, limit = 10, project, request_type, current_stage, dateFrom, dateTo, requester, sort } = req.query;
+    const pageInt = parseInt(page);
+    const limitInt = parseInt(limit);
+    const offset = (pageInt - 1) * limitInt;
+
+    let baseQuery = `
+        FROM 
+            material_requests mr
+        JOIN 
+            projects p ON mr.project_id = p.project_id
+        JOIN 
+            users u ON mr.user_id = u.user_id
+    `;
+    let filterParams = [];
+    let whereClauses = [];
+
+    if (project && project !== "all") {
+        whereClauses.push(`mr.project_id = ?`);
+        filterParams.push(project);
+    }
+    if (request_type && request_type !== "all") {
+        whereClauses.push(`mr.request_type = ?`);
+        filterParams.push(request_type);
+    }
+    if (current_stage && current_stage !== "all") {
+        whereClauses.push(`mr.current_stage = ?`);
+        filterParams.push(current_stage);
+    }
+    if (dateFrom && dateFrom !== "all") {
+        whereClauses.push(`mr.created_at >= ?`);
+        filterParams.push(dateFrom);
+    }
+    if (dateTo && dateTo !== "all") {
+        whereClauses.push(`mr.created_at <= ?`);
+        filterParams.push(dateTo);
+    }
+    if (requester && requester !== "all") {
+        whereClauses.push(`u.full_name LIKE ?`);
+        filterParams.push(`%${requester}%`);
+    }
+    
+    let whereClause = '';
+    if (whereClauses.length > 0) {
+        whereClause = ` WHERE ` + whereClauses.join(' AND ');
+    }
+
+    let orderByClause = 'ORDER BY mr.created_at DESC';
+    if (sort) {
+        switch (sort) {
+            case 'newest':
+                orderByClause = 'ORDER BY mr.created_at DESC';
+                break;
+            case 'oldest':
+                orderByClause = 'ORDER BY mr.created_at ASC';
+                break;
+        }
+    }
+
+    const countQuery = `SELECT COUNT(mr.id) AS total ${baseQuery} ${whereClause}`;
+    
+    const dataQuery = `
+        SELECT 
+            mr.id,
+            p.project_name,
+            u.full_name AS requester_name,
+            mr.request_type,
+            mr.current_stage,
+            mr.created_at,
+            (SELECT COUNT(*) FROM material_request_items mri WHERE mri.mr_id = mr.id) as item_count,
+            (SELECT SUM(mri.quantity * i.price) FROM material_request_items mri JOIN items i ON mri.item_id = i.item_id WHERE mri.mr_id = mr.id) as total_cost
+        ${baseQuery}
+        ${whereClause}
+        ${orderByClause}
+        LIMIT ${limitInt}
+        OFFSET ${offset}
+    `;
+
+    try {
+        const [countResult] = await pool.execute(countQuery, filterParams);
+        const total = countResult[0].total;
+
+        const [requests] = await pool.execute(dataQuery, filterParams);
+        
+        res.status(200).json({ requests, total });
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+});
+
+app.get('/api/material-requests/:id', authMiddleware(['all']), async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        const [headerResult] = await pool.execute(`
+            SELECT
+                mr.id,
+                p.project_name,
+                mr.request_type,
+                s.supplier_name,
+                mr.current_stage AS status,
+                u.full_name AS requester_name,
+                a.full_name AS approver_name,
+                mr.approved_at
+            FROM
+                material_requests mr
+            JOIN
+                projects p ON mr.project_id = p.project_id
+            JOIN
+                users u ON mr.user_id = u.user_id
+            LEFT JOIN
+                suppliers s ON mr.supplier_id = s.supplier_id
+            LEFT JOIN
+                users a ON mr.approved_by = a.user_id
+            WHERE
+                mr.id = ?;
+        `, [id]);
+
+        if (headerResult.length === 0) {
+            return failed(res, 404, 'Material request not found.');
+        }
+
+        const [itemsResult] = await pool.execute(`
+            SELECT
+                mri.id,
+                i.item_name,
+                mri.quantity AS requested_quantity,
+                mri.received_quantity,
+                mri.accepted_quantity,
+                mri.rejected_quantity,
+                (mri.quantity - mri.received_quantity) AS pending_quantity
+            FROM
+                material_request_items mri
+            JOIN
+                items i ON mri.item_id = i.item_id
+            WHERE
+                mri.mr_id = ?;
+        `, [id]);
+
+        res.status(200).json({
+            header: headerResult[0],
+            items: itemsResult
+        });
+
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+});
+
+app.post('/api/material-requests', authMiddleware(['all']), async (req, res) => {
+    const { id: userId } = req.user;
+    const { project_id, request_type, supplier_id, items, status } = req.body;
+
+    if (!project_id || !request_type || !items || !Array.isArray(items) || items.length === 0) {
+        return failed(res, 400, 'Missing required fields.');
+    }
+
+    const connection = await pool.getConnection();
+    try {
+        await connection.beginTransaction();
+
+        const [result] = await connection.execute(
+            'INSERT INTO material_requests (user_id, project_id, request_type, supplier_id, current_stage) VALUES (?, ?, ?, ?, ?)',
+            [userId, project_id, request_type, supplier_id, status || 'DRAFT']
+        );
+        const materialRequestId = result.insertId;
+
+        for (const item of items) {
+            await connection.execute(
+                'INSERT INTO material_request_items (mr_id, item_id, quantity) VALUES (?, ?, ?)',
+                [materialRequestId, item.item_id, item.quantity]
+            );
+        }
+
+        await connection.commit();
+        res.status(201).json({ status: 'success', message: 'Material request created successfully.', id: materialRequestId });
+
+    } catch (error) {
+        await connection.rollback();
+        failed(res, 500, `Database Error: ${error}`);
+    } finally {
+        connection.release();
+    }
+});
+
+async function updateMaterialRequestStage(res, req, mrId, newStage, newStatus, action, remarks) {
+    const { id: userId } = req.user;
+
+    const connection = await pool.getConnection();
+    try {
+        await connection.beginTransaction();
+
+        const [updateResult] = await connection.execute(
+            'UPDATE material_requests SET current_stage = ?, status = ?, approved_by = ?, approved_at = NOW() WHERE id = ?',
+            [newStage, newStatus, userId, mrId]
+        );
+
+        if (updateResult.affectedRows === 0) {
+            await connection.rollback();
+            return failed(res, 404, 'Material request not found or no change made.');
+        }
+
+        await connection.execute(
+            'INSERT INTO material_request_actions (mr_id, action, performed_by, remarks) VALUES (?, ?, ?, ?)',
+            [mrId, action, userId, remarks]
+        );
+
+        await connection.commit();
+        res.status(200).json({status: 'success', message: `Material request ${action} successfully.`});
+
+    } catch (error) {
+        await connection.rollback();
+        return failed(res, 500, `Database Error: ${error}`);
+    } finally {
+        connection.release();
+    }
+}
+
+app.put('/api/material-requests/:id/approve', authMiddleware(['admin', 'engineer', 'project manager']), async (req, res) => {
+    const { id } = req.params;
+    const { remarks } = req.body;
+    await updateMaterialRequestStage(res, req, id, 'approved', 'approved', 'approved', remarks);
+});
+
+app.put('/api/material-requests/:id/decline', authMiddleware(['admin', 'engineer', 'project manager']), async (req, res) => {
+    const { id } = req.params;
+    const { remarks } = req.body;
+    await updateMaterialRequestStage(res, req, id, 'cancelled', 'rejected', 'declined', remarks);
+});
+
+app.put('/api/material-requests/:id/order', authMiddleware(['admin', 'engineer', 'project manager']), async (req, res) => {
+    const { id } = req.params;
+    const { remarks } = req.body;
+    await updateMaterialRequestStage(res, req, id, 'ordered', 'approved', 'ordered', remarks);
+});
+
+async function recordDelivery(res, req, mrId, deliveryData) {
+    const { id: userId } = req.user;
+    const { delivered_by, delivery_date, delivery_status } = deliveryData;
+    const user = await getUser(userId);
+
+    const connection = await pool.getConnection();
+    try {
+        await connection.beginTransaction();
+
+        // Insert into material_deliveries
+        await connection.execute(
+            'INSERT INTO material_deliveries (mr_id, delivered_by, delivery_date, delivery_status, acknowledged_by) VALUES (?, ?, ?, ?, ?)',
+            [mrId, delivered_by, delivery_date, delivery_status, userId]
+        );
+
+        // Update material_requests stage
+        await connection.execute(
+            'UPDATE material_requests SET current_stage = ? WHERE id = ?',
+            ['verifying', mrId]
+        );
+
+        // Insert into material_request_actions
+        await connection.execute(
+            'INSERT INTO material_request_actions (mr_id, action, performed_by, remarks) VALUES (?, ?, ?, ?)',
+            [mrId, 'marked_delivered', userId, `Delivery recorded by ${user.full_name}`]
+        );
+
+        await connection.commit();
+        res.status(200).json({status: 'success', message: 'Delivery recorded successfully.'});
+
+    } catch (error) {
+        await connection.rollback();
+        return failed(res, 500, `Database Error: ${error}`);
+    } finally {
+        connection.release();
+    }
+}
+
+app.post('/api/material-requests/:id/deliveries', authMiddleware(['admin', 'foreman']), async (req, res) => {
+    const { id } = req.params;
+    const { delivered_by, delivery_date, delivery_status } = req.body;
+    if (!delivered_by || !delivery_date || !delivery_status) {
+        return failed(res, 400, 'Missing required fields.');
+    }
+    await recordDelivery(res, req, id, req.body);
+});
+
+app.get('/api/material-requests/:id/deliveries', authMiddleware(['all']), async (req, res) => {
+    const { id } = req.params;
+    try {
+        const [deliveries] = await pool.execute(
+            `SELECT md.*, u.full_name as acknowledged_by_name 
+             FROM material_deliveries md
+             JOIN users u ON md.acknowledged_by = u.user_id
+             WHERE md.mr_id = ? 
+             ORDER BY md.delivery_date DESC`,
+            [id]
+        );
+        res.status(200).json(deliveries);
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+});
+
+async function verifyDelivery(res, req, mrId, verificationData) {
+    const { id: userId } = req.user;
+    const connection = await pool.getConnection();
+    try {
+        await connection.beginTransaction();
+
+        for (const item of verificationData) {
+            const { mr_item_id, accepted_qty, rejected_qty, remarks } = item;
+
+            // 1. Insert into material_verifications
+            await connection.execute(
+                `INSERT INTO material_verifications (mr_item_id, verified_by, status, accepted_qty, rejected_qty, remarks)
+                 VALUES (?, ?, ?, ?, ?, ?)`,
+                [mr_item_id, userId, (rejected_qty > 0 ? 'partial' : 'accepted'), accepted_qty, rejected_qty, remarks]
+            );
+
+            // 2. Update material_request_items
+            const [itemToUpdate] = await connection.execute('SELECT * FROM material_request_items WHERE id = ? FOR UPDATE', [mr_item_id]);
+            
+            const new_received = itemToUpdate[0].received_quantity + accepted_qty + rejected_qty;
+            const new_accepted = itemToUpdate[0].accepted_quantity + accepted_qty;
+            const new_rejected = itemToUpdate[0].rejected_quantity + rejected_qty;
+
+            await connection.execute(
+                `UPDATE material_request_items 
+                 SET received_quantity = ?, accepted_quantity = ?, rejected_quantity = ?
+                 WHERE id = ?`,
+                [new_received, new_accepted, new_rejected, mr_item_id]
+            );
+
+            // 3. Automatic Inventory Update
+            if (accepted_qty > 0) {
+                const [[requestDetails]] = await connection.execute(
+                    `SELECT mr.project_id, mr.request_type, i.item_id 
+                     FROM material_requests mr
+                     JOIN material_request_items mri ON mr.id = mri.mr_id
+                     JOIN items i ON mri.item_id = i.item_id
+                     WHERE mri.id = ?`,
+                    [mr_item_id]
+                );
+                
+                const source = requestDetails.request_type === 'supplier' ? 'supplier' : 'main_inventory';
+                
+                await connection.execute(
+                    `INSERT INTO inventory_movements (item_id, project_id, movement_type, quantity, source, reference_type, reference_id, performed_by)
+                     VALUES (?, ?, 'in', ?, ?, 'material_request', ?, ?)`,
+                    [requestDetails.item_id, requestDetails.project_id, accepted_qty, source, mrId, userId]
+                );
+
+                if (source === 'main_inventory') {
+                    await connection.execute(
+                        `INSERT INTO inventory_movements (item_id, project_id, movement_type, quantity, source, reference_type, reference_id, performed_by)
+                         VALUES (?, NULL, 'out', ?, 'project_inventory', 'material_request', ?, ?)`,
+                        [requestDetails.item_id, accepted_qty, mrId, userId]
+                    );
+                }
+            }
+        }
+
+        // 4. Update overall material_request status
+        const [allItems] = await connection.execute('SELECT quantity, accepted_quantity, rejected_quantity FROM material_request_items WHERE mr_id = ?', [mrId]);
+        const total_requested = allItems.reduce((sum, item) => sum + item.quantity, 0);
+        const total_accepted = allItems.reduce((sum, item) => sum + item.accepted_quantity, 0);
+        const total_rejected = allItems.reduce((sum, item) => sum + item.rejected_quantity, 0);
+        
+        let newStage = 'verifying';
+        if (total_accepted === total_requested) {
+            newStage = 'completed';
+        } else if (total_accepted + total_rejected >= total_requested) {
+            newStage = total_rejected > 0 ? 'disputed' : 'completed';
+        } else if (total_accepted > 0 || total_rejected > 0) {
+            newStage = 'partially_verified';
+        }
+
+        await connection.execute('UPDATE material_requests SET current_stage = ? WHERE id = ?', [newStage, mrId]);
+
+        // 5. Log the action
+        await connection.execute(
+            `INSERT INTO material_request_actions (mr_id, action, performed_by, remarks) VALUES (?, ?, ?, ?)`,
+            [mrId, 'verification_submitted', userId, 'Verification submitted']
+        );
+
+        await connection.commit();
+        res.status(200).json({status: 'success', message: 'Verification submitted successfully.'});
+
+    } catch (error) {
+        await connection.rollback();
+        return failed(res, 500, `Database Error: ${error}`);
+    } finally {
+        connection.release();
+    }
+}
+
+app.post('/api/material-requests/:id/verify', authMiddleware(['admin', 'foreman']), async (req, res) => {
+    const { id } = req.params;
+    if (!Array.isArray(req.body) || req.body.length === 0) {
+        return failed(res, 400, 'Invalid verification data.');
+    }
+    await verifyDelivery(res, req, id, req.body);
+});
+
+app.get('/api/material-requests/:id/actions', authMiddleware(['all']), async (req, res) => {
+    const { id } = req.params;
+    try {
+        const [actions] = await pool.execute(
+            `SELECT mra.*, u.full_name as performed_by_name 
+             FROM material_request_actions mra
+             JOIN users u ON mra.performed_by = u.user_id
+             WHERE mra.mr_id = ? 
+             ORDER BY mra.created_at ASC`,
+            [id]
+        );
+        res.status(200).json(actions);
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+});
+
+app.post('/api/material-requests/:id/review', authMiddleware(['admin', 'engineer', 'project manager']), async (req, res) => {
+    const { id: mrId } = req.params;
+    const { id: userId } = req.user;
+    const { remarks } = req.body;
+
+    if (!remarks) {
+        return failed(res, 400, 'Remarks are required for the review.');
+    }
+
+    try {
+        await pool.execute(
+            'INSERT INTO material_request_actions (mr_id, action, performed_by, remarks) VALUES (?, ?, ?, ?)',
+            [mrId, 'verification_reviewed', userId, remarks]
+        );
+        res.status(201).json({ status: 'success', message: 'Review recorded successfully.' });
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+});
+
+app.get('/api/assets', authMiddleware(['all']), async (req, res) => {
+    try {
+        const [assets] = await pool.execute(`
+            SELECT 
+                a.asset_id, a.serial_number, a.condition_status, a.usage_status, a.last_inspected_at,
+                i.item_name,
+                p.project_name
+            FROM assets a
+            JOIN items i ON a.item_id = i.item_id
+            LEFT JOIN projects p ON a.project_id = p.project_id
+            ORDER BY i.item_name, a.asset_id
+        `);
+        res.status(200).json(assets);
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+});
+
+app.get('/api/assets/items', authMiddleware(['all']), async (req, res) => {
+    try {
+        const [assetItems] = await pool.execute(
+            `SELECT item_id, item_name FROM items WHERE item_type = 'asset' ORDER BY item_name`
+        );
+        res.status(200).json(assetItems);
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+});
+
+app.post('/api/assets', authMiddleware(['admin']), async (req, res) => {
+    const { item_id, serial_number, condition_status, usage_status, project_id, last_inspected_at } = req.body;
+    if (!item_id) {
+        return failed(res, 400, 'Item ID is required.');
+    }
+    try {
+        const [result] = await pool.execute(
+            `INSERT INTO assets (item_id, serial_number, condition_status, usage_status, project_id, last_inspected_at)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [item_id, serial_number, condition_status, usage_status, project_id, last_inspected_at]
+        );
+        res.status(201).json({ status: 'success', message: 'Asset created successfully.', id: result.insertId });
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+});
+
+app.put('/api/assets/:id', authMiddleware(['admin']), async (req, res) => {
+    const { id } = req.params;
+    const { serial_number, condition_status, usage_status, project_id, last_inspected_at } = req.body;
+    try {
+        const [result] = await pool.execute(
+            `UPDATE assets SET serial_number = ?, condition_status = ?, usage_status = ?, project_id = ?, last_inspected_at = ?
+             WHERE asset_id = ?`,
+            [serial_number, condition_status, usage_status, project_id, last_inspected_at, id]
+        );
+        if (result.affectedRows === 0) {
+            return failed(res, 404, 'Asset not found.');
+        }
+        res.status(200).json({ status: 'success', message: 'Asset updated successfully.' });
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+});
+
+app.delete('/api/assets/:id', authMiddleware(['admin']), async (req, res) => {
+    const { id } = req.params;
+    try {
+        const [result] = await pool.execute('DELETE FROM assets WHERE asset_id = ?', [id]);
+        if (result.affectedRows === 0) {
+            return failed(res, 404, 'Asset not found.');
+        }
+        res.status(200).json({ status: 'success', message: 'Asset deleted successfully.' });
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+});
+
 app.get('/api/materials', authMiddleware(['all']), async(req, res) => {
     const filters = req.query;
     res.status(200).json(await getAllMaterials(res, req.user.role, req.user.projects, filters));
 });
 
 app.post('/api/materials', authMiddleware(['admin', 'engineer', 'project manager', 'foreman']), upload.single('image'), async(req, res) => {
-    const { item_name, item_description, price, unit_id, category_id, supplier_id, size } = req.body;
+    const { item_name, item_description, price, unit_id, category_id, supplier_id, size, item_type, track_condition } = req.body;
     const image_url = req.file ? req.file.filename : 'constrackerWhite.svg'; // Get filename if uploaded
     const { id: userId, role: userRole } = req.user;
 
@@ -1478,7 +2070,7 @@ app.post('/api/materials', authMiddleware(['admin', 'engineer', 'project manager
     }
 
     try {
-        const materialData = { item_name, item_description, price, unit_id, category_id, supplier_id, size, image_url };
+        const materialData = { item_name, item_description, price, unit_id, category_id, supplier_id, size, image_url, item_type, track_condition };
         const materialId = await createMaterial(res, materialData, userId, userRole);
         
         if (userRole === 'admin' || userRole === 'engineer') {
@@ -1581,7 +2173,7 @@ app.put('/api/materials/:materialId/decline', authMiddleware(['engineer']), asyn
 app.put('/api/materials/:materialId', authMiddleware(['admin', 'engineer']), upload.single('image'), async(req, res) => {
     const { materialId } = req.params;
     const { id: userId } = req.user;
-    const { item_name, item_description, size, image_url: old_image_url_from_body } = req.body;
+    const { item_name, item_description, size, image_url: old_image_url_from_body, item_type, track_condition } = req.body;
     const price = parseFloat(req.body.price);
     const unit_id = req.body.unit_id ? parseInt(req.body.unit_id, 10) : undefined;
     const category_id = req.body.category_id ? parseInt(req.body.category_id, 10) : undefined;
@@ -1591,7 +2183,7 @@ app.put('/api/materials/:materialId', authMiddleware(['admin', 'engineer']), upl
 
     try {
         // Fetch old material data for logging changes and to get original image_url if not updated
-        const [oldMaterialResult] = await pool.execute('SELECT item_name, item_description, price, unit_id, category_id, supplier_id, size, image_url FROM items WHERE item_id = ?', [materialId]);
+        const [oldMaterialResult] = await pool.execute('SELECT item_name, item_description, price, unit_id, category_id, supplier_id, size, image_url, item_type, track_condition FROM items WHERE item_id = ?', [materialId]);
         if (oldMaterialResult.length === 0) {
             // If new file was uploaded but material not found, delete it
             if (req.file) {
@@ -1611,7 +2203,9 @@ app.put('/api/materials/:materialId', authMiddleware(['admin', 'engineer']), upl
             category_id: category_id, 
             supplier_id: supplier_id, 
             size: size, 
-            image_url: new_image_filename || oldMaterial.image_url // Ensure image_url is always set
+            image_url: new_image_filename || oldMaterial.image_url, // Ensure image_url is always set
+            item_type: item_type,
+            track_condition: track_condition
         };
 
         const success = await updateMaterial(res, materialId, materialData, userId);
@@ -1657,6 +2251,12 @@ app.put('/api/materials/:materialId', authMiddleware(['admin', 'engineer']), upl
             }
             if (new_image_filename !== oldMaterial.image_url) {
                 logDetails.push({ varName: 'image_url', oldVal: oldMaterial.image_url, newVal: new_image_filename, label: 'Image' });
+            }
+            if (item_type !== undefined && item_type !== oldMaterial.item_type) {
+                logDetails.push({ varName: 'item_type', oldVal: oldMaterial.item_type, newVal: item_type, label: 'Item Type' });
+            }
+            if (track_condition !== undefined && track_condition !== oldMaterial.track_condition) {
+                logDetails.push({ varName: 'track_condition', oldVal: oldMaterial.track_condition, newVal: track_condition, label: 'Track Condition' });
             }
 
             if (logDetails.length > 0) {

@@ -4,6 +4,7 @@ import { alertPopup, warnType, showEmptyPlaceholder } from "/js/popups.js";
 import { hideContents } from "/mainJs/sidebar.js";
 import { createMilestoneOl, milestoneFullOl, showLogDetailsOverlay, createOverlayWithBg, hideOverlayWithBg, showDeleteConfirmation, showOverlayWithBg } from "/mainJs/overlays.js";
 import { div, span, button, createButton, createFilterContainer, createPaginationControls, createInput, createFilterInput, editFormButton } from "/js/components.js";
+import { generateMaterialRequestsContent } from "./materialRequestsContent.js";
 
 const requiredRoles = ['engineer', 'foreman', 'project manager'];
 
@@ -167,6 +168,25 @@ async function createMaterialOverlay(material = null, refreshMaterialsContentFn)
     const materialPriceInput = createInput('text', 'edit', 'Base Price (₱)', 'materialPrice', 'price', material?.price || '', '0.00', 0.01, 99999999.99, 'decimal', 'Minimum 0.01');
     const materialSizeInput = createInput('text', 'edit', 'Size', 'materialSize', 'size', material?.size || '', 'e.g., 2x4, 1/2 inch', null, 255);
 
+    const itemTypeOptions = [
+        { id: 'consumable', name: 'Consumable' },
+        { id: 'non-consumable', name: 'Non-Consumable' },
+        { id: 'asset', name: 'Asset' }
+    ];
+    const { container: itemTypeSelectContainer, select: itemTypeSelect } = createSelect('materialItemTypeSelect', 'Item Type', null, material, material?.item_type, itemTypeOptions);
+
+    const trackConditionContainer = div('trackConditionContainer', 'input-box-containers-checkbox');
+    const trackConditionLabel = document.createElement('label');
+    trackConditionLabel.htmlFor = 'trackConditionCheckbox';
+    trackConditionLabel.classList.add('input-labels');
+    trackConditionLabel.innerText = 'Track Condition';
+    const trackConditionCheckbox = document.createElement('input');
+    trackConditionCheckbox.type = 'checkbox';
+    trackConditionCheckbox.id = 'trackConditionCheckbox';
+    trackConditionCheckbox.name = 'track_condition';
+    trackConditionCheckbox.checked = material?.track_condition || false;
+    trackConditionContainer.append(trackConditionCheckbox, trackConditionLabel);
+
     const imageDropAreaContainer = div('imageDropAreaContainer', 'input-box-containers');
     const imageLabelContainer = div('imageLabelContainer', 'label-container');
     const imageLabel = document.createElement('label');
@@ -266,8 +286,10 @@ async function createMaterialOverlay(material = null, refreshMaterialsContentFn)
         categorySelectContainer,
         supplierSelectContainer,
         unitSelectContainer,
+        itemTypeSelectContainer,
         materialPriceInput,
         materialSizeInput,
+        trackConditionContainer,
         imageDropAreaContainer
     );
 
@@ -282,7 +304,9 @@ async function createMaterialOverlay(material = null, refreshMaterialsContentFn)
             size: materialSizeInput.querySelector('input').value,
             category_id: parseInt(categorySelect.dataset.value),
             supplier_id: parseInt(supplierSelect.dataset.value),
-            unit_id: parseInt(unitSelect.dataset.value)
+            unit_id: parseInt(unitSelect.dataset.value),
+            item_type: itemTypeSelect.dataset.value,
+            track_condition: trackConditionCheckbox.checked ? 1 : 0
         };
         
         if (!payload.item_name || isNaN(payload.price) || payload.price <= 0 || !payload.category_id || !payload.supplier_id || !payload.unit_id) {
@@ -1060,9 +1084,122 @@ async function renderMilestones(role, projectId) {
     return milestoneSectionContainer;
 }
 
-async function renderInventory() {
+async function renderInventory(role, projectId) {
     const inventorySectionContainer = div('inventorySectionContainer');
-    inventorySectionContainer.innerText = 'Inventory';
+    const inventorySectionHeader = div('inventorySectionHeader');
+    const inventoryHeaderTitle = div('inventoryHeaderTitle');
+    inventoryHeaderTitle.innerText = 'Project Inventory';
+    
+    inventorySectionHeader.append(inventoryHeaderTitle);
+
+    const filterContainer = div('inventory-filter-container');
+    const inventoryListContainer = div('inventory-list-container');
+    const paginationContainer = div('inventoryPaginationContainer', 'pagination-container');
+    
+    inventorySectionContainer.append(inventorySectionHeader, filterContainer, inventoryListContainer, paginationContainer);
+
+    let currentPage = 1;
+    let itemsPerPage = 10;
+    let allInventory = [];
+    let filteredInventory = [];
+
+    function renderInventoryTable() {
+        inventoryListContainer.innerHTML = '';
+        paginationContainer.innerHTML = '';
+
+        const itemsToRender = filteredInventory;
+
+        if (itemsToRender.length === 0) {
+            showEmptyPlaceholder('/assets/icons/inventory.png', inventoryListContainer, null, "No inventory data found for this project.");
+            return;
+        }
+
+        const table = document.createElement('table');
+        table.classList.add('inventory-table');
+        const thead = document.createElement('thead');
+        const tbody = document.createElement('tbody');
+
+        const headers = ['Item Name', 'Description', 'Category', 'Unit', 'Stock Balance'];
+        const headerRow = document.createElement('tr');
+        headers.forEach(headerText => {
+            const th = document.createElement('th');
+            th.innerText = headerText;
+            headerRow.append(th);
+        });
+        thead.append(headerRow);
+
+        const start = (currentPage - 1) * itemsPerPage;
+        const end = start + itemsPerPage;
+        const pageItems = itemsToRender.slice(start, end);
+
+        pageItems.forEach(item => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${item.item_name}</td>
+                <td>${item.item_description || 'N/A'}</td>
+                <td>${item.category_name || 'N/A'}</td>
+                <td>${item.unit_name || 'N/A'}</td>
+                <td>${item.stock_balance}</td>
+            `;
+            tbody.append(row);
+        });
+
+        table.append(thead, tbody);
+        inventoryListContainer.append(table);
+
+        const paginationControls = createPaginationControls({
+            currentPage,
+            totalItems: itemsToRender.length,
+            itemsPerPage,
+            onPageChange: (page) => {
+                currentPage = page;
+                renderInventoryTable();
+            },
+            onItemsPerPageChange: (limit) => {
+                itemsPerPage = limit;
+                currentPage = 1;
+                renderInventoryTable();
+            }
+        });
+        paginationContainer.append(paginationControls);
+    }
+
+    function applyFilters() {
+        const nameFilter = document.getElementById('project-inventory-name-filter').value.toLowerCase();
+        
+        filteredInventory = allInventory.filter(item => {
+            const nameMatch = !nameFilter || item.item_name.toLowerCase().includes(nameFilter);
+            return nameMatch;
+        });
+
+        currentPage = 1;
+        renderInventoryTable();
+    }
+
+    async function fetchAndRenderInventory() {
+        inventoryListContainer.innerHTML = '<div class="loading-spinner"></div>';
+        const data = await fetchData(`/api/inventory/project/${projectId}`);
+        
+        if (data === 'error') {
+            inventoryListContainer.innerHTML = '';
+            showEmptyPlaceholder('/assets/icons/inventory.png', inventoryListContainer, null, "An error occurred while fetching inventory data.");
+            allInventory = [];
+        } else {
+            allInventory = data;
+        }
+        
+        applyFilters();
+    }
+    
+    const searchInput = document.createElement('input');
+    searchInput.type = 'text';
+    searchInput.id = 'project-inventory-name-filter';
+    searchInput.placeholder = 'Search by item name...';
+    searchInput.addEventListener('input', applyFilters);
+    filterContainer.append(searchInput);
+
+    await fetchAndRenderInventory();
+    
     return inventorySectionContainer;
 }
 
@@ -1370,6 +1507,10 @@ const tabContents = {
     },
     materials: {
         generateContent: async(role) => await generateMaterialsContent(role),
+        generateGraphs: async() => '' 
+    },
+    'material-requests': {
+        generateContent: async(role) => await generateMaterialRequestsContent(role),
         generateGraphs: async() => '' 
     },
     project: {

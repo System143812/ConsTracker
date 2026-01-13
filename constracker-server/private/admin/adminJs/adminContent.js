@@ -3,10 +3,13 @@ import { formatString, dateFormatting } from "/js/string.js";
 import { alertPopup, warnType, showEmptyPlaceholder } from "/js/popups.js";
 import { div, span, button, createButton, createFilterContainer, createPaginationControls, createInput, createFilterInput, editFormButton, validateInput } from "/js/components.js";
 import { createMilestoneOl, milestoneFullOl, showLogDetailsOverlay, createOverlayWithBg, hideOverlayWithBg, showDeleteConfirmation, showOverlayWithBg } from "/mainJs/overlays.js";
+import { generateInventoryContent } from "/admin/inventoryContent.js";
+import { generateMaterialRequestsContent } from "/admin/materialRequestsContent.js";
+import { generateAssetsContent } from "/admin/assetsContent.js";
 
 const defaultImageBackgroundColors = [
     '#B388EB', '#FFD180', '#80CBC4', '#E1BEE7', '#C5E1A5',
-    '#F48FB1', '#81D4FA', '#FFF59D', '#A7FFEB', '#FFAB91'
+    '#F48FB1', '#81D4FA', '#FFF59D', '#FFAB91'
 ];
 
 function roundDecimal(number) {
@@ -164,6 +167,25 @@ async function createMaterialOverlay(material = null, refreshMaterialsContentFn)
     const materialPriceInput = createInput('text', 'edit', 'Base Price (₱)', 'materialPrice', 'price', material?.price || '', '0.00', 0.01, 99999999.99, 'decimal', 'Minimum 0.01');
     const materialSizeInput = createInput('text', 'edit', 'Size', 'materialSize', 'size', material?.size || '', 'e.g., 2x4, 1/2 inch', null, 255);
 
+    const itemTypeOptions = [
+        { id: 'consumable', name: 'Consumable' },
+        { id: 'non-consumable', name: 'Non-Consumable' },
+        { id: 'asset', name: 'Asset' }
+    ];
+    const { container: itemTypeSelectContainer, select: itemTypeSelect } = createSelect('materialItemTypeSelect', 'Item Type', null, material, material?.item_type, itemTypeOptions);
+
+    const trackConditionContainer = div('trackConditionContainer', 'input-box-containers-checkbox');
+    const trackConditionLabel = document.createElement('label');
+    trackConditionLabel.htmlFor = 'trackConditionCheckbox';
+    trackConditionLabel.classList.add('input-labels');
+    trackConditionLabel.innerText = 'Track Condition';
+    const trackConditionCheckbox = document.createElement('input');
+    trackConditionCheckbox.type = 'checkbox';
+    trackConditionCheckbox.id = 'trackConditionCheckbox';
+    trackConditionCheckbox.name = 'track_condition';
+    trackConditionCheckbox.checked = material?.track_condition || false;
+    trackConditionContainer.append(trackConditionCheckbox, trackConditionLabel);
+
     const imageDropAreaContainer = div('imageDropAreaContainer', 'input-box-containers');
     const imageLabelContainer = div('imageLabelContainer', 'label-container');
     const imageLabel = document.createElement('label');
@@ -263,8 +285,10 @@ async function createMaterialOverlay(material = null, refreshMaterialsContentFn)
         categorySelectContainer,
         supplierSelectContainer,
         unitSelectContainer,
+        itemTypeSelectContainer,
         materialPriceInput,
         materialSizeInput,
+        trackConditionContainer,
         imageDropAreaContainer
     );
 
@@ -306,7 +330,9 @@ async function createMaterialOverlay(material = null, refreshMaterialsContentFn)
             size: materialSizeInput.querySelector('input').value,
             category_id: parseInt(categorySelect.dataset.value),
             supplier_id: parseInt(supplierSelect.dataset.value),
-            unit_id: parseInt(unitSelect.dataset.value)
+            unit_id: parseInt(unitSelect.dataset.value),
+            item_type: itemTypeSelect.dataset.value,
+            track_condition: trackConditionCheckbox.checked ? 1 : 0
         };
         
         if (!isValid || isNaN(payload.price) || payload.price <= 0) {
@@ -1059,12 +1085,14 @@ const tabContents = {
         generateGraphs: async() => await initDashboardGraphs()
     },
     inventory: {
-        generateContent: async function renderInventory(projectId, role, refreshActiveTabContentFn) {
-            const inventorySectionContainer = div('inventorySectionContainer');
-            inventorySectionContainer.innerText = 'Inventory Content for Project: ' + projectId + ' (Role: ' + role + ')'; // Example with parameters
-            return inventorySectionContainer;
+        generateContent: async function renderInventory(role) {
+            return await generateInventoryContent(role);
         },
         generateGraphs: async() => ''
+    },
+    'material-requests': {
+        generateContent: async(role) => await generateMaterialRequestsContent(role),
+        generateGraphs: async() => '' 
     },
     logs: {
         generateContent: async() => await generateLogsContent(),
@@ -1116,12 +1144,6 @@ async function generatePersonnelContent() {
     const personnelBodyContent = document.getElementById('personnelBodyContent');
     personnelBodyContent.innerHTML = '';
     showEmptyPlaceholder('/assets/icons/personnel.png', personnelBodyContent, null, "Personnel Content Coming Soon");
-}
-
-async function generateAssetsContent() {
-    const assetsBodyContent = document.getElementById('assetsBodyContent');
-    assetsBodyContent.innerHTML = '';
-    showEmptyPlaceholder('/assets/icons/inventory.png', assetsBodyContent, null, "Assets Content Coming Soon");
 }
 
 async function generateReportsContent() {
@@ -1412,12 +1434,6 @@ async function generateProjectsContent(role) {
 async function dashboardSummaryCards() {
     const dashboardSummaryCards = div('dashboardSummaryCards', 'summary-cards');
     const dashboardCardData = {
-        activeProjects: {
-            title: "activeProjects",
-            data: "-",
-            info: "No projects so far",
-            color: "darkblue"
-        },
         activePersonnel: {
             title: "activePersonnel",
             data: "-",
@@ -1430,11 +1446,23 @@ async function dashboardSummaryCards() {
             info: "No pending requests so far",
             color: "darkorange"
         },
-        budgetUtilization: {
-            title: "budgetUtilization",
-            data: "36.7%",
-            info: "₱34.3M of ₱93.5M",
-            color: "red"
+        awaitingDeliveries: {
+            title: "awaitingDeliveries",
+            data: "-",
+            info: "No requests awaiting delivery",
+            color: "#FFC107" // amber
+        },
+        partiallyVerified: {
+            title: "partiallyVerified",
+            data: "-",
+            info: "No partially verified requests",
+            color: "#2196F3" // blue
+        },
+        disputedRequests: {
+            title: "disputedRequests",
+            data: "-",
+            info: "No disputed requests",
+            color: "#F44336" // red
         }
     };
 
@@ -1446,20 +1474,19 @@ async function dashboardSummaryCards() {
     if(data === 'error') return;
     const cardData = data[0];
     if(cardData){
-        if(cardData.total_projects !== 0) modifyCardData(dashboardCardData['activeProjects'], cardData.active_projects, `${cardData.total_projects} total projects`);
         if(cardData.total_personnel !== 0) modifyCardData(dashboardCardData['activePersonnel'], cardData.active_personnel, `${cardData.total_personnel} total personnel`);
-        if(cardData.pending_requests !== 0) modifyCardData(dashboardCardData['pendingRequest'], cardData.pending_requests, `Material request awaiting for approval`); 
+        if(cardData.pending_requests > 0) modifyCardData(dashboardCardData['pendingRequest'], cardData.pending_requests, `Material request awaiting for approval`); 
+        if(cardData.awaiting_deliveries > 0) modifyCardData(dashboardCardData['awaitingDeliveries'], cardData.awaiting_deliveries, `Requests awaiting delivery`);
+        if(cardData.partially_verified > 0) modifyCardData(dashboardCardData['partiallyVerified'], cardData.partially_verified, `Partially verified requests`);
+        if(cardData.disputed_requests > 0) modifyCardData(dashboardCardData['disputedRequests'], cardData.disputed_requests, `Disputed requests`);
     }
-    const activeProjectsData = dashboardCardData['activeProjects'];
-    const activePersonnelData = dashboardCardData['activePersonnel'];
-    const pendingRequestData = dashboardCardData['pendingRequest'];
-    const budgetUtilizationData = dashboardCardData['budgetUtilization'];
 
     dashboardSummaryCards.append(
-        createSummaryCards(activeProjectsData), 
-        createSummaryCards(activePersonnelData),
-        createSummaryCards(pendingRequestData),
-        createSummaryCards(budgetUtilizationData)
+        createSummaryCards(dashboardCardData['activePersonnel']),
+        createSummaryCards(dashboardCardData['pendingRequest']),
+        createSummaryCards(dashboardCardData['awaitingDeliveries']),
+        createSummaryCards(dashboardCardData['partiallyVerified']),
+        createSummaryCards(dashboardCardData['disputedRequests'])
     );
     return dashboardSummaryCards;
 }
@@ -1936,6 +1963,126 @@ async function renderMilestones(role, projectId) {
     
     return milestoneSectionContainer;
 }
+
+async function renderInventory(role, projectId) {
+    const inventorySectionContainer = div('inventorySectionContainer');
+    const inventorySectionHeader = div('inventorySectionHeader');
+    const inventoryHeaderTitle = div('inventoryHeaderTitle');
+    inventoryHeaderTitle.innerText = 'Project Inventory';
+    
+    inventorySectionHeader.append(inventoryHeaderTitle);
+
+    const filterContainer = div('inventory-filter-container');
+    const inventoryListContainer = div('inventory-list-container');
+    const paginationContainer = div('inventoryPaginationContainer', 'pagination-container');
+    
+    inventorySectionContainer.append(inventorySectionHeader, filterContainer, inventoryListContainer, paginationContainer);
+
+    let currentPage = 1;
+    let itemsPerPage = 10;
+    let allInventory = [];
+    let filteredInventory = [];
+
+    function renderInventoryTable() {
+        inventoryListContainer.innerHTML = '';
+        paginationContainer.innerHTML = '';
+
+        const itemsToRender = filteredInventory;
+
+        if (itemsToRender.length === 0) {
+            showEmptyPlaceholder('/assets/icons/inventory.png', inventoryListContainer, null, "No inventory data found for this project.");
+            return;
+        }
+
+        const table = document.createElement('table');
+        table.classList.add('inventory-table');
+        const thead = document.createElement('thead');
+        const tbody = document.createElement('tbody');
+
+        const headers = ['Item Name', 'Description', 'Category', 'Unit', 'Stock Balance'];
+        const headerRow = document.createElement('tr');
+        headers.forEach(headerText => {
+            const th = document.createElement('th');
+            th.innerText = headerText;
+            headerRow.append(th);
+        });
+        thead.append(headerRow);
+
+        const start = (currentPage - 1) * itemsPerPage;
+        const end = start + itemsPerPage;
+        const pageItems = itemsToRender.slice(start, end);
+
+        pageItems.forEach(item => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${item.item_name}</td>
+                <td>${item.item_description || 'N/A'}</td>
+                <td>${item.category_name || 'N/A'}</td>
+                <td>${item.unit_name || 'N/A'}</td>
+                <td>${item.stock_balance}</td>
+            `;
+            tbody.append(row);
+        });
+
+        table.append(thead, tbody);
+        inventoryListContainer.append(table);
+
+        const paginationControls = createPaginationControls({
+            currentPage,
+            totalItems: itemsToRender.length,
+            itemsPerPage,
+            onPageChange: (page) => {
+                currentPage = page;
+                renderInventoryTable();
+            },
+            onItemsPerPageChange: (limit) => {
+                itemsPerPage = limit;
+                currentPage = 1;
+                renderInventoryTable();
+            }
+        });
+        paginationContainer.append(paginationControls);
+    }
+
+    function applyFilters() {
+        const nameFilter = document.getElementById('project-inventory-name-filter').value.toLowerCase();
+        
+        filteredInventory = allInventory.filter(item => {
+            const nameMatch = !nameFilter || item.item_name.toLowerCase().includes(nameFilter);
+            return nameMatch;
+        });
+
+        currentPage = 1;
+        renderInventoryTable();
+    }
+
+    async function fetchAndRenderInventory() {
+        inventoryListContainer.innerHTML = '<div class="loading-spinner"></div>';
+        const data = await fetchData(`/api/inventory/project/${projectId}`);
+        
+        if (data === 'error') {
+            inventoryListContainer.innerHTML = '';
+            showEmptyPlaceholder('/assets/icons/inventory.png', inventoryListContainer, null, "An error occurred while fetching inventory data.");
+            allInventory = [];
+        } else {
+            allInventory = data;
+        }
+        
+        applyFilters();
+    }
+    
+    const searchInput = document.createElement('input');
+    searchInput.type = 'text';
+    searchInput.id = 'project-inventory-name-filter';
+    searchInput.placeholder = 'Search by item name...';
+    searchInput.addEventListener('input', applyFilters);
+    filterContainer.append(searchInput);
+
+    await fetchAndRenderInventory();
+    
+    return inventorySectionContainer;
+}
+
 
 async function renderWorker(role, projectId) {
     const workerSectionContainer = div('workerSectionContainer');
