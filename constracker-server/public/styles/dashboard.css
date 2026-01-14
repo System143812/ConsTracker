@@ -461,8 +461,8 @@ body {
     justify-content: space-between !important;
     align-items: center;
     width: 100%;
-    height: fit-content;
-    padding: 1.5rem;
+    padding: 1rem 2rem;
+    box-sizing: border-box;
 }
 
 #projectsBodyHeader {
@@ -1607,6 +1607,14 @@ body {
     color: #ffffff !important; /* Forces white text */
 }
 
+
+/* Ensure nested text/icon spans stay white (global * rule sets span color) */
+.solid-buttons.blue .btn-texts,
+.solid-buttons.blue .btn-icons,
+#addPersonnelBtn .btn-texts,
+#addPersonnelBtn .btn-icons {
+    color: #ffffff !important;
+}
 .solid-buttons.blue:hover {
     background-color: var(--blue-text) !important;
 }

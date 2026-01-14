@@ -90,7 +90,7 @@ function filterByName(applyFilterCallback, filtersForm, searchType) {
             }
             const filteredUrlParams = getFilteredValues(filtersForm);
             applyFilterCallback(filteredUrlParams);
-        }, 300); // 300ms delay
+        }, 100); // 100ms delay for near real-time filtering
     });
     return filterNameContainer;
 }
@@ -118,19 +118,21 @@ async function filterByProject(applyFilterCallback, filtersForm) {
     return filterProjectGroup;
 }
 
-async function createSortFilter(applyFilterCallback, filtersForm, defaultSort = 'newest') {
+async function createSortFilter(applyFilterCallback, filtersForm, defaultSort = 'newest', sortOptionsOverride = null) {
     const sortContainer = div('sortFilterContainer', 'filter-group');
     const title = span('sortFilterTitle', 'filter-title');
     title.textContent = 'Sort by';
     
     const sortHidden = createFilterInput('hidden', '', 'sortFilterHidden', 'sort', defaultSort);
     
-    const sortOptions = [
-        { id: 'newest', label: 'Newest' },
-        { id: 'oldest', label: 'Oldest' },
-        { id: 'atoz', label: 'Alphabetical (A-Z)' },
-        { id: 'ztoa', label: 'Alphabetical (Z-A)' }
-    ];
+    const sortOptions = Array.isArray(sortOptionsOverride) && sortOptionsOverride.length
+        ? sortOptionsOverride
+        : [
+            { id: 'newest', label: 'Newest' },
+            { id: 'oldest', label: 'Oldest' },
+            { id: 'atoz', label: 'Alphabetical (A-Z)' },
+            { id: 'ztoa', label: 'Alphabetical (Z-A)' }
+        ];
 
     const radioGroup = div('sortRadioGroup', 'radio-group');
 
@@ -226,15 +228,17 @@ async function filterByCategory(applyFilterCallback, filtersForm) {
     return filterCategoryGroup;
 }
 
-async function filterByStatus(applyFilterCallback, filtersForm) {
+async function filterByStatus(applyFilterCallback, filtersForm, statusOptionsOverride = null) {
     const filterStatusGroup = div('filterStatusGroup', 'filter-group');
     const title = span('filterStatusTitle', 'filter-title');
     title.textContent = 'Status';
 
-    const statusOptions = [
-        { id: 'approved', label: 'Approved' },
-        { id: 'pending', label: 'Pending' }
-    ];
+    const statusOptions = Array.isArray(statusOptionsOverride) && statusOptionsOverride.length
+        ? statusOptionsOverride
+        : [
+            { id: 'approved', label: 'Approved' },
+            { id: 'pending', label: 'Pending' }
+        ];
 
     const checkboxGroup = div('statusCheckboxGroup', 'checkbox-group');
     const statusHidden = createFilterInput('hidden', '', 'filterByStatusHidden', 'status', 'all');
@@ -273,12 +277,22 @@ async function filterByStatus(applyFilterCallback, filtersForm) {
 
 export async function createFilterContainer(applyFilterCallback, searchBarPlaceholder = null, defaultFilterList, searchBarType = null, defaultSort = 'newest') {
     const filterList = Object.keys(defaultFilterList);
+    // Allow per-screen overrides while staying backward compatible.
+    // Supported shapes:
+    //   sort: true OR { default: 'newest', options: [{id,label}, ...] }
+    //   status: true OR { options: [{id,label}, ...] }
+    const sortConfig = (defaultFilterList && typeof defaultFilterList.sort === 'object') ? defaultFilterList.sort : null;
+    const statusConfig = (defaultFilterList && typeof defaultFilterList.status === 'object') ? defaultFilterList.status : null;
+    const sortDefault = sortConfig?.default ?? defaultSort;
+    const sortOptionsOverride = sortConfig?.options ?? null;
+    const statusOptionsOverride = statusConfig?.options ?? null;
+
     const filtersObj = {
         name: {
             filterFunction: (applyFilterCallback, filtersForm) => filterByName(applyFilterCallback, filtersForm, searchBarType)
         },
         sort: { // Renamed from recent to sort
-            filterFunction: async(applyFilterCallback, filtersForm) => await createSortFilter(applyFilterCallback, filtersForm, defaultSort)
+            filterFunction: async(applyFilterCallback, filtersForm) => await createSortFilter(applyFilterCallback, filtersForm, sortDefault, sortOptionsOverride)
         },
         project: {
             filterFunction: async(applyFilterCallback, filtersForm) => await filterByProject(applyFilterCallback, filtersForm)
@@ -293,7 +307,7 @@ export async function createFilterContainer(applyFilterCallback, searchBarPlaceh
             filterFunction: async(applyFilterCallback, filtersForm) => await filterByCategory(applyFilterCallback, filtersForm)
         },
         status: {
-            filterFunction: async(applyFilterCallback, filtersForm) => await filterByStatus(applyFilterCallback, filtersForm)
+            filterFunction: async(applyFilterCallback, filtersForm) => await filterByStatus(applyFilterCallback, filtersForm, statusOptionsOverride)
         }
     }
 
