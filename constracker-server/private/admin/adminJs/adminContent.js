@@ -2,6 +2,7 @@ import { fetchData, fetchPostJson } from "/js/apiURL.js";
 import { formatString, dateFormatting } from "/js/string.js";
 import { alertPopup, warnType, showEmptyPlaceholder } from "/js/popups.js";
 import { div, span, button, createButton, createFilterContainer, createPaginationControls, createInput, createFilterInput, editFormButton, validateInput } from "/js/components.js";
+import { renderSettingsPage } from "/mainJs/settings.js";
 // Fix: Combine these into one line and ensure the path is correct
 import { createMilestoneOl, milestoneFullOl, showLogDetailsOverlay, createOverlayWithBg, hideOverlayWithBg, showDeleteConfirmation, showOverlayWithBg as overlayShow } from "/mainJs/overlays.js";
 // Update this line at the top of adminContent.js
@@ -1087,7 +1088,7 @@ const tabContents = {
         generateGraphs: async() => ''
     },
     settings: {
-        generateContent: async() => '',
+        generateContent: async() => await generateSettingsContent(),
         generateGraphs: async() => ''
     }
 }
@@ -1139,6 +1140,14 @@ async function generatePersonnelContent() {
     personnelBodyContent.innerHTML = '';
     showEmptyPlaceholder('/assets/icons/personnel.png', personnelBodyContent, null, "Personnel Content Coming Soon");
 }
+
+async function generateSettingsContent() {
+    const settingsBodyContent = document.getElementById('settingsBodyContent');
+    if (!settingsBodyContent) return;
+    settingsBodyContent.innerHTML = '';
+    await renderSettingsPage(settingsBodyContent);
+}
+
 
 export async function renderPersonnel(params) {
     const workerSectionContainer = div('workerSectionContainer', 'worker-section');
@@ -1244,18 +1253,16 @@ export async function displayPersonnel(container, parentId, role) {
         listGrid.innerHTML = '';
         let filtered = allPersonnel.filter(user => {
             const nameMatch = (user.full_name || "").toLowerCase().includes(keyword.toLowerCase());
-            const statusValues = (status === 'all') ? ['active', 'inactive'] : String(status).split(',').map(s => s.trim()).filter(Boolean);
-            const isActive = user.is_active == 1;
-            const statusMatch = (status === 'all') ||
-                                (statusValues.includes('active') && isActive) ||
-                                (statusValues.includes('inactive') && !isActive);
+            const statusMatch = (status === 'all') || 
+                                (status === 'active' && user.is_active == 1) || 
+                                (status === 'inactive' && user.is_active == 0);
             return nameMatch && statusMatch;
         });
 
         filtered.sort((a, b) => {
             const valA = (a.full_name || "").toUpperCase();
             const valB = (b.full_name || "").toUpperCase();
-            return (sortOrder === 'ztoa') ? valB.localeCompare(valA) : valA.localeCompare(valB);
+            return sortOrder === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
         });
 
         if (filtered.length === 0) {
@@ -1271,28 +1278,39 @@ export async function displayPersonnel(container, parentId, role) {
     // --- 4. THE FILTER BAR ---
     const filterBar = await createFilterContainer(
         (urlParams) => {
-            const keyword = urlParams.get('name') || '';
-            const sort = urlParams.get('sort') || 'atoz';
+            // createFilterContainer's name search writes to the `name` param.
+            const rawKeyword = urlParams.get('name') || 'all';
+            const keyword = rawKeyword === 'all' ? '' : rawKeyword;
+
+            // Sort is optional for this screen; default to A-Z.
+            const sort = urlParams.get('sort') || 'asc';
+
+            // Status should be single-select: all | active | inactive.
             const status = urlParams.get('status') || 'all';
+
             renderPersonnelCards(keyword, sort, status);
         },
         'Search personnel by name...',
         {
             name: true,
             sort: {
-                default: 'atoz',
+                default: 'asc',
                 options: [
-                    { id: 'atoz', label: 'Name (A-Z)' },
-                    { id: 'ztoa', label: 'Name (Z-A)' }
+                    { id: 'asc', label: 'Alphabetical (A-Z)' },
+                    { id: 'desc', label: 'Alphabetical (Z-A)' }
                 ]
             },
             status: {
+                mode: 'single',
                 options: [
+                    { id: 'all', label: 'All' },
                     { id: 'active', label: 'Active' },
                     { id: 'inactive', label: 'Inactive' }
                 ]
             }
-        }
+        },
+        'name',
+        'asc'
     );
 
     filterArea.append(filterBar);
@@ -2367,130 +2385,172 @@ async function refreshAdminProjectContent(currentProjectId, role) {
 
 
 async function showAddUserOverlay() {
-    const { overlayBackground, overlayHeader, overlayBody } = createOverlayWithBg();
-    overlayHeader.innerText = "Register New Personnel";
-    
-    const formWrapper = div('regFormWrapper', 'input-containers');
-    formWrapper.style.padding = "20px";
-    formWrapper.style.display = "flex";
-    formWrapper.style.flexDirection = "column";
-    formWrapper.style.gap = "12px";
+    const { overlayBackground, overlayContainer, overlayHeader, overlayBody } = createOverlayWithBg();
+    overlayContainer.classList.add('modal-lg', 'personnel-add-modal');
 
-    // 1. Full Name
-    const nameLabel = span(null, 'labels');
-    nameLabel.innerText = "Full Name";
-    const nameInput = document.createElement('input');
-    nameInput.id = 'regFullName';
-    nameInput.className = 'input-boxes';
-    nameInput.placeholder = "e.g. Juan Dela Cruz";
+    // Header (title + close)
+    overlayHeader.innerHTML = '';
+    const headerWrap = div('', 'overlay-header-containers overlay-header-flex');
+    const titleWrap = div('', 'overlay-title-wrap');
+    const title = span('', 'overlay-title');
+    const subtitle = span('', 'overlay-subtitle');
+    title.innerText = 'Register New Personnel';
+    subtitle.innerText = 'Create an account and send credentials to the new team member.';
+    titleWrap.append(title, subtitle);
 
-    // 2. Email Address
-    const emailLabel = span(null, 'labels');
-    emailLabel.innerText = "Email Address";
-    const emailInput = document.createElement('input');
-    emailInput.id = 'regEmailInput';
-    emailInput.type = 'email';
-    emailInput.className = 'input-boxes';
-    emailInput.placeholder = "e.g. juan@company.com";
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'overlay-close-btn';
+    closeBtn.setAttribute('aria-label', 'Close');
+    closeBtn.innerHTML = '&times;';
+    closeBtn.addEventListener('click', () => hideOverlayWithBg(overlayBackground));
 
-    // 3. Role Selection
-    const roleLabel = span(null, 'labels');
-    roleLabel.innerText = "Role";
+    headerWrap.append(titleWrap, closeBtn);
+    overlayHeader.append(headerWrap);
+
+    overlayBody.innerHTML = '';
+
+    // Form
+    const form = document.createElement('form');
+    form.id = 'regPersonnelForm';
+    form.className = 'form-edit-forms personnel-add-form';
+
+    const nameInputBox = createInput('text', 'edit', 'Full Name', 'regFullName', 'full_name', '', 'e.g. Juan Dela Cruz', null, 150);
+    const emailInputBox = createInput('email', 'edit', 'Email Address', 'regEmailInput', 'email', '', 'e.g. juan@company.com', null, 150);
+
+    // Role select (styled like inputs)
+    const roleBox = div('regRoleBox', 'input-box-containers');
+    const roleLabel = document.createElement('label');
+    roleLabel.className = 'input-labels';
+    roleLabel.htmlFor = 'regRoleInput';
+    roleLabel.innerText = 'Role';
+
     const roleSelect = document.createElement('select');
     roleSelect.id = 'regRoleInput';
-    roleSelect.className = 'input-boxes';
+    roleSelect.name = 'role';
+    roleSelect.className = 'input-fields edit';
     roleSelect.innerHTML = '<option value="">Loading roles...</option>';
 
-    // 4. Password Mask Container
-    const successContainer = div('regSuccessContainer', 'input-containers');
-    successContainer.id = 'regSuccessContainer'; // Added ID for easier access
-    successContainer.style.display = "none";
-    
-    const passLabel = span(null, 'labels');
-    passLabel.innerText = "Temporary Password Generated";
-    
+    const roleErr = span('', 'error-messages');
+    roleErr.dataset.errMsg = 'Role Required';
+    roleErr.dataset.defaultMsg = ' ';
+    roleErr.innerText = roleErr.dataset.defaultMsg;
+
+    roleSelect.addEventListener('change', () => validateInput(roleSelect));
+
+    roleBox.append(roleLabel, roleSelect, roleErr);
+
+    // Success (masked password) - only for confirmation
+    const successBox = div('regSuccessContainer', 'input-box-containers');
+    successBox.style.display = 'none';
+    const passLabel = document.createElement('label');
+    passLabel.className = 'input-labels';
+    passLabel.innerText = 'Temporary Password Generated';
+
     const maskInput = document.createElement('input');
     maskInput.id = 'regMaskInput';
     maskInput.readOnly = true;
-    maskInput.className = 'input-boxes';
-    maskInput.style.textAlign = "center";
-    maskInput.style.letterSpacing = "5px";
-    maskInput.style.backgroundColor = "#f9f9f9";
-    
-    successContainer.append(passLabel, maskInput);
+    maskInput.className = 'input-fields read';
+    maskInput.style.textAlign = 'center';
+    maskInput.style.letterSpacing = '6px';
 
-    const submitBtn = createButton('regSubmitBtn', 'primary-btn', 'Generate & Send Credentials');
-    submitBtn.style.marginTop = "10px";
+    const passNote = span('', 'error-messages');
+    passNote.dataset.defaultMsg = 'Credentials were sent via email.';
+    passNote.innerText = passNote.dataset.defaultMsg;
 
-    formWrapper.append(nameLabel, nameInput, emailLabel, emailInput, roleLabel, roleSelect, successContainer, submitBtn);
-    overlayBody.append(formWrapper);
-    
+    successBox.append(passLabel, maskInput, passNote);
+
+    // Actions
+    const actions = div('regActions', 'overlay-action-row');
+    const cancelBtn = createButton('regCancelBtn', 'glass-buttons', 'Cancel', 'regCancelTxt');
+    const submitBtn = createButton('regSubmitBtn', 'solid-buttons', 'Generate & Send Credentials', 'regSubmitTxt');
+
+    cancelBtn.type = 'button';
+    submitBtn.type = 'button';
+
+    cancelBtn.addEventListener('click', () => hideOverlayWithBg(overlayBackground));
+
+    actions.append(cancelBtn, submitBtn);
+
+    form.append(nameInputBox, emailInputBox, roleBox, successBox, actions);
+    overlayBody.append(form);
+
     overlayShow(overlayBackground);
 
-    // Populate Roles
+    // Populate roles
     try {
         const roles = await fetchData('/api/roles');
         if (roles && roles.length > 0) {
-            roleSelect.innerHTML = roles.map(r => `<option value="${r}">${formatString(r)}</option>`).join('');
+            roleSelect.innerHTML = '<option value="">Select a role...</option>' + roles.map(r => `<option value="${r}">${formatString(r)}</option>`).join('');
         } else {
             roleSelect.innerHTML = `
+                <option value="">Select a role...</option>
                 <option value="admin">Admin</option>
                 <option value="engineer">Engineer</option>
                 <option value="foreman">Foreman</option>
                 <option value="project manager">Project Manager</option>`;
         }
     } catch (e) {
-        roleSelect.innerHTML = '<option value="engineer">Engineer</option>';
+        roleSelect.innerHTML = `
+            <option value="">Select a role...</option>
+            <option value="engineer">Engineer</option>
+            <option value="foreman">Foreman</option>
+            <option value="project manager">Project Manager</option>`;
     }
 
-    submitBtn.addEventListener('click', async () => {
-        // Fetch current values from DOM
-        const nameVal = document.getElementById('regFullName').value.trim();
-        const emailVal = document.getElementById('regEmailInput').value.trim();
-        const roleVal = document.getElementById('regRoleInput').value;
+    async function submit() {
+        const nameVal = document.getElementById('regFullName')?.value.trim();
+        const emailVal = document.getElementById('regEmailInput')?.value.trim();
+        const roleVal = document.getElementById('regRoleInput')?.value;
+
+        // Basic validation
+        validateInput(document.getElementById('regFullName'));
+        validateInput(document.getElementById('regEmailInput'));
+        validateInput(document.getElementById('regRoleInput'));
 
         if (!nameVal || !emailVal || !roleVal) {
-            return alertPopup('warn', 'Please fill in all fields');
+            return alertPopup('warn', 'Please complete all required fields');
         }
 
         submitBtn.disabled = true;
-        submitBtn.innerText = "Processing...";
+        submitBtn.classList.add('loading');
+        const originalTxt = submitBtn.querySelector('.btn-texts')?.innerText || submitBtn.innerText;
+        if (submitBtn.querySelector('.btn-texts')) submitBtn.querySelector('.btn-texts').innerText = 'Sending...';
+        else submitBtn.innerText = 'Sending...';
 
         try {
             const response = await fetch('/api/register/generate-password', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    fullName: nameVal, 
-                    email: emailVal, 
-                    role: roleVal 
-                })
+                body: JSON.stringify({ fullName: nameVal, email: emailVal, role: roleVal })
             });
 
             const data = await response.json();
+            if (!data.success) throw new Error(data.message || 'Failed to create account');
 
-            if (data.success) {
-                // UI feedback
-                const sc = document.getElementById('regSuccessContainer');
-                const mi = document.getElementById('regMaskInput');
-                
-                sc.style.display = "block";
-                mi.value = "****************"; // Secure mask
-                
-                submitBtn.innerText = "Credentials Sent!";
-                submitBtn.style.backgroundColor = "#28a745";
-                alertPopup('success', `Account created for ${nameVal}`);
+            successBox.style.display = 'block';
+            maskInput.value = '****************';
 
-                // Refresh the personnel list
-                const userListContainer = document.getElementById('userListContainer');
-                if (userListContainer) fetchAndRenderUsers(userListContainer);
-            } else {
-                throw new Error(data.message || "Failed to create account");
-            }
-        } catch (error) {
+            if (submitBtn.querySelector('.btn-texts')) submitBtn.querySelector('.btn-texts').innerText = 'Credentials Sent';
+            else submitBtn.innerText = 'Credentials Sent';
+
+            submitBtn.disabled = true;
+            alertPopup('success', `Account created for ${nameVal}`);
+
+            // Refresh personnel list
+            const userListContainer = document.getElementById('userListContainer');
+            if (userListContainer) fetchAndRenderUsers(userListContainer);
+
+        } catch (err) {
             submitBtn.disabled = false;
-            submitBtn.innerText = "Try Again";
-            alertPopup('error', error.message);
+            if (submitBtn.querySelector('.btn-texts')) submitBtn.querySelector('.btn-texts').innerText = originalTxt;
+            else submitBtn.innerText = originalTxt;
+            alertPopup('error', err.message);
+        } finally {
+            submitBtn.classList.remove('loading');
         }
-    });
+    }
+
+    submitBtn.addEventListener('click', submit);
+    form.addEventListener('submit', (e) => { e.preventDefault(); submit(); });
 }

@@ -228,20 +228,59 @@ async function filterByCategory(applyFilterCallback, filtersForm) {
     return filterCategoryGroup;
 }
 
+// statusOptionsOverride supports either:
+//  - Array<{id,label}>  -> multi-select checkboxes (legacy default)
+//  - { mode: 'single'|'multi', options: Array<{id,label}> } -> configurable
 async function filterByStatus(applyFilterCallback, filtersForm, statusOptionsOverride = null) {
     const filterStatusGroup = div('filterStatusGroup', 'filter-group');
     const title = span('filterStatusTitle', 'filter-title');
     title.textContent = 'Status';
 
-    const statusOptions = Array.isArray(statusOptionsOverride) && statusOptionsOverride.length
-        ? statusOptionsOverride
+    const statusConfig = Array.isArray(statusOptionsOverride)
+        ? { mode: 'multi', options: statusOptionsOverride }
+        : (statusOptionsOverride && typeof statusOptionsOverride === 'object')
+            ? { mode: statusOptionsOverride.mode || 'multi', options: statusOptionsOverride.options || [] }
+            : { mode: 'multi', options: [] };
+
+    const statusOptions = Array.isArray(statusConfig.options) && statusConfig.options.length
+        ? statusConfig.options
         : [
             { id: 'approved', label: 'Approved' },
             { id: 'pending', label: 'Pending' }
         ];
 
-    const checkboxGroup = div('statusCheckboxGroup', 'checkbox-group');
     const statusHidden = createFilterInput('hidden', '', 'filterByStatusHidden', 'status', 'all');
+
+    if (statusConfig.mode === 'single') {
+        const radioGroup = div('statusRadioGroup', 'radio-group');
+
+        function triggerUpdate() {
+            const checked = radioGroup.querySelector('input[type="radio"]:checked');
+            statusHidden.dataset.value = checked ? checked.id : 'all';
+            const filteredUrlParams = getFilteredValues(filtersForm);
+            applyFilterCallback(filteredUrlParams);
+        }
+
+        statusOptions.forEach(option => {
+            const radioContainer = div(`${option.id}RadioContainer`, 'radio-container');
+            const input = document.createElement('input');
+            input.type = 'radio';
+            input.name = 'statusRadioGroup';
+            input.id = option.id;
+            const label = document.createElement('label');
+            label.htmlFor = option.id;
+            label.textContent = option.label;
+            input.addEventListener('change', triggerUpdate);
+            radioContainer.append(input, label);
+            radioGroup.append(radioContainer);
+        });
+
+        filterStatusGroup.append(title, statusHidden, radioGroup);
+        return filterStatusGroup;
+    }
+
+    // Legacy multi-select (checkbox)
+    const checkboxGroup = div('statusCheckboxGroup', 'checkbox-group');
 
     function triggerUpdate() {
         const selectedStatuses = [];
@@ -251,22 +290,19 @@ async function filterByStatus(applyFilterCallback, filtersForm, statusOptionsOve
         });
 
         statusHidden.dataset.value = selectedStatuses.length > 0 ? selectedStatuses.join(',') : 'all';
-        
         const filteredUrlParams = getFilteredValues(filtersForm);
         applyFilterCallback(filteredUrlParams);
     }
 
     statusOptions.forEach(option => {
-        const checkboxContainer = div(`${option.id}CheckboxContainer`, 'checkbox-container'); // Changed from radio-container
+        const checkboxContainer = div(`${option.id}CheckboxContainer`, 'checkbox-container');
         const input = document.createElement('input');
         input.type = 'checkbox';
         input.id = option.id;
         const label = document.createElement('label');
         label.htmlFor = option.id;
         label.textContent = option.label;
-        
         input.addEventListener('change', triggerUpdate);
-
         checkboxContainer.append(input, label);
         checkboxGroup.append(checkboxContainer);
     });
@@ -285,7 +321,8 @@ export async function createFilterContainer(applyFilterCallback, searchBarPlaceh
     const statusConfig = (defaultFilterList && typeof defaultFilterList.status === 'object') ? defaultFilterList.status : null;
     const sortDefault = sortConfig?.default ?? defaultSort;
     const sortOptionsOverride = sortConfig?.options ?? null;
-    const statusOptionsOverride = statusConfig?.options ?? null;
+    // If statusConfig is provided, pass it through so the status filter can support radio mode.
+    const statusOptionsOverride = statusConfig ? statusConfig : null;
 
     const filtersObj = {
         name: {
