@@ -1129,7 +1129,543 @@ async function generateReportsContent() {
 async function generateAnalyticsContent() {
     const analyticsBodyContent = document.getElementById('analyticsBodyContent');
     analyticsBodyContent.innerHTML = '';
-    showEmptyPlaceholder('/assets/icons/analytics.png', analyticsBodyContent, null, "Analytics Content Coming Soon");
+
+    // Filter Section
+    const filterSection = div('', 'analytics-filter-section');
+    
+    // Date Range Filter
+    const dateRangeControl = div('', 'analytics-filter-control');
+    const dateRangeLabel = span('', 'analytics-filter-label');
+    dateRangeLabel.innerText = 'Date Range';
+    const dateRangeSelect = document.createElement('select');
+    dateRangeSelect.className = 'analytics-filter-select';
+    dateRangeSelect.id = 'analyticsDateRange';
+    dateRangeSelect.innerHTML = `
+        <option value="today">Today</option>
+        <option value="this-week">This Week</option>
+        <option value="this-month" selected>This Month</option>
+        <option value="last-month">Last Month</option>
+        <option value="this-year">This Year</option>
+        <option value="custom">Custom Range</option>
+    `;
+    dateRangeControl.append(dateRangeLabel, dateRangeSelect);
+
+    filterSection.append(dateRangeControl);
+
+    // Event listeners for filters
+    dateRangeSelect.addEventListener('change', (e) => {
+        console.log('Date range changed to:', e.target.value);
+    });
+
+    // Inventory Overview Section Title
+    const inventoryTitle = span('', 'analytics-section-title');
+    inventoryTitle.innerText = 'Inventory Overview';
+
+    // Metric Cards Grid
+    const metricsGrid = div('', 'analytics-metrics-grid');
+    
+    const metrics = [
+        {
+            label: 'TOTAL ITEMS',
+            value: '2,847',
+            subtext: 'Across all categories',
+            status: 'success',
+            statusText: '↑ 12% from last month'
+        },
+        {
+            label: 'INVENTORY VALUE',
+            value: '₱485,320',
+            subtext: 'Total current value',
+            status: 'success',
+            statusText: '↑ 8.5% growth'
+        },
+        {
+            label: 'LOW STOCK ITEMS',
+            value: '24',
+            subtext: 'Require attention',
+            status: 'warning',
+            statusText: 'Reorder soon'
+        },
+        {
+            label: 'OUT OF STOCK',
+            value: '5',
+            subtext: 'Unavailable items',
+            status: 'error',
+            statusText: 'Urgent action needed'
+        },
+        {
+            label: 'OVERSTOCKED ITEMS',
+            value: '12',
+            subtext: 'Excess inventory',
+            status: 'info',
+            statusText: 'Review allocation'
+        },
+        {
+            label: 'STOCK TURNOVER RATE',
+            value: '4.2x',
+            subtext: 'Per year average',
+            status: 'success',
+            statusText: 'Healthy rate'
+        }
+    ];
+
+    metrics.forEach(metric => {
+        const card = createAnalyticsMetricCard(metric);
+        metricsGrid.append(card);
+    });
+
+    analyticsBodyContent.append(filterSection, inventoryTitle, metricsGrid);
+
+    // Material Usage Per Project Section
+    const materialUsageTitle = span('', 'analytics-section-title');
+    materialUsageTitle.innerText = 'Material Usage Per Project';
+    
+    const materialUsageTable = createMaterialUsageTable();
+    
+    // Create header with title and search
+    const materialUsageHeader = div('', 'analytics-section-header');
+    materialUsageHeader.append(materialUsageTitle, materialUsageTable.searchSection);
+    
+    analyticsBodyContent.append(materialUsageHeader, materialUsageTable.container);
+
+    // Waste and Damage Cost Section
+    const wasteDamageTitle = span('', 'analytics-section-title');
+    wasteDamageTitle.innerText = 'Waste and Damage Cost Per Project';
+    
+    const wasteDamageTable = createWasteDamageTable();
+    
+    // Create header with title and search
+    const wasteDamageHeader = div('', 'analytics-section-header');
+    wasteDamageHeader.append(wasteDamageTitle, wasteDamageTable.searchSection);
+    
+    analyticsBodyContent.append(wasteDamageHeader, wasteDamageTable.container);
+}
+
+function createWasteDamageTable() {
+    const container = div('', 'waste-damage-container');
+    
+    // Search bar section
+    const searchSection = div('', 'waste-damage-search-section');
+    const searchInput = document.createElement('input');
+    searchInput.type = 'text';
+    searchInput.className = 'waste-damage-search-input';
+    searchInput.placeholder = 'Search project';
+    searchSection.append(searchInput);
+    
+    // Table wrapper
+    const tableWrapper = div('', 'waste-damage-table-wrapper');
+    const table = document.createElement('table');
+    table.className = 'waste-damage-table';
+    
+    // Table header
+    const thead = document.createElement('thead');
+    const headerRow = document.createElement('tr');
+    const headers = ['Project Name', 'Total Items Lost', 'Total Waste Value', 'Action'];
+    headers.forEach(headerText => {
+        const th = document.createElement('th');
+        th.innerText = headerText;
+        headerRow.append(th);
+    });
+    thead.append(headerRow);
+    table.append(thead);
+    
+    // Table body with sample data
+    const tbody = document.createElement('tbody');
+    const projectData = [
+        { name: 'Downtown Plaza Renovation', itemsLost: 8, wasteValue: '₱42,300', id: 1 },
+        { name: 'Highway Bridge Construction', itemsLost: 12, wasteValue: '₱67,800', id: 2 },
+        { name: 'Commercial Complex', itemsLost: 5, wasteValue: '₱28,500', id: 3 },
+        { name: 'Park Development Project', itemsLost: 9, wasteValue: '₱51,200', id: 4 },
+        { name: 'Residential Complex Phase 1', itemsLost: 7, wasteValue: '₱38,900', id: 5 }
+    ];
+    
+    projectData.forEach(project => {
+        const row = document.createElement('tr');
+        row.dataset.projectName = project.name.toLowerCase();
+        const nameCell = document.createElement('td');
+        nameCell.innerText = project.name;
+        const itemsCell = document.createElement('td');
+        itemsCell.innerText = project.itemsLost;
+        itemsCell.style.textAlign = 'center';
+        const valueCell = document.createElement('td');
+        valueCell.innerText = project.wasteValue;
+        valueCell.style.textAlign = 'center';
+        valueCell.style.fontWeight = '600';
+        valueCell.style.color = 'var(--red-text)';
+        
+        const actionCell = document.createElement('td');
+        actionCell.style.textAlign = 'center';
+        const viewBtn = document.createElement('button');
+        viewBtn.className = 'waste-damage-view-btn';
+        viewBtn.innerText = 'View';
+        viewBtn.addEventListener('click', () => {
+            showWasteDamageModal(project);
+        });
+        actionCell.append(viewBtn);
+        
+        row.append(nameCell, itemsCell, valueCell, actionCell);
+        tbody.append(row);
+    });
+    table.append(tbody);
+    tableWrapper.append(table);
+    container.append(tableWrapper);
+    
+    // Search functionality
+    searchInput.addEventListener('input', (e) => {
+        const searchTerm = e.target.value.toLowerCase();
+        const rows = tbody.querySelectorAll('tr');
+        rows.forEach(row => {
+            const projectName = row.dataset.projectName;
+            if (projectName.includes(searchTerm)) {
+                row.style.display = '';
+            } else {
+                row.style.display = 'none';
+            }
+        });
+    });
+    
+    return { container, table, searchSection };
+}
+
+function showWasteDamageModal(project) {
+    // Modal background
+    const modalBg = div('', 'waste-damage-modal-bg');
+    
+    // Modal content
+    const modal = div('', 'waste-damage-modal');
+    
+    // Modal header
+    const header = div('', 'waste-damage-modal-header');
+    const title = span('', 'waste-damage-modal-title');
+    title.innerText = `Waste & Damage - ${project.name}`;
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'waste-damage-modal-close';
+    closeBtn.innerHTML = '✕';
+    header.append(title, closeBtn);
+    
+    // Modal body with waste/damage list
+    const body = div('', 'waste-damage-modal-body');
+    
+    // Sample waste/damage data for the project
+    const wasteItems = [
+        { name: 'Concrete Mix 1:2:4', category: 'Concrete', reason: 'Spillage during transport', quantity: 12, unit: 'bags', value: 5400 },
+        { name: 'Steel Reinforcement', category: 'Steel', reason: 'Rust and corrosion', quantity: 8, unit: 'kg', value: 960 },
+        { name: 'Wooden Formwork', category: 'Wood', reason: 'Water damage', quantity: 5, unit: 'pcs', value: 4000 },
+        { name: 'Cement', category: 'Concrete', reason: 'Moisture damage', quantity: 10, unit: 'bags', value: 3800 },
+        { name: 'Sand (Grade A)', category: 'Aggregates', reason: 'Contamination', quantity: 45, unit: 'cubic meter', value: 36000 },
+        { name: 'Paint (Indoor)', category: 'Finishing', reason: 'Expired/Unusable', quantity: 8, unit: 'liters', value: 5200 },
+        { name: 'Electrical Wire', category: 'Electrical', reason: 'Accidental damage', quantity: 120, unit: 'meters', value: 3000 },
+        { name: 'Door Frames', category: 'Hardware', reason: 'Scratched/Dented', quantity: 2, unit: 'pcs', value: 5000 }
+    ];
+    
+    // Waste/Damage table
+    const wasteTable = document.createElement('table');
+    wasteTable.className = 'waste-detail-table';
+    
+    const wasteThead = document.createElement('thead');
+    const wasteHeaderRow = document.createElement('tr');
+    const wasteHeaders = ['Material Name', 'Category', 'Reason', 'Quantity', 'Unit', 'Estimated Value'];
+    wasteHeaders.forEach(headerText => {
+        const th = document.createElement('th');
+        th.innerText = headerText;
+        wasteHeaderRow.append(th);
+    });
+    wasteThead.append(wasteHeaderRow);
+    wasteTable.append(wasteThead);
+    
+    const wasteTbody = document.createElement('tbody');
+    let totalWasteValue = 0;
+    wasteItems.forEach(item => {
+        const row = document.createElement('tr');
+        
+        const nameCell = document.createElement('td');
+        nameCell.innerText = item.name;
+        
+        const categoryCell = document.createElement('td');
+        categoryCell.innerText = item.category;
+        categoryCell.style.textAlign = 'center';
+        
+        const reasonCell = document.createElement('td');
+        reasonCell.innerText = item.reason;
+        
+        const quantityCell = document.createElement('td');
+        quantityCell.innerText = item.quantity;
+        quantityCell.style.textAlign = 'center';
+        
+        const unitCell = document.createElement('td');
+        unitCell.innerText = item.unit;
+        unitCell.style.textAlign = 'center';
+        
+        const valueCell = document.createElement('td');
+        valueCell.innerText = `₱${item.value.toLocaleString()}`;
+        valueCell.style.textAlign = 'center';
+        valueCell.style.fontWeight = '600';
+        valueCell.style.color = 'var(--red-text)';
+        
+        totalWasteValue += item.value;
+        row.append(nameCell, categoryCell, reasonCell, quantityCell, unitCell, valueCell);
+        wasteTbody.append(row);
+    });
+    wasteTable.append(wasteTbody);
+    body.append(wasteTable);
+    
+    // Summary section
+    const summary = div('', 'waste-damage-summary');
+    const summaryTitle = span('', 'waste-damage-summary-title');
+    summaryTitle.innerText = 'Damage Summary';
+    const summaryContent = div('', 'waste-damage-summary-content');
+    
+    const totalItems = span('', 'summary-item');
+    totalItems.innerHTML = `<strong>Total Items Damaged:</strong> ${wasteItems.length}`;
+    
+    const totalValue = span('', 'summary-item');
+    totalValue.innerHTML = `<strong>Total Waste Value:</strong> ₱${totalWasteValue.toLocaleString()}`;
+    totalValue.style.color = 'var(--red-text)';
+    totalValue.style.fontWeight = '700';
+    
+    summaryContent.append(totalItems, totalValue);
+    summary.append(summaryTitle, summaryContent);
+    body.append(summary);
+    
+    modal.append(header, body);
+    modalBg.append(modal);
+    document.body.append(modalBg);
+    
+    // Close button events
+    closeBtn.addEventListener('click', () => {
+        modalBg.remove();
+    });
+    
+    modalBg.addEventListener('click', (e) => {
+        if (e.target === modalBg) {
+            modalBg.remove();
+        }
+    });
+}
+
+function createMaterialUsageTable() {
+    const container = div('', 'material-usage-container');
+    
+    // Search bar section
+    const searchSection = div('', 'material-usage-search-section');
+    const searchInput = document.createElement('input');
+    searchInput.type = 'text';
+    searchInput.className = 'material-usage-search-input';
+    searchInput.placeholder = 'Search project';
+    searchSection.append(searchInput);
+    
+    // Table wrapper
+    const tableWrapper = div('', 'material-usage-table-wrapper');
+    const table = document.createElement('table');
+    table.className = 'material-usage-table';
+    
+    // Table header
+    const thead = document.createElement('thead');
+    const headerRow = document.createElement('tr');
+    const headers = ['Project Name', 'Total Materials', 'Total Quantity', 'Total Cost', 'Action'];
+    headers.forEach(headerText => {
+        const th = document.createElement('th');
+        th.innerText = headerText;
+        headerRow.append(th);
+    });
+    thead.append(headerRow);
+    table.append(thead);
+    
+    // Table body with sample data
+    const tbody = document.createElement('tbody');
+    const projectData = [
+        { name: 'Downtown Plaza Renovation', materials: 12, quantity: 487, cost: '₱145,600', id: 1 },
+        { name: 'Highway Bridge Construction', materials: 18, quantity: 892, cost: '₱234,500', id: 2 },
+        { name: 'Commercial Complex', materials: 9, quantity: 356, cost: '₱98,750', id: 3 },
+        { name: 'Park Development Project', materials: 15, quantity: 623, cost: '₱187,300', id: 4 },
+        { name: 'Residential Complex Phase 1', materials: 11, quantity: 489, cost: '₱167,450', id: 5 }
+    ];
+    
+    projectData.forEach(project => {
+        const row = document.createElement('tr');
+        row.dataset.projectName = project.name.toLowerCase();
+        const nameCell = document.createElement('td');
+        nameCell.innerText = project.name;
+        const materialsCell = document.createElement('td');
+        materialsCell.innerText = project.materials;
+        materialsCell.style.textAlign = 'center';
+        const quantityCell = document.createElement('td');
+        quantityCell.innerText = project.quantity;
+        quantityCell.style.textAlign = 'center';
+        const costCell = document.createElement('td');
+        costCell.innerText = project.cost;
+        costCell.style.textAlign = 'right';
+        costCell.style.fontWeight = '600';
+        
+        const actionCell = document.createElement('td');
+        actionCell.style.textAlign = 'center';
+        const viewBtn = document.createElement('button');
+        viewBtn.className = 'material-usage-view-btn';
+        viewBtn.innerText = 'View';
+        viewBtn.addEventListener('click', () => {
+            showMaterialUsageModal(project);
+        });
+        actionCell.append(viewBtn);
+        
+        row.append(nameCell, materialsCell, quantityCell, costCell, actionCell);
+        tbody.append(row);
+    });
+    table.append(tbody);
+    tableWrapper.append(table);
+    container.append(tableWrapper);
+    
+    // Search functionality
+    searchInput.addEventListener('input', (e) => {
+        const searchTerm = e.target.value.toLowerCase();
+        const rows = tbody.querySelectorAll('tr');
+        rows.forEach(row => {
+            const projectName = row.dataset.projectName;
+            if (projectName.includes(searchTerm)) {
+                row.style.display = '';
+            } else {
+                row.style.display = 'none';
+            }
+        });
+    });
+    
+    return { container, table, searchSection };
+}
+
+function showMaterialUsageModal(project) {
+    // Modal background
+    const modalBg = div('', 'material-usage-modal-bg');
+    
+    // Modal content
+    const modal = div('', 'material-usage-modal');
+    
+    // Modal header
+    const header = div('', 'material-usage-modal-header');
+    const title = span('', 'material-usage-modal-title');
+    title.innerText = `Materials Used - ${project.name}`;
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'material-usage-modal-close';
+    closeBtn.innerHTML = '✕';
+    header.append(title, closeBtn);
+    
+    // Modal body with materials list
+    const body = div('', 'material-usage-modal-body');
+    
+    // Sample materials data for the project
+    const materials = [
+        { name: 'Concrete Mix 1:2:4', plannedQty: 125, actualQty: 120, unit: 'bags', price: 450, total: 54000 },
+        { name: 'Steel Reinforcement', plannedQty: 90, actualQty: 85, unit: 'kg', price: 120, total: 10200 },
+        { name: 'Wooden Formwork', plannedQty: 50, actualQty: 45, unit: 'pcs', price: 800, total: 36000 },
+        { name: 'Cement', plannedQty: 100, actualQty: 95, unit: 'bags', price: 380, total: 36100 },
+        { name: 'Sand (Grade A)', plannedQty: 220, actualQty: 200, unit: 'cubic meter', price: 800, total: 160000 },
+        { name: 'Gravel', plannedQty: 160, actualQty: 150, unit: 'cubic meter', price: 600, total: 90000 },
+        { name: 'Paint (Indoor)', plannedQty: 55, actualQty: 50, unit: 'liters', price: 650, total: 32500 },
+        { name: 'Electrical Wire', plannedQty: 850, actualQty: 800, unit: 'meters', price: 25, total: 20000 },
+        { name: 'Plumbing Pipes', plannedQty: 130, actualQty: 120, unit: 'meters', price: 450, total: 54000 },
+        { name: 'Door Frames', plannedQty: 26, actualQty: 24, unit: 'pcs', price: 2500, total: 60000 }
+    ];
+    
+    // Materials table
+    const materialsTable = document.createElement('table');
+    materialsTable.className = 'materials-detail-table';
+    
+    const matThead = document.createElement('thead');
+    const matHeaderRow = document.createElement('tr');
+    const matHeaders = ['Material Name', 'Planned Qty', 'Actual Qty', 'Unit', 'Unit Price', 'Total'];
+    matHeaders.forEach(headerText => {
+        const th = document.createElement('th');
+        th.innerText = headerText;
+        matHeaderRow.append(th);
+    });
+    matThead.append(matHeaderRow);
+    materialsTable.append(matThead);
+    
+    const matTbody = document.createElement('tbody');
+    let totalCost = 0;
+    materials.forEach(material => {
+        const row = document.createElement('tr');
+        
+        const nameCell = document.createElement('td');
+        nameCell.innerText = material.name;
+        
+        const plannedQtyCell = document.createElement('td');
+        plannedQtyCell.innerText = material.plannedQty;
+        plannedQtyCell.style.textAlign = 'center';
+        
+        const actualQtyCell = document.createElement('td');
+        actualQtyCell.innerText = material.actualQty;
+        actualQtyCell.style.textAlign = 'center';
+        
+        const unitCell = document.createElement('td');
+        unitCell.innerText = material.unit;
+        unitCell.style.textAlign = 'center';
+        
+        const priceCell = document.createElement('td');
+        priceCell.innerText = `₱${material.price.toLocaleString()}`;
+        priceCell.style.textAlign = 'center';
+        
+        const totalCell = document.createElement('td');
+        totalCell.innerText = `₱${material.total.toLocaleString()}`;
+        totalCell.style.textAlign = 'center';
+        totalCell.style.fontWeight = '600';
+        
+        totalCost += material.total;
+        row.append(nameCell, plannedQtyCell, actualQtyCell, unitCell, priceCell, totalCell);
+        matTbody.append(row);
+    });
+    materialsTable.append(matTbody);
+    body.append(materialsTable);
+    
+    // Summary section
+    const summary = div('', 'material-usage-summary');
+    const summaryTitle = span('', 'material-usage-summary-title');
+    summaryTitle.innerText = 'Project Summary';
+    const summaryContent = div('', 'material-usage-summary-content');
+    
+    const totalMaterials = span('', 'summary-item');
+    totalMaterials.innerHTML = `<strong>Total Materials:</strong> ${materials.length}`;
+    
+    const totalAmount = span('', 'summary-item');
+    totalAmount.innerHTML = `<strong>Total Cost:</strong> ₱${totalCost.toLocaleString()}`;
+    totalAmount.style.color = 'var(--green-text)';
+    totalAmount.style.fontWeight = '700';
+    
+    summaryContent.append(totalMaterials, totalAmount);
+    summary.append(summaryTitle, summaryContent);
+    body.append(summary);
+    
+    modal.append(header, body);
+    modalBg.append(modal);
+    document.body.append(modalBg);
+    
+    // Close button events
+    closeBtn.addEventListener('click', () => {
+        modalBg.remove();
+    });
+    
+    modalBg.addEventListener('click', (e) => {
+        if (e.target === modalBg) {
+            modalBg.remove();
+        }
+    });
+}
+
+function createAnalyticsMetricCard(metric) {
+    const card = div('', 'analytics-metric-card');
+    
+    const label = span('', 'metric-card-label');
+    label.innerText = metric.label;
+    
+    const value = span('', 'metric-card-value');
+    value.innerText = metric.value;
+    
+    const subtext = span('', 'metric-card-subtext');
+    subtext.innerText = metric.subtext;
+    
+    const statusBadge = span('', `metric-card-badge metric-badge-${metric.status}`);
+    statusBadge.innerText = metric.statusText;
+    
+    card.append(label, value, subtext, statusBadge);
+    return card;
 }
 
 async function generateDashboardContent() {
