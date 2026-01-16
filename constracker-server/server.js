@@ -28,6 +28,61 @@ const indexDir = path.join(__dirName, "public");
 const privDir = path.join(__dirName, "private");
 const JWT_KEY = process.env.JWT_SECRET_KEY;
 
+// ---- User preferences / profile assets ----
+const AVATAR_DIR = path.join(__dirName, 'public', 'avatarImages');
+
+function ensureDir(dirPath) {
+    try {
+        if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
+    } catch (e) {
+        console.error('Failed to ensure directory:', dirPath, e);
+    }
+}
+
+async function ensureUserSettingsTable() {
+    // Stores per-user UI preferences and avatar pointers.
+    // Intentionally kept minimal (no FK) to avoid environment-specific MySQL settings.
+    await pool.execute(`
+        CREATE TABLE IF NOT EXISTS user_settings (
+            user_id INT PRIMARY KEY,
+            dark_mode TINYINT(1) NOT NULL DEFAULT 0,
+            font_size VARCHAR(8) NOT NULL DEFAULT 'md',
+            avatar_path VARCHAR(255) DEFAULT NULL,
+            avatar_url VARCHAR(2048) DEFAULT NULL,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )
+    `);
+}
+
+async function getOrCreateUserSettings(userId) {
+    const [rows] = await pool.execute('SELECT * FROM user_settings WHERE user_id = ?', [userId]);
+    if (rows.length > 0) return rows[0];
+    await pool.execute('INSERT INTO user_settings (user_id) VALUES (?)', [userId]);
+    const [after] = await pool.execute('SELECT * FROM user_settings WHERE user_id = ?', [userId]);
+    return after[0];
+}
+
+// Multer configuration for avatar uploads (max 5MB)
+const avatarStorage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        cb(null, AVATAR_DIR);
+    },
+    filename: function (req, file, cb) {
+        const hash = crypto.createHash('sha256').update(file.originalname + Date.now()).digest('hex');
+        const extension = path.extname(file.originalname);
+        cb(null, `${hash}${extension}`);
+    }
+});
+
+const avatarUpload = multer({
+    storage: avatarStorage,
+    limits: { fileSize: 5 * 1024 * 1024 },
+    fileFilter: function (req, file, cb) {
+        const ok = /^image\//.test(file.mimetype || '');
+        cb(ok ? null : new Error('Only image uploads are allowed'), ok);
+    }
+});
+
 // Multer configuration for file uploads
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
@@ -1170,6 +1225,161 @@ app.get('/profile', authMiddleware(['all']), async(req, res) => {
     }
 });
 
+// --- Settings APIs (dark mode, font size, avatar) ---
+app.get('/api/settings', authMiddleware(['all']), async (req, res) => {
+    try {
+        const userId = req.user.id;
+        await pool.execute(
+            'INSERT INTO user_settings (user_id) VALUES (?) ON DUPLICATE KEY UPDATE user_id = user_id',
+            [userId]
+        );
+        const [rows] = await pool.execute(
+            'SELECT dark_mode, font_size, avatar_path, avatar_url FROM user_settings WHERE user_id = ?',
+            [userId]
+        );
+        res.status(200).json(rows[0] || { dark_mode: 0, font_size: 'md', avatar_path: null, avatar_url: null });
+    } catch (e) {
+        failed(res, 500, 'Database error');
+    }
+});
+
+app.put('/api/settings', authMiddleware(['all']), async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const darkMode = req.body?.dark_mode ? 1 : 0;
+        const fontSize = String(req.body?.font_size || 'md').toLowerCase();
+        const allowedSizes = new Set(['sm', 'md', 'lg']);
+        if (!allowedSizes.has(fontSize)) {
+            return failed(res, 400, 'Invalid font size');
+        }
+
+        await pool.execute(
+            'INSERT INTO user_settings (user_id, dark_mode, font_size) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE dark_mode = VALUES(dark_mode), font_size = VALUES(font_size)',
+            [userId, darkMode, fontSize]
+        );
+        res.status(200).json({ status: 'success' });
+    } catch (e) {
+        failed(res, 500, 'Database error');
+    }
+});
+
+app.put('/api/profile/full-name', authMiddleware(['all']), async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const fullName = String(req.body?.full_name || '').trim();
+        if (fullName.length < 2 || fullName.length > 120) {
+            return failed(res, 400, 'Full name must be between 2 and 120 characters');
+        }
+        await pool.execute('UPDATE users SET full_name = ? WHERE user_id = ?', [fullName, userId]);
+        res.status(200).json({ status: 'success', full_name: fullName });
+    } catch (e) {
+        failed(res, 500, 'Database error');
+    }
+});
+
+function avatarUploadMiddleware(req, res, next) {
+    const single = avatarUpload.single('avatar');
+    single(req, res, (err) => {
+        if (err) {
+            const msg = err.message && err.message.includes('File too large')
+                ? 'Max image size is 5 MB'
+                : (err.message || 'Upload failed');
+            return res.status(400).json({ status: 'failed', message: msg });
+        }
+        next();
+    });
+}
+
+app.post('/api/profile/avatar/upload', authMiddleware(['all']), avatarUploadMiddleware, async (req, res) => {
+    try {
+        const userId = req.user.id;
+        if (!req.file?.filename) return failed(res, 400, 'No file uploaded');
+
+        // Remove previously stored avatar file (if it was an upload)
+        const [existingRows] = await pool.execute('SELECT avatar_path FROM user_settings WHERE user_id = ?', [userId]);
+        const oldPath = existingRows?.[0]?.avatar_path;
+        if (oldPath) {
+            const fullOldPath = path.join(AVATAR_DIR, oldPath);
+            if (fs.existsSync(fullOldPath)) {
+                try { fs.unlinkSync(fullOldPath); } catch (_) {}
+            }
+        }
+
+        await pool.execute(
+            'INSERT INTO user_settings (user_id, avatar_path, avatar_url) VALUES (?, ?, NULL) ON DUPLICATE KEY UPDATE avatar_path = VALUES(avatar_path), avatar_url = NULL',
+            [userId, req.file.filename]
+        );
+
+        res.status(200).json({ status: 'success', avatar_path: req.file.filename });
+    } catch (e) {
+        failed(res, 500, 'Database error');
+    }
+});
+
+app.put('/api/profile/avatar/url', authMiddleware(['all']), async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const avatarUrl = String(req.body?.avatar_url || '').trim();
+        if (!avatarUrl) {
+            // Clear avatar URL (keep path null)
+            await pool.execute(
+                'INSERT INTO user_settings (user_id, avatar_url, avatar_path) VALUES (?, NULL, NULL) ON DUPLICATE KEY UPDATE avatar_url = NULL, avatar_path = NULL',
+                [userId]
+            );
+            return res.status(200).json({ status: 'success', avatar_url: null });
+        }
+        if (!/^https?:\/\//i.test(avatarUrl) || avatarUrl.length > 2048) {
+            return failed(res, 400, 'Invalid image URL');
+        }
+
+        // If switching from uploaded avatar -> remove old file
+        const [existingRows] = await pool.execute('SELECT avatar_path FROM user_settings WHERE user_id = ?', [userId]);
+        const oldPath = existingRows?.[0]?.avatar_path;
+        if (oldPath) {
+            const fullOldPath = path.join(AVATAR_DIR, oldPath);
+            if (fs.existsSync(fullOldPath)) {
+                try { fs.unlinkSync(fullOldPath); } catch (_) {}
+            }
+        }
+
+        await pool.execute(
+            'INSERT INTO user_settings (user_id, avatar_url, avatar_path) VALUES (?, ?, NULL) ON DUPLICATE KEY UPDATE avatar_url = VALUES(avatar_url), avatar_path = NULL',
+            [userId, avatarUrl]
+        );
+        res.status(200).json({ status: 'success', avatar_url: avatarUrl });
+    } catch (e) {
+        failed(res, 500, 'Database error');
+    }
+});
+
+// Remove avatar (clears both uploaded avatar_path and avatar_url)
+// Method matches the frontend usage (PUT).
+app.put('/api/profile/avatar/remove', authMiddleware(['all']), async (req, res) => {
+    try {
+        const userId = req.user.id;
+
+        // If there is an existing uploaded avatar, delete the file from disk
+        const [existingRows] = await pool.execute('SELECT avatar_path FROM user_settings WHERE user_id = ?', [userId]);
+        const oldPath = existingRows?.[0]?.avatar_path;
+        if (oldPath) {
+            const fullOldPath = path.join(AVATAR_DIR, oldPath);
+            if (fs.existsSync(fullOldPath)) {
+                try { fs.unlinkSync(fullOldPath); } catch (_) {}
+            }
+        }
+
+        await pool.execute(
+            'INSERT INTO user_settings (user_id, avatar_path, avatar_url) VALUES (?, NULL, NULL) ON DUPLICATE KEY UPDATE avatar_path = NULL, avatar_url = NULL',
+            [userId]
+        );
+
+        res.status(200).json({ status: 'success', avatar_path: null, avatar_url: null });
+    } catch (e) {
+        failed(res, 500, 'Database error');
+    }
+});
+
+
 app.get('/api/milestones/:projectId', authMiddleware(['all']), async(req, res) => {
     res.status(200).json(await getAllMilestones(res, req.params.projectId));
 });
@@ -1918,6 +2128,14 @@ app.use((req, res) => {
     showNotFound(res);
 });
 
-app.listen(PORT, () => {
-    console.log(`Server running on port: ${PORT}`);
-});
+(async () => {
+    ensureDir(AVATAR_DIR);
+    try {
+        await ensureUserSettingsTable();
+    } catch (e) {
+        console.error("Failed to ensure user_settings table:", e?.message || e);
+    }
+    app.listen(PORT, () => {
+        console.log(`Server running on port: ${PORT}`);
+    });
+})();

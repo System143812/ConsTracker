@@ -111,8 +111,8 @@ html, body {
 body {
     display: flex;
     position: relative;;
-    background-color: #f0f0f0;
-    font-size: 12px;
+    background-color: var(--white-background);
+    font-size: 1rem;
     color: var(--default-black-color);
 }
 
@@ -144,7 +144,7 @@ body {
     height: 100%;
     width: 225px;
     gap: 0rem;
-    background-color: #f0f0f0;
+    background-color: var(--white-background);
     border-right: solid var(--light-border) 0.1px;
     transition: all 0.5s ease;
     overflow: hidden;
@@ -185,7 +185,7 @@ body {
     left: 0;
     height: 100%;
     width: 100%;
-    background-color: #f0f0f0;
+    background-color: var(--white-background);
     z-index: 2;
     transition: all 0.5s normal;
 }
@@ -279,7 +279,7 @@ body {
     width: 225px;
     border-bottom: solid var(--light-border) 0.1px;
     transition: all 0.25s ease;
-    background-color: #f0f0f0;
+    background-color: var(--white-background);
     overflow-y: auto;
 
 }
@@ -364,7 +364,7 @@ body {
     padding: 1rem 0;
     gap: 0.25rem;
     flex: 1;
-    background-color: #eeeeee;
+    background-color: var(--light-blue-background);
 }
 
 #contentContainer {
@@ -461,8 +461,8 @@ body {
     justify-content: space-between !important;
     align-items: center;
     width: 100%;
-    height: fit-content;
-    padding: 1.5rem;
+    padding: 1rem 2rem;
+    box-sizing: border-box;
 }
 
 #projectsBodyHeader {
@@ -611,7 +611,7 @@ body {
 }
 
 .log-card-names {
-    font-size: 12px;
+    font-size: 1rem;
     font-weight: 600;
     color: #4e4e4e;
 }
@@ -738,13 +738,13 @@ body {
 
 #milestoneSubheaderText {
     color: var(--grayed-text);
-    font-size: 12px;
+    font-size: 1rem;
 }
 
 #milestoneAddBtn, #taskAddBtn {
     background-color: var(--blue-border);
     color: var(--white-ishy-text);
-    font-size: 12px;
+    font-size: 1rem;
 }
 
 #taskAddBtn {
@@ -1425,7 +1425,7 @@ body {
 
 .log-detail-subtitle {
     color: var(--grayed-text);
-    font-size: 12px; /* Thinner font */
+    font-size: 1rem; /* Thinner font */
 }
 
 .log-detail-by-date {
@@ -1450,7 +1450,7 @@ body {
 
 .log-detail-changes-title {
     font-weight: 600;
-    font-size: 12px; /* Thinner font */
+    font-size: 1rem; /* Thinner font */
 }
 
 .log-detail-show-old-toggle {
@@ -1470,7 +1470,7 @@ body {
 
 .log-change-entry {
 
-    font-size: 12px; /* Thinner font */
+    font-size: 1rem; /* Thinner font */
 
 }
 
@@ -1527,11 +1527,27 @@ body {
     background: #f0f2f5;
     color: #4A90E2;
     border-radius: 50%;
+    position: relative;
+    overflow: hidden;
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 24px;
     font-weight: 700;
+}
+
+.personnel-avatar-img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.personnel-avatar-initials {
+    position: relative;
+    z-index: 1;
+    line-height: 1;
 }
 
 .status-bubble {
@@ -1555,8 +1571,26 @@ body {
 
 /* Text Content */
 .personnel-name { font-weight: 700; font-size: 18px; color: #333; margin-bottom: 4px; }
-.personnel-role-tag { font-size: 12px; color: #4A90E2; text-transform: uppercase; font-weight: 600; margin-bottom: 8px; }
+.personnel-role-tag { font-size: 1rem; color: #4A90E2; text-transform: uppercase; font-weight: 600; margin-bottom: 8px; }
 .personnel-email { font-size: 13px; color: #888; margin-bottom: 20px; }
+
+/* Dark mode support for personnel cards */
+body.theme-dark .personnel-card {
+    background: rgba(30, 41, 59, 0.75);
+    border-color: var(--light-border);
+}
+
+body.theme-dark .personnel-name {
+    color: var(--white-ishy-text);
+}
+
+body.theme-dark .personnel-email {
+    color: var(--grayed-text);
+}
+
+body.theme-dark .personnel-avatar {
+    background: rgba(15, 23, 42, 0.7);
+}
 
 /* Buttons */
 .card-actions { display: flex; gap: 10px; width: 100%; }
@@ -1565,7 +1599,7 @@ body {
     padding: 10px;
     border-radius: 10px;
     border: none;
-    font-size: 12px;
+    font-size: 1rem;
     font-weight: 600;
     cursor: pointer;
 }
@@ -1648,6 +1682,234 @@ body {
 /* Responsive: Stack them on small screens */
 @media (max-width: 768px) {
     .filter-action-wrapper {
+        flex-direction: column;
+        align-items: stretch;
+    }
+}
+
+/* Settings page */
+.settings-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+    padding: 0 2rem 2rem 2rem;
+    overflow-y: auto;
+}
+@media (max-width: 860px) {
+    .settings-grid {
+        grid-template-columns: 1fr;
+        padding: 0 1.25rem 1.75rem 1.25rem;
+    }
+}
+
+.settings-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 1rem;
+    border-radius: 12px;
+    border: solid var(--light-border) 1px;
+    background-color: var(--white-transparent);
+}
+
+.settings-card h3 {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--default-black-color);
+}
+
+.settings-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.settings-label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+}
+
+.settings-label small {
+    color: var(--grayed-text);
+    font-size: 10px;
+}
+
+.settings-select,
+.settings-input {
+    min-width: 180px;
+    padding: 0.6rem 0.75rem;
+    border-radius: 10px;
+    border: solid var(--light-border) 1px;
+    background-color: var(--white-background);
+    color: var(--default-black-text);
+}
+
+.settings-button-row {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    padding-top: 0.5rem;
+}
+
+.settings-avatar-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.settings-avatar-preview {
+    height: 72px;
+    width: 72px;
+    border-radius: 50%;
+    background-color: var(--light-blue-background);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    color: var(--blue-border);
+    overflow: hidden;
+    background-size: cover;
+    background-position: center;
+}
+
+.settings-switch {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 26px;
+}
+.settings-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+.settings-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(102, 102, 102, 0.25);
+    transition: .2s;
+    border-radius: 20px;
+}
+.settings-slider:before {
+    position: absolute;
+    content: "";
+    height: 20px;
+    width: 20px;
+    left: 3px;
+    bottom: 3px;
+    background-color: var(--white-ishy-text);
+    transition: .2s;
+    border-radius: 50%;
+}
+.settings-switch input:checked + .settings-slider {
+    background-color: var(--blue-border);
+}
+.settings-switch input:checked + .settings-slider:before {
+    transform: translateX(18px);
+}
+
+/* Settings page (refined) */
+.settings-card-header {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+.settings-card-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--default-black-color);
+}
+.settings-card-subtitle {
+    font-size: 11px;
+    color: var(--grayed-text);
+}
+.settings-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+}
+
+.settings-row-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+}
+.settings-row-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--default-black-color);
+}
+.settings-row-help {
+    font-size: 10px;
+    color: var(--grayed-text);
+}
+
+.settings-actions {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.settings-profile-row {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+}
+
+.settings-avatar {
+    height: 76px;
+    width: 76px;
+    border-radius: 50%;
+    background-color: var(--light-blue-background);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-weight: 700;
+    color: var(--blue-border);
+    overflow: hidden;
+}
+
+.settings-profile-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    flex: 1;
+}
+
+.settings-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.settings-field-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--default-black-color);
+}
+
+.settings-inline {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.settings-file {
+    border: solid var(--light-border) 1px;
+    border-radius: 10px;
+    padding: 0.45rem 0.6rem;
+    background-color: var(--white-background);
+    color: var(--default-black-text);
+}
+
+@media (max-width: 520px) {
+    .settings-profile-row {
         flex-direction: column;
         align-items: stretch;
     }

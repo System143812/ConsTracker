@@ -2,7 +2,12 @@ import { fetchData, fetchPostJson } from "/js/apiURL.js";
 import { formatString, dateFormatting } from "/js/string.js";
 import { alertPopup, warnType, showEmptyPlaceholder } from "/js/popups.js";
 import { div, span, button, createButton, createFilterContainer, createPaginationControls, createInput, createFilterInput, editFormButton, validateInput } from "/js/components.js";
-import { createMilestoneOl, milestoneFullOl, showLogDetailsOverlay, createOverlayWithBg, hideOverlayWithBg, showDeleteConfirmation, showOverlayWithBg } from "/mainJs/overlays.js";
+import { renderSettingsPage } from "/mainJs/settings.js";
+// Fix: Combine these into one line and ensure the path is correct
+import { createMilestoneOl, milestoneFullOl, showLogDetailsOverlay, createOverlayWithBg, hideOverlayWithBg, showDeleteConfirmation, showOverlayWithBg as overlayShow } from "/mainJs/overlays.js";
+// Update this line at the top of adminContent.js
+let allPersonnel = [];
+
 
 const defaultImageBackgroundColors = [
     '#B388EB', '#FFD180', '#80CBC4', '#E1BEE7', '#C5E1A5',
@@ -1083,7 +1088,7 @@ const tabContents = {
         generateGraphs: async() => ''
     },
     settings: {
-        generateContent: async() => '',
+        generateContent: async() => await generateSettingsContent(),
         generateGraphs: async() => ''
     }
 }
@@ -1135,6 +1140,14 @@ async function generatePersonnelContent() {
     personnelBodyContent.innerHTML = '';
     showEmptyPlaceholder('/assets/icons/personnel.png', personnelBodyContent, null, "Personnel Content Coming Soon");
 }
+
+async function generateSettingsContent() {
+    const settingsBodyContent = document.getElementById('settingsBodyContent');
+    if (!settingsBodyContent) return;
+    settingsBodyContent.innerHTML = '';
+    await renderSettingsPage(settingsBodyContent);
+}
+
 
 export async function renderPersonnel(params) {
     const workerSectionContainer = div('workerSectionContainer', 'worker-section');
@@ -1265,14 +1278,38 @@ export async function displayPersonnel(container, parentId, role) {
     // --- 4. THE FILTER BAR ---
     const filterBar = await createFilterContainer(
         (urlParams) => {
-            const keyword = urlParams.get('itemName') || ''; 
+            // createFilterContainer's name search writes to the `name` param.
+            const rawKeyword = urlParams.get('name') || 'all';
+            const keyword = rawKeyword === 'all' ? '' : rawKeyword;
+
+            // Sort is optional for this screen; default to A-Z.
             const sort = urlParams.get('sort') || 'asc';
+
+            // Status should be single-select: all | active | inactive.
             const status = urlParams.get('status') || 'all';
+
             renderPersonnelCards(keyword, sort, status);
         },
-        'Search personnel by name...', 
-        { name: true, sort: true, status: true },
-        'itemName', 
+        'Search personnel by name...',
+        {
+            name: true,
+            sort: {
+                default: 'asc',
+                options: [
+                    { id: 'asc', label: 'Alphabetical (A-Z)' },
+                    { id: 'desc', label: 'Alphabetical (Z-A)' }
+                ]
+            },
+            status: {
+                mode: 'single',
+                options: [
+                    { id: 'all', label: 'All' },
+                    { id: 'active', label: 'Active' },
+                    { id: 'inactive', label: 'Inactive' }
+                ]
+            }
+        },
+        'name',
         'asc'
     );
 
@@ -1565,7 +1602,7 @@ async function createProjectOverlay(refreshCallback) {
     form.append(createProjectFormHeader, createProjectFormFooter);
     overlayBody.append(form);
 
-    showOverlayWithBg(overlayBackground);
+    overlayShow(overlayBackground);
 }
 
 async function generateProjectsContent(role) {
@@ -2344,4 +2381,176 @@ async function refreshAdminProjectContent(currentProjectId, role) {
 
     selectionTabContent.innerHTML = '';
     selectionTabContent.append(await currentRenderFunction(role, currentProjectId));
+}
+
+
+async function showAddUserOverlay() {
+    const { overlayBackground, overlayContainer, overlayHeader, overlayBody } = createOverlayWithBg();
+    overlayContainer.classList.add('modal-lg', 'personnel-add-modal');
+
+    // Header (title + close)
+    overlayHeader.innerHTML = '';
+    const headerWrap = div('', 'overlay-header-containers overlay-header-flex');
+    const titleWrap = div('', 'overlay-title-wrap');
+    const title = span('', 'overlay-title');
+    const subtitle = span('', 'overlay-subtitle');
+    title.innerText = 'Register New Personnel';
+    subtitle.innerText = 'Create an account and send credentials to the new team member.';
+    titleWrap.append(title, subtitle);
+
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'overlay-close-btn';
+    closeBtn.setAttribute('aria-label', 'Close');
+    closeBtn.innerHTML = '&times;';
+    closeBtn.addEventListener('click', () => hideOverlayWithBg(overlayBackground));
+
+    headerWrap.append(titleWrap, closeBtn);
+    overlayHeader.append(headerWrap);
+
+    overlayBody.innerHTML = '';
+
+    // Form
+    const form = document.createElement('form');
+    form.id = 'regPersonnelForm';
+    form.className = 'form-edit-forms personnel-add-form';
+
+    const nameInputBox = createInput('text', 'edit', 'Full Name', 'regFullName', 'full_name', '', 'e.g. Juan Dela Cruz', null, 150);
+    const emailInputBox = createInput('email', 'edit', 'Email Address', 'regEmailInput', 'email', '', 'e.g. juan@company.com', null, 150);
+
+    // Role select (styled like inputs)
+    const roleBox = div('regRoleBox', 'input-box-containers');
+    const roleLabel = document.createElement('label');
+    roleLabel.className = 'input-labels';
+    roleLabel.htmlFor = 'regRoleInput';
+    roleLabel.innerText = 'Role';
+
+    const roleSelect = document.createElement('select');
+    roleSelect.id = 'regRoleInput';
+    roleSelect.name = 'role';
+    roleSelect.className = 'input-fields edit';
+    roleSelect.innerHTML = '<option value="">Loading roles...</option>';
+
+    const roleErr = span('', 'error-messages');
+    roleErr.dataset.errMsg = 'Role Required';
+    roleErr.dataset.defaultMsg = ' ';
+    roleErr.innerText = roleErr.dataset.defaultMsg;
+
+    roleSelect.addEventListener('change', () => validateInput(roleSelect));
+
+    roleBox.append(roleLabel, roleSelect, roleErr);
+
+    // Success (masked password) - only for confirmation
+    const successBox = div('regSuccessContainer', 'input-box-containers');
+    successBox.style.display = 'none';
+    const passLabel = document.createElement('label');
+    passLabel.className = 'input-labels';
+    passLabel.innerText = 'Temporary Password Generated';
+
+    const maskInput = document.createElement('input');
+    maskInput.id = 'regMaskInput';
+    maskInput.readOnly = true;
+    maskInput.className = 'input-fields read';
+    maskInput.style.textAlign = 'center';
+    maskInput.style.letterSpacing = '6px';
+
+    const passNote = span('', 'error-messages');
+    passNote.dataset.defaultMsg = 'Credentials were sent via email.';
+    passNote.innerText = passNote.dataset.defaultMsg;
+
+    successBox.append(passLabel, maskInput, passNote);
+
+    // Actions
+    const actions = div('regActions', 'overlay-action-row');
+    const cancelBtn = createButton('regCancelBtn', 'glass-buttons', 'Cancel', 'regCancelTxt');
+    const submitBtn = createButton('regSubmitBtn', 'solid-buttons', 'Generate & Send Credentials', 'regSubmitTxt');
+
+    cancelBtn.type = 'button';
+    submitBtn.type = 'button';
+
+    cancelBtn.addEventListener('click', () => hideOverlayWithBg(overlayBackground));
+
+    actions.append(cancelBtn, submitBtn);
+
+    form.append(nameInputBox, emailInputBox, roleBox, successBox, actions);
+    overlayBody.append(form);
+
+    overlayShow(overlayBackground);
+
+    // Populate roles
+    try {
+        const roles = await fetchData('/api/roles');
+        if (roles && roles.length > 0) {
+            roleSelect.innerHTML = '<option value="">Select a role...</option>' + roles.map(r => `<option value="${r}">${formatString(r)}</option>`).join('');
+        } else {
+            roleSelect.innerHTML = `
+                <option value="">Select a role...</option>
+                <option value="admin">Admin</option>
+                <option value="engineer">Engineer</option>
+                <option value="foreman">Foreman</option>
+                <option value="project manager">Project Manager</option>`;
+        }
+    } catch (e) {
+        roleSelect.innerHTML = `
+            <option value="">Select a role...</option>
+            <option value="engineer">Engineer</option>
+            <option value="foreman">Foreman</option>
+            <option value="project manager">Project Manager</option>`;
+    }
+
+    async function submit() {
+        const nameVal = document.getElementById('regFullName')?.value.trim();
+        const emailVal = document.getElementById('regEmailInput')?.value.trim();
+        const roleVal = document.getElementById('regRoleInput')?.value;
+
+        // Basic validation
+        validateInput(document.getElementById('regFullName'));
+        validateInput(document.getElementById('regEmailInput'));
+        validateInput(document.getElementById('regRoleInput'));
+
+        if (!nameVal || !emailVal || !roleVal) {
+            return alertPopup('warn', 'Please complete all required fields');
+        }
+
+        submitBtn.disabled = true;
+        submitBtn.classList.add('loading');
+        const originalTxt = submitBtn.querySelector('.btn-texts')?.innerText || submitBtn.innerText;
+        if (submitBtn.querySelector('.btn-texts')) submitBtn.querySelector('.btn-texts').innerText = 'Sending...';
+        else submitBtn.innerText = 'Sending...';
+
+        try {
+            const response = await fetch('/api/register/generate-password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fullName: nameVal, email: emailVal, role: roleVal })
+            });
+
+            const data = await response.json();
+            if (!data.success) throw new Error(data.message || 'Failed to create account');
+
+            successBox.style.display = 'block';
+            maskInput.value = '****************';
+
+            if (submitBtn.querySelector('.btn-texts')) submitBtn.querySelector('.btn-texts').innerText = 'Credentials Sent';
+            else submitBtn.innerText = 'Credentials Sent';
+
+            submitBtn.disabled = true;
+            alertPopup('success', `Account created for ${nameVal}`);
+
+            // Refresh personnel list
+            const userListContainer = document.getElementById('userListContainer');
+            if (userListContainer) fetchAndRenderUsers(userListContainer);
+
+        } catch (err) {
+            submitBtn.disabled = false;
+            if (submitBtn.querySelector('.btn-texts')) submitBtn.querySelector('.btn-texts').innerText = originalTxt;
+            else submitBtn.innerText = originalTxt;
+            alertPopup('error', err.message);
+        } finally {
+            submitBtn.classList.remove('loading');
+        }
+    }
+
+    submitBtn.addEventListener('click', submit);
+    form.addEventListener('submit', (e) => { e.preventDefault(); submit(); });
 }
