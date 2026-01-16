@@ -27,6 +27,7 @@
     --blue-text: #173f70;
     --light-blue: #174e90;
     --blue-border: #12345d;
+    --text-primary-color: #2c3e50;
     --blue-bg: rgba(23, 63, 112, 0.075);
     --blue-border-invi: rgba(23, 63, 112, 0);
     --btn-shadow: 0px 2px 8px 1px rgba(30, 30, 30, 0.25);
@@ -600,6 +601,7 @@ input:focus, textarea:focus {
     gap: 0.5rem;
     /* justify-content: space-between; */
     align-items: center;
+    width: 100%;
     padding: 0 0.5rem;
 }
 
@@ -628,7 +630,7 @@ input:focus, textarea:focus {
     width: 100%;
     border-radius: 20px;
     border: solid var(--light-border) 1px;
-    background-color: var(--gray-no-opacity);
+    background-color: #f2f2f2;
     color: var(--grayed-text);
     font-size: 12px;
     padding: 0.5rem 1rem;
@@ -668,7 +670,7 @@ input:focus, textarea:focus {
 }
 
 input[type='date'] {
-    padding: 0.5rem 1rem;
+    padding: 0.5rem;
     background-color: var(--gray-no-opacity);
     border: solid #999999 1px;
     border-radius: 3px;

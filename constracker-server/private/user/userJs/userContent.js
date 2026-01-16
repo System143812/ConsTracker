@@ -5,6 +5,9 @@ import { hideContents } from "/mainJs/sidebar.js";
 import { createMilestoneOl, milestoneFullOl, showLogDetailsOverlay, createOverlayWithBg, hideOverlayWithBg, showDeleteConfirmation, showOverlayWithBg } from "/mainJs/overlays.js";
 import { div, span, button, createButton, createFilterContainer, createPaginationControls, createInput, createFilterInput, editFormButton, createSelect } from "/js/components.js";
 import { createProjectCard, generateProjectsContent, generateProjectContent, createProjectDetailCard, createSectionTabs, hideSelectionContents, selectionTabRenderEvent, renderMilestones, renderInventory, renderWorker, createProjectPersonnelCard, refreshProjectDetailsContent } from "/mainJs/projectsContent.js";
+import { generateAssetsContent } from "./assetsContent.js";
+import { generateMaterialRequestsContent } from "./materialRequestsContent.js";
+import { generateReportsContent } from "./userReportsContent.js";
 
 const requiredRoles = ['engineer', 'foreman', 'project manager'];
 
@@ -54,14 +57,6 @@ async function updateDivContents(divContainer, newContentFn) {
 
 
 
-
-
-
-async function generateAssetsContent() {
-    const assetsBodyContent = document.getElementById('assetsBodyContent');
-    assetsBodyContent.innerHTML = '';
-    showEmptyPlaceholder('/assets/icons/inventory.png', assetsBodyContent, null, "Assets Content Coming Soon");
-}
 
 
 
@@ -354,10 +349,7 @@ const tabContents = {
         generateGraphs: async() => '' 
     },
     'material-requests': {
-        generateContent: async(role) => {
-            const { generateMaterialRequestsContent } = await import("./materialRequestsContent.js");
-            return await generateMaterialRequestsContent(role);
-        },
+        generateContent: async(role) => await generateMaterialRequestsContent(role),
         generateGraphs: async() => '' 
     },
     project: {
@@ -367,10 +359,7 @@ const tabContents = {
         }
     },
     reports: {
-        generateContent: async(role) => {
-            const { generateReportsContent } = await import("./userReportsContent.js");
-            return await generateReportsContent(role);
-        },
+        generateContent: async(role) => await generateReportsContent(role),
         generateGraphs: async() => ''
     },
     settings: {

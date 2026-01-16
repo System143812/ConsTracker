@@ -64,12 +64,13 @@ export function createMaterialCard(material, role, currentUserId, refreshMateria
         item.append(labelSpan, valueSpan);
         return item;
     };
-
+    const itemDesc = span('itemCardDescription', 'item-card-descriptions');
+    itemDesc.innerText = material.item_description || 'N/A';
     detailsContainer.append(
-        createDetailItem('Category:', material.category_name || 'N/A'),
-        createDetailItem('Unit:', material.unit_name || 'N/A'),
-        createDetailItem('Size:', material.size || 'N/A'),
-        createDetailItem('Supplier:', material.supplier_name || 'N/A')
+        itemDesc,
+        createDetailItem('CATEGORY', material.category_name || 'N/A'),
+        createDetailItem('UNIT', material.unit_name || 'N/A'),
+        createDetailItem('SUPPLIER', material.supplier_name || 'N/A')
     );
 
     const price = div('materialPrice', 'material-price');
@@ -127,8 +128,8 @@ export function createMaterialCard(material, role, currentUserId, refreshMateria
         imageContainer.append(editIcon);
     }
     
-    statusActions.append(actionsContainer);
-    infoContainer.append(titleStatusContainer, detailsContainer, price, statusActions);
+    statusActions.append(actionsContainer, price);
+    infoContainer.append(titleStatusContainer, detailsContainer, statusActions);
     card.append(imageContainer, infoContainer);
     return card;
 }

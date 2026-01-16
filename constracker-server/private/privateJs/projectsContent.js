@@ -2,7 +2,7 @@ import { fetchData, fetchPostJson } from "/js/apiURL.js";
 import { formatString, dateFormatting } from "/js/string.js";
 import { alertPopup, warnType, showEmptyPlaceholder } from "/js/popups.js";
 import { div, span, createButton, createFilterContainer, createPaginationControls, createInput, validateInput } from "/js/components.js";
-import { createMilestoneOl, milestoneFullOl, createOverlayWithBg, hideOverlayWithBg } from "/mainJs/overlays.js";
+import { createMilestoneOl, milestoneFullOl, createOverlayWithBg, hideOverlayWithBg, showDeleteConfirmation } from "/mainJs/overlays.js";
 
 function roundDecimal(number) {
     return Math.floor(number * 100) / 100;
@@ -283,7 +283,7 @@ export async function generateProjectsContent(role) {
         projectsContainer.innerHTML = '';
         
         if (data === 'error' || data.projects.length === 0) {
-            showEmptyPlaceholder('/assets/icons/projects.png', projectsContainer, null, "No projects found.");
+            showEmptyPlaceholder('/assets/icons/projects.png', projectsBodyContent, null, "No projects found.");
             return;
         }
 
@@ -416,13 +416,13 @@ export function createSectionTabs(role, projectId) {
     if (role === 'admin') {
         newContents = [
             {id: "selectionTabMilestones", label: "Milestones", render: renderMilestones},
-            {id: "selectionTabWorkers", label: "Personnel & Workers", render: renderWorker},
+            {id: "selectionTabWorkers", label: "Personnel", render: renderWorker},
         ];
     } else { // For regular users
         newContents = [
             {id: "selectionTabMilestones", label: "Milestones", render: renderMilestones},
             {id: "selectionTabInventory", label: "Inventory", render: renderInventory},
-            {id: "selectionTabWorkers", label: "Personnel & Workers", render: renderWorker},
+            {id: "selectionTabWorkers", label: "Personnel", render: renderWorker},
             {id: "selectionTabAnalytics", label: "Analytics", render: renderAnalytics},
         ];
     }
@@ -703,39 +703,50 @@ export async function renderWorker(role, projectId) {
     const workerSectionContainer = div('workerSectionContainer');
     const workerSectionHeader = div('workerSectionHeader');
     const workerHeaderTitle = div('workerHeaderTitle');
-    workerHeaderTitle.innerText = 'Personnel & Workers';
-    const addPeopleBtn = createButton('addPeopleBtn', 'text-buttons', 'Add People', 'addPeopleText');
-    
-    workerSectionHeader.append(workerHeaderTitle, addPeopleBtn);
+    workerHeaderTitle.innerText = 'Personnel'; 
 
-    const filterContainer = div('personnel-filter-container');
+    // Conditional "Assign Personnel" button for admin
+    if (role === 'admin') {
+        const assignPersonnelBtn = createButton('assignPersonnelBtn', 'solid-buttons btn-blue', 'Assign Personnel', 'assignPersonnelBtnText', 'addIconWhite');
+        assignPersonnelBtn.addEventListener('click', () => {
+            // Implement assign personnel overlay
+            createAssignPersonnelOverlay(projectId, () => renderPersonnelForProject());
+        });
+        workerSectionHeader.append(assignPersonnelBtn);
+    }
+    
+    workerSectionHeader.append(workerHeaderTitle); // Append title after potential button
+    
     const personnelContainer = div('personnel-main-container');
     personnelContainer.id = 'personnel-main-container';
+    const personnelGrid = div('personnel-grid-container', 'personnel-grid'); // Using grid for cards
     const paginationContainer = div('personnelPaginationContainer', 'pagination-container');
     
-    workerSectionContainer.append(workerSectionHeader, filterContainer, personnelContainer, paginationContainer);
+    personnelContainer.append(personnelGrid, paginationContainer); // Append grid and pagination to main container
+    workerSectionContainer.append(workerSectionHeader, personnelContainer); // Append header and main container to section
 
     let currentPage = 1;
     let itemsPerPage = 10;
-
-    async function renderPersonnel(urlParams = new URLSearchParams()) {
-        personnelContainer.innerHTML = '<div class="loading-spinner"></div>';
+    
+    async function renderPersonnelForProject(urlParams = new URLSearchParams()) {
+        personnelGrid.innerHTML = '<div class="loading-spinner"></div>';
         paginationContainer.innerHTML = '';
 
         urlParams.set('page', currentPage);
         urlParams.set('limit', itemsPerPage);
-        urlParams.set('projectId', projectId);
+        urlParams.set('projectId', projectId); // Ensure projectId is passed for fetching assigned personnel
 
-        const data = await fetchData(`/api/personnel/project?${urlParams.toString()}`);
-        personnelContainer.innerHTML = '';
+        const data = await fetchData(`/api/projects/${projectId}/personnel?${urlParams.toString()}`); // Fetch only assigned personnel
+        personnelGrid.innerHTML = '';
         
         if (data === 'error' || data.personnel.length === 0) {
-            showEmptyPlaceholder('/assets/icons/personnel.png', personnelContainer, null, "No personnel found for this project.");
+            showEmptyPlaceholder('/assets/icons/personnel.png', personnelGrid, null, "No personnel assigned to this project.");
             return;
         }
 
         data.personnel.forEach(person => {
-            personnelContainer.append(createProjectPersonnelCard(person, () => renderPersonnel(urlParams)));
+            // createPersonnelCard should be updated to accept projectId and refreshCallback for remove action
+            personnelGrid.append(createProjectPersonnelCard(person, role, projectId, () => renderPersonnelForProject(urlParams)));
         });
 
         const paginationControls = createPaginationControls({
@@ -744,53 +755,130 @@ export async function renderWorker(role, projectId) {
             itemsPerPage,
             onPageChange: (page) => {
                 currentPage = page;
-                renderPersonnel(urlParams);
+                renderPersonnelForProject(urlParams);
             },
             onItemsPerPageChange: (limit) => {
                 itemsPerPage = limit;
                 currentPage = 1;
-                renderPersonnel(urlParams);
+                renderPersonnelForProject(urlParams);
             }
         });
         paginationContainer.append(paginationControls);
     }
 
-    async function applyFilterToPersonnel(filteredUrlParams) {
-        currentPage = 1;
-        await renderPersonnel(filteredUrlParams);
-    }
-
-    const filters = await createFilterContainer(
-        applyFilterToPersonnel,
-        'Search by name...', 
-        { name: true, sort: true, role: true },
-        'name',
-        'newest'
-    );
-    
-    filterContainer.append(filters);
-
-    await renderPersonnel(new URLSearchParams());
+    await renderPersonnelForProject(new URLSearchParams()); // Initial render
     
     return workerSectionContainer;
 }
 
-export function createProjectPersonnelCard(person, refreshCallback) {
+export async function createAssignPersonnelOverlay(projectId, refreshCallback) {
+    const { overlayBackground, overlayHeader, overlayBody } = createOverlayWithBg();
+    overlayHeader.innerText = `Assign Personnel to Project`;
+
+    const allUsers = await fetchData(`/api/users/unassigned-to-project/${projectId}`); // Adjust API to get users not in this project
+    if (allUsers === 'error') {
+        hideOverlayWithBg(overlayBackground);
+        return alertPopup('error', 'Failed to load users for assignment.');
+    }
+
+    const form = document.createElement('form');
+    form.id = 'assignPersonnelForm';
+
+    const userListContainer = div('assign-user-list', 'scrollable-list');
+    
+    if (allUsers.length === 0) {
+        userListContainer.innerText = 'No unassigned users available.';
+    } else {
+        allUsers.forEach(user => {
+            const userItem = div('', 'user-list-item');
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.id = `user-${user.user_id}`;
+            checkbox.value = user.user_id;
+            const label = document.createElement('label');
+            label.htmlFor = `user-${user.user_id}`;
+            label.innerText = `${user.full_name} (${user.role})`;
+            userItem.append(checkbox, label);
+            userListContainer.append(userItem);
+        });
+    }
+
+    const assignBtn = createButton('confirmAssignBtn', 'solid-buttons', 'Assign Selected Personnel');
+    assignBtn.addEventListener('click', async () => {
+        const selectedUserIds = Array.from(userListContainer.querySelectorAll('input[type="checkbox"]:checked'))
+                                     .map(checkbox => parseInt(checkbox.value));
+
+        if (selectedUserIds.length === 0) {
+            alertPopup('warn', 'Please select at least one user to assign.');
+            return;
+        }
+
+        const payload = {
+            project_id: projectId,
+            user_ids: selectedUserIds
+        };
+
+        const result = await fetchPostJson(`/api/projects/${projectId}/assign-personnel`, 'POST', payload); // New API endpoint
+        if (result.status === 'success') {
+            alertPopup('success', 'Personnel assigned successfully!');
+            hideOverlayWithBg(overlayBackground);
+            if (refreshCallback) refreshCallback();
+        } else {
+            alertPopup('error', result.message || 'Failed to assign personnel.');
+        }
+    });
+
+    const cancelBtn = createButton('cancelAssignBtn', 'wide-buttons', 'Cancel');
+    cancelBtn.addEventListener('click', () => hideOverlayWithBg(overlayBackground));
+
+    form.append(userListContainer, assignBtn, cancelBtn);
+    overlayBody.append(form);
+
+    showOverlayWithBg(overlayBackground);
+}
+
+export function createProjectPersonnelCard(person, currentUserRole, projectId, refreshCallback) {
     const card = div(`personnel-card-${person.user_id}`, 'personnel-card');
+    const nameParts = person.full_name ? person.full_name.trim().split(' ') : ["?"];
+    const initials = nameParts.length > 1 
+        ? (nameParts[0][0] + nameParts[nameParts.length - 1][0]).toUpperCase()
+        : nameParts[0][0].toUpperCase();
 
-    const profileIcon = div('profileIcon', 'personnel-profile-icon');
-    profileIcon.innerText = person.username.charAt(0).toUpperCase();
+    const statusClass = person.is_active == 1 ? 'status-active' : 'status-inactive';
 
-    const infoContainer = div('personnel-info-container');
-    const name = span('personnelName', 'personnel-name');
-    name.innerText = person.username;
-    const email = span('personnelEmail', 'personnel-email');
-    email.innerText = person.email;
-    const role = span('personnelRole', 'personnel-role');
-    role.innerText = person.role;
+    card.innerHTML = `
+        <div class="avatar-wrapper">
+            <div class="personnel-avatar">${initials}</div>
+            <div class="status-bubble ${statusClass}"></div>
+        </div>
+        <div class="personnel-info" style="text-align: center;">
+            <div class="personnel-name">${person.full_name}</div>
+            <div class="personnel-role-tag" style="font-size: 11px; color: var(--blue-text); font-weight: 600; text-transform: uppercase;">${formatString(person.role)}</div>
+            <div class="personnel-email" style="font-size: 12px; color: var(--grayed-text);">${person.email}</div>
+        </div>
+    `;
 
-    infoContainer.append(name, email, role);
-    card.append(profileIcon, infoContainer);
+    // Conditional remove button for admin
+    if (currentUserRole === 'admin') {
+        const removeBtn = createButton('removePersonnelBtn', 'warn-glass red', `Remove`, 'removePersonnelBtnText');
+        removeBtn.style.width = '100%';
+        removeBtn.style.marginTop = '15px';
+
+        removeBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            showDeleteConfirmation(`Remove ${person.full_name} from this project?`, async () => {
+                const result = await fetchPostJson(`/api/projects/${projectId}/remove-personnel`, 'POST', { user_id: person.user_id });
+                if (result.status === 'success') {
+                    alertPopup('success', `${person.full_name} removed from project.`);
+                    if (refreshCallback) refreshCallback();
+                } else {
+                    alertPopup('error', result.message || `Failed to remove ${person.full_name}.`);
+                }
+            });
+        });
+        card.append(removeBtn); // Append remove button to the card
+    }
+
     return card;
 }
 
@@ -811,13 +899,13 @@ export async function refreshProjectDetailsContent(currentProjectId, role) {
     if (role === 'admin') {
         newContents = [
             {id: "selectionTabMilestones", label: "Milestones", render: renderMilestones},
-            {id: "selectionTabWorkers", label: "Personnel & Workers", render: renderWorker},
+            {id: "selectionTabWorkers", label: "Personnel", render: renderWorker},
         ];
     } else { // For regular users
         newContents = [
             {id: "selectionTabMilestones", label: "Milestones", render: renderMilestones},
             {id: "selectionTabInventory", label: "Inventory", render: renderInventory},
-            {id: "selectionTabWorkers", label: "Personnel & Workers", render: renderWorker},
+            {id: "selectionTabWorkers", label: "Personnel", render: renderWorker},
             {id: "selectionTabAnalytics", label: "Analytics", render: renderAnalytics},
         ];
     }

@@ -142,7 +142,7 @@ async function generatePersonnelContent(role) {
         personnelGrid.innerHTML = '';
         
         if (data === 'error' || data.users.length === 0) {
-            showEmptyPlaceholder('/assets/icons/personnel.png', personnelGrid, null, "No personnel found.");
+            showEmptyPlaceholder('/assets/icons/personnel.png', personnelBodyContent, null, "No personnel found.");
             return;
         }
 

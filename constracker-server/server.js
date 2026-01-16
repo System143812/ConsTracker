@@ -521,6 +521,40 @@ async function getAllPersonnel(res, filters) {
     }
 }
 
+async function getProjectPersonnel(res, projectId, filters) {
+    const { page = 1, limit = 10 } = filters;
+    const pageInt = parseInt(page);
+    const limitInt = parseInt(limit);
+    const offset = (pageInt - 1) * limitInt;
+
+    const baseQuery = `
+        FROM users u
+        JOIN assigned_projects ap ON u.user_id = ap.user_id
+        WHERE ap.project_id = ?
+    `;
+    const filterParams = [projectId];
+
+    const countQuery = `SELECT COUNT(u.user_id) AS total ${baseQuery}`;
+    const dataQuery = `
+        SELECT u.user_id, u.full_name, u.email, u.role, u.is_active
+        ${baseQuery}
+        ORDER BY u.full_name ASC
+        LIMIT ${limitInt}
+        OFFSET ${offset}
+    `;
+
+    try {
+        const [countResult] = await pool.execute(countQuery, filterParams);
+        const total = countResult[0].total;
+
+        const [personnel] = await pool.execute(dataQuery, filterParams);
+
+        return { personnel, total };
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+}
+
 async function getAllProjects(res, filters) {
     const { page = 1, limit = 10, name, dateFrom, dateTo, sort } = filters;
     console.log(sort);
@@ -2138,6 +2172,123 @@ app.get('/api/allPersonnel', authMiddleware(['admin']), async(req, res) => {
     res.status(200).json(await getAllPersonnel(res, req.query));
 });
 
+app.get('/api/projects/:projectId/personnel', authMiddleware(['all']), async(req, res) => {
+    const { projectId } = req.params;
+    res.status(200).json(await getProjectPersonnel(res, projectId, req.query));
+});
+
+app.get('/api/users/unassigned-to-project/:projectId', authMiddleware(['admin']), async(req, res) => {
+    const { projectId } = req.params;
+    try {
+        const [users] = await pool.execute(
+            `SELECT u.user_id, u.full_name, u.role 
+             FROM users u 
+             WHERE u.user_id NOT IN (SELECT user_id FROM assigned_projects WHERE project_id = ?)`,
+            [projectId]
+        );
+        res.status(200).json(users);
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+});
+
+app.post('/api/projects/:projectId/assign-personnel', authMiddleware(['admin']), async (req, res) => {
+    const { projectId } = req.params;
+    const { user_ids } = req.body;
+    const { id: adminId } = req.user;
+
+    if (!user_ids || !Array.isArray(user_ids) || user_ids.length === 0) {
+        return failed(res, 400, 'User IDs are required for assignment.');
+    }
+
+    const connection = await pool.getConnection();
+    try {
+        await connection.beginTransaction();
+
+        for (const userId of user_ids) {
+            // Check if already assigned to prevent duplicates
+            const [existing] = await connection.execute(
+                'SELECT * FROM assigned_projects WHERE project_id = ? AND user_id = ?',
+                [projectId, userId]
+            );
+            if (existing.length === 0) {
+                await connection.execute(
+                    'INSERT INTO assigned_projects (project_id, user_id, assigned_by) VALUES (?, ?, ?)',
+                    [projectId, userId, adminId]
+                );
+                // Log the assignment
+                const [userResult] = await connection.execute('SELECT full_name FROM users WHERE user_id = ?', [userId]);
+                const userName = userResult[0]?.full_name || `User ${userId}`;
+                const [projectResult] = await connection.execute('SELECT project_name FROM projects WHERE project_id = ?', [projectId]);
+                const projectName = projectResult[0]?.project_name || `Project ${projectId}`;
+
+                const logData = {
+                    logName: `assigned ${userName} to project ${projectName}`,
+                    projectId: projectId,
+                    type: 'non-item',
+                    action: 'assign_personnel',
+                };
+                await createLogs(res, req, logData);
+            }
+        }
+
+        await connection.commit();
+        res.status(200).json({ status: 'success', message: 'Personnel assigned successfully.' });
+    } catch (error) {
+        await connection.rollback();
+        failed(res, 500, `Database Error: ${error}`);
+    } finally {
+        connection.release();
+    }
+});
+
+app.post('/api/projects/:projectId/remove-personnel', authMiddleware(['admin']), async (req, res) => {
+    const { projectId } = req.params;
+    const { user_id } = req.body;
+    const { id: adminId } = req.user;
+
+    if (!user_id) {
+        return failed(res, 400, 'User ID is required for removal.');
+    }
+
+    const connection = await pool.getConnection();
+    try {
+        await connection.beginTransaction();
+
+        const [result] = await connection.execute(
+            'DELETE FROM assigned_projects WHERE project_id = ? AND user_id = ?',
+            [projectId, user_id]
+        );
+
+        if (result.affectedRows === 0) {
+            await connection.rollback();
+            return failed(res, 404, 'Personnel not found in this project.');
+        }
+
+        // Log the removal
+        const [userResult] = await connection.execute('SELECT full_name FROM users WHERE user_id = ?', [user_id]);
+        const userName = userResult[0]?.full_name || `User ${user_id}`;
+        const [projectResult] = await connection.execute('SELECT project_name FROM projects WHERE project_id = ?', [projectId]);
+        const projectName = projectResult[0]?.project_name || `Project ${projectId}`;
+
+        const logData = {
+            logName: `removed ${userName} from project ${projectName}`,
+            projectId: projectId,
+            type: 'non-item',
+            action: 'remove_personnel',
+        };
+        await createLogs(res, req, logData);
+
+        await connection.commit();
+        res.status(200).json({ status: 'success', message: 'Personnel removed successfully.' });
+    } catch (error) {
+        await connection.rollback();
+        failed(res, 500, `Database Error: ${error}`);
+    } finally {
+        connection.release();
+    }
+});
+
 app.get('/api/allProjects', authMiddleware(['admin', 'engineer']), async(req, res) => { 
     res.status(200).json(await getAllProjects(res, req.query));
 });
@@ -2305,6 +2456,7 @@ app.get('/api/inventory', authMiddleware(['admin', 'engineer', 'project manager'
                 i.item_name,
                 i.item_description,
                 i.image_url AS image_path,
+                i.category_id,
                 mc.category_name,
                 u.unit_name,
                 inv.current_amount as total_in,
@@ -2338,6 +2490,7 @@ app.get('/api/inventory/project/:projectId', authMiddleware(['admin', 'engineer'
                 i.item_name,
                 i.item_description,
                 i.image_url AS image_path,
+                i.category_id,
                 mc.category_name,
                 u.unit_name,
                 inv.current_amount as total_in,

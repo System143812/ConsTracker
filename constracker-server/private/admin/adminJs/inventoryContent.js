@@ -1,21 +1,6 @@
 import { fetchData } from "/js/apiURL.js";
-import { div, span, createPaginationControls } from "/js/components.js";
-
-function createEmptyPlaceholder() {
-    const placeholder = div('empty-inventory-placeholder');
-    const img = document.createElement('img');
-    img.src = '/assets/icons/inventory.png'; 
-    img.alt = 'Empty Inventory';
-
-    const title = document.createElement('h3');
-    title.textContent = 'No Items Found';
-
-    const message = document.createElement('p');
-    message.textContent = 'There are currently no items in this inventory that match your search.';
-
-    placeholder.append(img, title, message);
-    return placeholder;
-}
+import { div, span, createPaginationControls, createFilterContainer } from "/js/components.js";
+import { showEmptyPlaceholder } from "/js/popups.js";
 
 function createInventoryCard(item) {
     const card = div(null, 'inventory-item-card');
@@ -103,7 +88,6 @@ export async function generateInventoryContent(role) {
     }
     
     projectSelectContainer.append(projectSelectLabel, projectSelect);
-
     const filterContainer = div('inventory-filter-container', 'inventory-filter-container');
     const inventoryListContainer = div('inventory-list-container', 'inventory-list-container');
     const paginationContainer = div('inventoryPaginationContainer', 'pagination-container');
@@ -113,22 +97,21 @@ export async function generateInventoryContent(role) {
     let currentPage = 1;
     let itemsPerPage = 12;
     let allInventory = [];
-    let filteredInventory = [];
-    
+
     projectSelect.addEventListener('change', fetchAndRenderInventory);
 
-    function renderInventory() {
+    function renderInventory(itemsToDisplay) {
         inventoryListContainer.innerHTML = '';
         paginationContainer.innerHTML = '';
 
-        if (filteredInventory.length === 0) {
-            inventoryListContainer.append(createEmptyPlaceholder());
+        if (itemsToDisplay.length === 0) {
+            showEmptyPlaceholder('/assets/icons/inventory.png', inventoryListContainer, null, "No Materials found.");
             return;
         }
 
         const start = (currentPage - 1) * itemsPerPage;
         const end = start + itemsPerPage;
-        const pageItems = filteredInventory.slice(start, end);
+        const pageItems = itemsToDisplay.slice(start, end);
 
         pageItems.forEach(item => {
             const card = createInventoryCard(item);
@@ -137,63 +120,101 @@ export async function generateInventoryContent(role) {
 
         const paginationControls = createPaginationControls({
             currentPage,
-            totalItems: filteredInventory.length,
+            totalItems: itemsToDisplay.length,
             itemsPerPage,
             onPageChange: (page) => {
                 currentPage = page;
-                renderInventory();
+                renderInventory(itemsToDisplay);
             },
             onItemsPerPageChange: (limit) => {
                 itemsPerPage = limit;
                 currentPage = 1; 
-                renderInventory();
+                renderInventory(itemsToDisplay);
             }
         });
-        if (filteredInventory.length > itemsPerPage) {
+        if (itemsToDisplay.length > itemsPerPage) {
             paginationContainer.append(paginationControls);
         }
     }
 
-    function applyFilters() {
-        const nameFilter = document.getElementById('inventory-name-filter').value.toLowerCase();
-        
-        filteredInventory = allInventory.filter(item => 
-            item.item_name.toLowerCase().includes(nameFilter)
-        );
-
+    async function applyFilterToInventory(filteredUrlParams) {
         currentPage = 1;
-        renderInventory();
+        await renderInventoryWithFilters(filteredUrlParams);
     }
 
-    async function fetchAndRenderInventory() {
-        inventoryListContainer.innerHTML = '<div class="loading-dots"></div>'; 
-        const selectedInventory = projectSelect.value;
+    async function renderInventoryWithFilters(urlParams = new URLSearchParams()) {
+        inventoryListContainer.innerHTML = '<div class="loading-dots"></div>';
         
-        let url = selectedInventory === 'main' 
-            ? '/api/inventory' 
-            : `/api/inventory/project/${selectedInventory}`;
+        // Get filter values from URL params
+        const nameFilter = urlParams.get('name')?.toLowerCase() || '';
+        const projectFilter = urlParams.get('project')?.toLowerCase() || 'all';
+        const categoryFilter = urlParams.get('category') || 'all';
+        const dateFromFilter = urlParams.get('dateFrom') || 'all';
+        const dateToFilter = urlParams.get('dateTo') || 'all';
+        const sortFilter = urlParams.get('sort') || 'newest';
 
-        if (selectedInventory !== 'main') {
-            const selectedProject = projects.find(p => p.id == selectedInventory);
-            title.innerText = `${selectedProject.name} Inventory`;
-            subtitle.innerText = `Stock levels for the ${selectedProject.name} project.`;
+        // Determine which inventory to fetch
+        let selectedInventoryId = projectSelect.value;
+        if (projectFilter !== 'all' && projectFilter !== '') {
+            selectedInventoryId = projectFilter;
+        }
+
+        let url = selectedInventoryId === 'main' 
+            ? '/api/inventory' 
+            : `/api/inventory/project/${selectedInventoryId}`;
+
+        const data = await fetchData(url);
+        allInventory = (data && data !== 'error') ? data : [];
+
+        // Update title and subtitle
+        if (selectedInventoryId !== 'main') {
+            const selectedProject = projects.find(p => p.id == selectedInventoryId);
+            title.innerText = selectedProject ? `${selectedProject.name} Inventory` : 'Inventory Overview';
+            subtitle.innerText = selectedProject ? `Stock levels for the ${selectedProject.name} project.` : 'Stock levels of all items.';
         } else {
             title.innerText = 'Main Inventory Overview';
             subtitle.innerText = 'Stock levels of all items in the main inventory.';
         }
 
-        const data = await fetchData(url);
-        
-        allInventory = (data && data !== 'error') ? data : [];
-        applyFilters();
+        // Apply filters
+        let filteredInventory = allInventory.filter(item => {
+            const itemNameMatch = item.item_name.toLowerCase().includes(nameFilter);
+            const categoryMatch = categoryFilter === 'all' || item.category_id === parseInt(categoryFilter);
+            return itemNameMatch && categoryMatch;
+        });
+
+        // Sort
+        if (sortFilter === 'newest') {
+            filteredInventory.sort((a, b) => b.item_id - a.item_id);
+        } else if (sortFilter === 'oldest') {
+            filteredInventory.sort((a, b) => a.item_id - b.item_id);
+        } else if (sortFilter === 'atoz') {
+            filteredInventory.sort((a, b) => a.item_name.localeCompare(b.item_name));
+        } else if (sortFilter === 'ztoa') {
+            filteredInventory.sort((a, b) => b.item_name.localeCompare(a.item_name));
+        }
+
+        inventoryListContainer.innerHTML = '';
+        renderInventory(filteredInventory);
     }
-    
-    const searchInput = document.createElement('input');
-    searchInput.type = 'text';
-    searchInput.id = 'inventory-name-filter';
-    searchInput.placeholder = 'Search by item name...';
-    searchInput.addEventListener('input', applyFilters);
-    filterContainer.append(searchInput);
+
+    async function fetchAndRenderInventory() {
+        currentPage = 1;
+        const urlParams = new URLSearchParams();
+        urlParams.set('project', projectSelect.value);
+        await renderInventoryWithFilters(urlParams);
+    }
+
+    // Create the filter container
+    const filters = await createFilterContainer(
+        applyFilterToInventory,
+        'Search by item name...', 
+        { name: true, project: false, category: true, dateFrom: false, dateTo: false, sort: true },
+        'itemName',
+        'newest'
+    );
+
+    filterContainer.append(filters);
 
     await fetchAndRenderInventory();
 }

@@ -1,10 +1,127 @@
 import { fetchData } from "/js/apiURL.js";
-import { div, span, createButton, createFilterContainer, createPaginationControls, createFilterInput } from "/js/components.js";
-import { showEmptyPlaceholder } from "/js/popups.js";
+import { div, span, createButton, createFilterContainer, createPaginationControls, createInput, createItemSearch, createFilterInput } from "/js/components.js";
+import { showEmptyPlaceholder, warnType } from "/js/popups.js";
 import { createOverlayWithBg, hideOverlayWithBg, showOverlayWithBg } from "/mainJs/overlays.js";
-import { dateFormatting } from "/js/string.js";
+import { dateFormatting, formatString } from "/js/string.js";
 
-async function showMaterialRequestDetails(requestId, requestCode) {
+async function createMaterialRequestOverlay(refreshCallback) {
+    const { overlayBackground, overlayHeader, overlayBody } = createOverlayWithBg();
+    overlayHeader.innerText = 'Create Material Request';
+
+    let requestedItems = [];
+
+    const form = document.createElement('form');
+    form.id = 'materialRequestForm';
+
+    // --- Project and Type Selection ---
+    const projects = await fetchData('/api/selection/project');
+    if (projects === 'error') {
+        hideOverlayWithBg(overlayBackground);
+        return alertPopup('error', 'Failed to load projects.');
+    }
+    const requestTypes = [{ id: 'supplier', name: 'Supplier' }, { id: 'main_inventory', name: 'Main Inventory' }];
+    const suppliers = await fetchData('/api/materials/suppliers');
+     if (suppliers === 'error') {
+        hideOverlayWithBg(overlayBackground);
+        return alertPopup('error', 'Failed to load suppliers.');
+    }
+
+    const projectSelect = createFilterInput('select', 'dropdown', 'requestProject', 'project_id', 'all', 'Select a project', null, 'single', 1, projects);
+    const requestTypeSelect = createFilterInput('select', 'dropdown', 'requestType', 'request_type', 'all', 'Select request type', null, 'single', 1, requestTypes);
+    const supplierSelect = createFilterInput('select', 'dropdown', 'requestSupplier', 'supplier_id', 'all', 'Select a supplier', null, 'single', 1, suppliers);
+    supplierSelect.style.display = 'none'; // Initially hidden
+
+    requestTypeSelect.querySelector('.dropdown-input').addEventListener('change', () => {
+        if (requestTypeSelect.dataset.value === 'supplier') {
+            supplierSelect.style.display = 'block';
+        } else {
+            supplierSelect.style.display = 'none';
+        }
+    });
+    
+    // --- Items Section ---
+    const itemsHeader = document.createElement('h4');
+    itemsHeader.innerText = 'Requested Items';
+    const itemsContainer = div('request-items-container');
+    const addItemBtn = createButton('addItemBtn', 'text-buttons', '+ Add Item');
+    
+    const renderRequestedItems = () => {
+        itemsContainer.innerHTML = '';
+        if (requestedItems.length === 0) {
+            itemsContainer.innerText = 'No items added yet.';
+            return;
+        }
+        requestedItems.forEach((item, index) => {
+            const itemElement = div('requested-item', `req-item-${index}`);
+            itemElement.innerHTML = `<span>${item.item_name} (Qty: ${item.quantity})</span>`;
+            const removeBtn = createButton('remove-item', 'icon-buttons', 'x');
+            removeBtn.addEventListener('click', () => {
+                requestedItems.splice(index, 1);
+                renderRequestedItems();
+            });
+            itemElement.append(removeBtn);
+            itemsContainer.append(itemElement);
+        });
+    };
+
+    addItemBtn.addEventListener('click', () => {
+        createItemSearch(async (selectedItem) => {
+            const quantity = prompt(`Enter quantity for ${selectedItem.item_name}:`);
+            if (quantity && !isNaN(quantity) && Number(quantity) > 0) {
+                requestedItems.push({ ...selectedItem, quantity: Number(quantity) });
+                renderRequestedItems();
+            } else if (quantity) {
+                alert('Please enter a valid positive number for the quantity.');
+            }
+        });
+    });
+
+    // --- Footer and Submit Buttons ---
+    const footer = div('request-footer');
+    const saveDraftBtn = createButton('saveDraftBtn', 'wide-buttons', 'Save as Draft');
+    const submitBtn = createButton('submitRequestBtn', 'wide-buttons solid-buttons', 'Submit Request');
+    
+    const handleSubmit = async (status) => {
+        const payload = {
+            project_id: projectSelect.dataset.value,
+            request_type: requestTypeSelect.dataset.value,
+            supplier_id: requestTypeSelect.dataset.value === 'supplier' ? supplierSelect.dataset.value : null,
+            items: requestedItems,
+            status: status
+        };
+
+        if (!payload.project_id || !payload.request_type || (payload.request_type === 'supplier' && !payload.supplier_id) || payload.items.length === 0) {
+            alert('Please fill all required fields and add at least one item.');
+            return;
+        }
+
+        const result = await fetchData('/api/material-requests', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (result.status === 'success') {
+            hideOverlayWithBg(overlayBackground);
+            if (refreshCallback) refreshCallback();
+            alert('Request successfully created!');
+        } else {
+            console.error('Failed to create request:', result);
+            alert('Failed to create request.');
+        }
+    };
+
+    saveDraftBtn.addEventListener('click', () => handleSubmit('DRAFT'));
+    submitBtn.addEventListener('click', () => handleSubmit('requested'));
+
+    footer.append(saveDraftBtn, submitBtn);
+    form.append(projectSelect, requestTypeSelect, supplierSelect, itemsHeader, itemsContainer, addItemBtn, footer);
+    overlayBody.append(form);
+
+    renderRequestedItems(); // Initial render
+}
+
+async function showMaterialRequestDetails(requestId, requestCode, refreshCallback) {
     const { overlayBackground, overlayHeader, overlayBody } = createOverlayWithBg();
     overlayHeader.innerText = `Material Request ${requestCode}`;
 
@@ -58,33 +175,339 @@ async function showMaterialRequestDetails(requestId, requestCode) {
     itemsTable.append(thead, tbody);
     overlayBody.append(itemsTable);
 
+    const deliveriesHeader = document.createElement('h3');
+    deliveriesHeader.innerText = 'Deliveries';
+    overlayBody.append(deliveriesHeader);
+
+    const deliveriesContainer = div('deliveries-container');
+    overlayBody.append(deliveriesContainer);
+
+    const deliveriesData = await fetchData(`/api/material-requests/${requestId}/deliveries`);
+    if (deliveriesData && deliveriesData.length > 0) {
+        const deliveriesTable = document.createElement('table');
+        const dThead = document.createElement('thead');
+        dThead.innerHTML = `<tr><th>Date</th><th>Delivered By</th><th>Status</th><th>Acknowledged By</th></tr>`;
+        const dTbody = document.createElement('tbody');
+        deliveriesData.forEach(delivery => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${dateFormatting(delivery.delivery_date, 'date')}</td>
+                <td>${delivery.delivered_by}</td>
+                <td>${delivery.delivery_status}</td>
+                <td>${delivery.acknowledged_by_name}</td>
+            `;
+            dTbody.append(row);
+        });
+        deliveriesTable.append(dThead, dTbody);
+            deliveriesContainer.append(deliveriesTable);
+        } else {
+            deliveriesContainer.innerText = 'No deliveries recorded yet.';
+        }
+        
+        const activityHeader = document.createElement('h3');
+        activityHeader.innerText = 'Activity Log';
+        overlayBody.append(activityHeader);
+        
+        const activityContainer = div('activity-log-container');
+        overlayBody.append(activityContainer);
+        
+        const actionsData = await fetchData(`/api/material-requests/${requestId}/actions`);
+        if (actionsData && actionsData.length > 0) {
+            actionsData.forEach(action => {
+                const actionElement = div('', 'activity-log-item');
+                actionElement.innerHTML = `
+                    <p class="action-info"><strong>${action.action.toUpperCase()}</strong> by ${action.performed_by_name}</p>
+                    <p class="action-date">${dateFormatting(action.created_at, 'dateTime')}</p>
+                    ${action.remarks ? `<p class="action-remarks">Remarks: ${action.remarks}</p>` : ''}
+                `;
+                activityContainer.append(actionElement);
+            });
+        } else {
+            activityContainer.innerText = 'No actions recorded yet.';
+        }
+        
+        const actionsContainer = div('', 'request-actions-container');
+    if (header.status === 'requested') {
+        const remarksInput = createInput('text', 'remarks', 'remarks', '', 'Add remarks (optional)...');
+        
+        const approveButton = createButton('approveRequestBtn', 'solid-buttons', 'Approve');
+        approveButton.addEventListener('click', async () => {
+            const remarks = document.getElementById('remarks').value;
+            const result = await fetchData(`/api/material-requests/${requestId}/approve`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ remarks })
+            });
+
+            if (result.status === 'success') {
+                hideOverlayWithBg(overlayBackground);
+                if (refreshCallback) refreshCallback();
+            } else {
+                console.error('Failed to approve request:', result);
+            }
+        });
+
+        const declineButton = createButton('declineRequestBtn', 'danger-buttons', 'Decline');
+        declineButton.addEventListener('click', async () => {
+            const remarks = document.getElementById('remarks').value;
+            const result = await fetchData(`/api/material-requests/${requestId}/decline`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ remarks })
+            });
+
+            if (result.status === 'success') {
+                hideOverlayWithBg(overlayBackground);
+                if (refreshCallback) refreshCallback();
+            } else {
+                console.error('Failed to decline request:', result);
+            }
+        });
+
+        actionsContainer.append(remarksInput, approveButton, declineButton);
+    }
+
+    if (header.status === 'approved') {
+        const remarksInput = createInput('text', 'remarks', 'remarks', '', 'Add remarks (optional)...');
+        const orderButton = createButton('orderRequestBtn', 'solid-buttons', 'Mark as Ordered');
+        orderButton.addEventListener('click', async () => {
+            const remarks = document.getElementById('remarks').value;
+            const result = await fetchData(`/api/material-requests/${requestId}/order`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ remarks })
+            });
+            if (result.status === 'success') {
+                hideOverlayWithBg(overlayBackground);
+                if (refreshCallback) refreshCallback();
+            } else {
+                console.error('Failed to mark as ordered:', result);
+            }
+        });
+        actionsContainer.append(remarksInput, orderButton);
+    }
+
+    if (header.status === 'ordered') {
+        const recordDeliveryButton = createButton('recordDeliveryBtn', 'solid-buttons', 'Record Delivery');
+        recordDeliveryButton.addEventListener('click', () => {
+            createDeliveryOverlay(requestId, requestCode, refreshCallback);
+        });
+        actionsContainer.append(recordDeliveryButton);
+    }
+
+    if (header.status === 'verifying' || header.status === 'partially_verified') {
+        const verifyButton = createButton('verifyDeliveryBtn', 'solid-buttons', 'Verify Items');
+        verifyButton.addEventListener('click', () => {
+            createVerificationOverlay(requestId, requestCode, items, refreshCallback);
+        });
+        actionsContainer.append(verifyButton);
+    }
+
+    if (['verified', 'partially_verified', 'disputed'].includes(header.status)) {
+        const reviewRemarks = createInput('text', 'review_remarks', 'reviewRemarks', '', 'Add review comments...');
+        const reviewButton = createButton('submitReviewBtn', 'solid-buttons', 'Submit Review');
+
+        reviewButton.addEventListener('click', async () => {
+            const remarks = document.getElementById('reviewRemarks').value;
+            if (!remarks) {
+                alert('Review comments cannot be empty.');
+                return;
+            }
+
+            const result = await fetchData(`/api/material-requests/${requestId}/review`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ remarks })
+            });
+
+            if (result.status === 'success') {
+                hideOverlayWithBg(overlayBackground);
+                showMaterialRequestDetails(requestId, refreshCallback);
+            } else {
+                console.error('Failed to submit review:', result);
+            }
+        });
+
+        actionsContainer.append(reviewRemarks, reviewButton);
+    }
+
+    overlayBody.append(actionsContainer);
+
+
     const closeButton = createButton('closeOverlayBtn', 'wide-buttons', 'Close');
     closeButton.addEventListener('click', () => hideOverlayWithBg(overlayBackground));
     overlayBody.append(closeButton);
 }
 
-export async function generateMaterialRequestsContent(role) {
-    const materialRequestsBodyContainer = document.getElementById('material-requestsBodyContainer'); 
-    materialRequestsBodyContainer.innerHTML = '';
+function createVerificationOverlay(requestId, requestCode, items, refreshCallback) {
+    const { overlayBackground, overlayHeader, overlayBody } = createOverlayWithBg();
+    overlayHeader.innerText = `Verify Items for Request ${requestCode}`;
 
-    // Setup header section
-    const materialRequestsBodyHeader = div('material-requestsBodyHeader', 'body-header');
-    const bodyHeaderContainer = div('', 'body-header-container');
-    const title = div('', 'body-header-title');
+    const form = document.createElement('form');
+    form.id = 'verificationForm';
+
+    const verificationItemsContainer = div('verification-items-container');
+    
+    items.forEach(item => {
+        const itemContainer = div(`verify-item-${item.id}`, 'verification-item');
+        
+        itemContainer.innerHTML = `
+            <span class="item-name">${item.item_name}</span>
+            <span class="item-qty">Pending: ${item.pending_quantity}</span>
+        `;
+        
+        const acceptedInput = createInput('number', `accepted_${item.id}`, `accepted_qty_${item.id}`, '', 'Accepted Qty');
+        acceptedInput.min = 0;
+        const rejectedInput = createInput('number', `rejected_${item.id}`, `rejected_qty_${item.id}`, '', 'Rejected Qty');
+        rejectedInput.min = 0;
+        const remarksInput = createInput('text', `remarks_${item.id}`, `remarks_${item.id}`, '', 'Remarks');
+        
+        itemContainer.append(acceptedInput, rejectedInput, remarksInput);
+        verificationItemsContainer.append(itemContainer);
+    });
+
+    form.append(verificationItemsContainer);
+
+    const submitButton = createButton('submitVerification', 'solid-buttons', 'Submit Verification');
+    submitButton.addEventListener('click', async (e) => {
+        e.preventDefault();
+        
+        let validationFailed = false;
+        const verificationData = items.map(item => {
+            const accepted_qty = parseInt(document.getElementById(`accepted_qty_${item.id}`).value) || 0;
+            const rejected_qty = parseInt(document.getElementById(`rejected_qty_${item.id}`).value) || 0;
+            const remarks = document.getElementById(`remarks_${item.id}`).value;
+            
+            if (accepted_qty + rejected_qty > item.pending_quantity) {
+                console.error(`Qty for ${item.item_name} exceeds pending quantity.`);
+                validationFailed = true;
+                return null; 
+            }
+            
+            return {
+                mr_item_id: item.id,
+                accepted_qty,
+                rejected_qty,
+                remarks
+            };
+        }).filter(Boolean);
+
+        if (validationFailed) {
+            // Show error popup to the user
+            alert('One or more item quantities exceed the pending amount.');
+            return;
+        }
+
+        if (verificationData.length === 0) {
+            alert('No quantities were entered for verification.');
+            return;
+        }
+
+        const result = await fetchData(`/api/material-requests/${requestId}/verify`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(verificationData)
+        });
+
+        if (result.status === 'success') {
+            hideOverlayWithBg(overlayBackground);
+            if (refreshCallback) refreshCallback();
+        } else {
+            console.error('Failed to submit verification:', result);
+        }
+    });
+
+    overlayBody.append(form, submitButton);
+
+    const closeButton = createButton('closeOverlayBtn', 'wide-buttons', 'Cancel');
+    closeButton.addEventListener('click', () => hideOverlayWithBg(overlayBackground));
+    overlayBody.append(closeButton);
+}
+
+
+function createDeliveryOverlay(requestId, requestCode, refreshCallback) {
+    const { overlayBackground, overlayHeader, overlayBody } = createOverlayWithBg();
+    overlayHeader.innerText = `Record Delivery for Request ${requestCode}`;
+
+    const form = document.createElement('form');
+
+    const deliveredByInput = createInput('text', 'delivered_by', 'deliveredBy', '', 'Delivered By');
+    const deliveryDateInput = createInput('date', 'delivery_date', 'deliveryDate', '', 'Delivery Date');
+    
+    const statusLabel = document.createElement('label');
+    statusLabel.textContent = 'Delivery Status';
+    const deliveryStatusSelect = document.createElement('select');
+    deliveryStatusSelect.id = 'deliveryStatus';
+    const statuses = ['partial', 'complete'];
+    statuses.forEach(status => {
+        const option = document.createElement('option');
+        option.value = status;
+        option.textContent = status.charAt(0).toUpperCase() + status.slice(1);
+        deliveryStatusSelect.append(option);
+    });
+    
+    const submitButton = createButton('submitDelivery', 'solid-buttons', 'Submit');
+    submitButton.addEventListener('click', async (e) => {
+        e.preventDefault();
+        const deliveryData = {
+            delivered_by: document.getElementById('deliveredBy').value,
+            delivery_date: document.getElementById('deliveryDate').value,
+            delivery_status: document.getElementById('deliveryStatus').value
+        };
+
+        if (!deliveryData.delivered_by || !deliveryData.delivery_date) {
+            // handle error - maybe replace with a popup
+            console.error("Delivery person and date are required.");
+            return;
+        }
+
+        const result = await fetchData(`/api/material-requests/${requestId}/deliveries`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(deliveryData)
+        });
+
+        if (result.status === 'success') {
+            hideOverlayWithBg(overlayBackground);
+            if (refreshCallback) refreshCallback();
+        } else {
+            console.error('Failed to record delivery:', result);
+        }
+    });
+
+    form.append(deliveredByInput, deliveryDateInput, statusLabel, deliveryStatusSelect, submitButton);
+    overlayBody.append(form);
+
+    const closeButton = createButton('closeOverlayBtn', 'wide-buttons', 'Cancel');
+    closeButton.addEventListener('click', () => hideOverlayWithBg(overlayBackground));
+    overlayBody.append(closeButton);
+}
+
+export async function generateMaterialRequestsContent(role) {
+    const materialRequestsBodyHeader = document.getElementById('material-requestsBodyHeader'); 
+    const materialRequestsBodyContent = document.getElementById('material-requestsBodyContent');
+    materialRequestsBodyContent.innerHTML = '';
+
+    // Update header section
+    const bodyHeaderContainer = materialRequestsBodyHeader.querySelector('.body-header-container');
+    const title = bodyHeaderContainer.querySelector('.body-header-title');
+    const subtitle = bodyHeaderContainer.querySelector('.body-header-subtitle');
     title.innerText = 'Material Requests';
-    const subtitle = div('', 'body-header-subtitle');
-    subtitle.innerText = 'Browse and manage your material requests.';
-    bodyHeaderContainer.append(title, subtitle);
-    materialRequestsBodyHeader.append(bodyHeaderContainer);
+    subtitle.innerText = 'Browse and manage all material requests.';
+    
+    // Clear any previous buttons and add Create Request button
+    const existingBtn = materialRequestsBodyHeader.querySelector('.solid-buttons');
+    if (existingBtn) existingBtn.remove();
+    const createRequestBtn = createButton('createRequestBtn', 'solid-buttons btn-blue', 'Create Request', 'createRequestBtnText', 'addMaterialBtnIcon');
+    createRequestBtn.addEventListener('click', () => createMaterialRequestOverlay(renderMaterialRequests));
+    materialRequestsBodyHeader.append(createRequestBtn);
 
     // Setup content section
-    const materialRequestsBodyContent = div('material-requestsBodyContent', 'body-content');
     const filterContainer = div('material-requests-filter-container');
     const materialRequestsListContainer = div('material-requests-list-container');
     const paginationContainer = div('material-requests-pagination-container', 'pagination-container');
     
     materialRequestsBodyContent.append(filterContainer, materialRequestsListContainer, paginationContainer);
-    materialRequestsBodyContainer.append(materialRequestsBodyHeader, materialRequestsBodyContent);
 
     let currentPage = 1;
     let itemsPerPage = 10;
@@ -113,15 +536,20 @@ export async function generateMaterialRequestsContent(role) {
             const requestCardTitle = div(`requestCardTitle`, `request-card-title`);
             requestCardTitle.innerText = `${request.project_name}`;
             const requestCardPriority = div(`requestCardPriority`, `request-card-priority`);
-            if(request.priority_level === "medium") warnType(requestCardPriority, "solid", 'yellow', '', '');
-            if(request.priority_level === "low") warnType(requestCardPriority, "solid", 'green', '', '');
-            if(request.priority_level === "high") warnType(requestCardPriority, "solid", 'red', '', '');
-            requestCardPriority.innerText = `${request.priority_level} Priority`;
+            if (request.priority_level) {
+                if(request.priority_level === "medium") warnType(requestCardPriority, "solid", 'yellow', '', '');
+                if(request.priority_level === "low") warnType(requestCardPriority, "solid", 'green', '', '');
+                if(request.priority_level === "high") warnType(requestCardPriority, "solid", 'red', '', '');
+                requestCardPriority.innerText = `${request.priority_level} Priority`;
+            } else {
+                requestCardPriority.innerText = 'No Priority';
+                warnType(requestCardPriority, "solid", 'grey', '', ''); // Apply a neutral style for 'No Priority'
+            }
             const requestCardBody = div(`requestCardBody`, `request-card-body`);
             const requestCardName = div(`requestCardName`, `request-card-name`);
             requestCardName.innerText = `Requested by ${request.requester_name} • `;
             const requestCardItemCount = div(`requestCardItemCount`, `request-card-item-count`);
-            requestCardItemCount.innerText = `${request.item_count} items • `; 
+            requestCardItemCount.innerText = `${request.item_count} item(s) • `; 
             const requestCardCost = div(`requestCardCost`, `request-card-cost`);
             requestCardCost.innerText = `₱${request.total_cost ? request.total_cost.toLocaleString() : '0'}`;
             const requestCardRight = div(`requestCardRight`, `request-card-right`);
@@ -129,15 +557,18 @@ export async function generateMaterialRequestsContent(role) {
             const requestStatusIcon = div(`requestStatusIcon`, `request-status-icon`);
             requestStatusIcon.classList.add('icons');
             const requestStatusLabel = div(`requestStatusLabel`, `request-status-label`);
-            if(request.current_stage === "pending") warnType(requestStatusContainer, "", 'yellow', requestStatusIcon, requestStatusLabel);
-            if(request.current_stage === "approved") warnType(requestStatusContainer, "", 'green', requestStatusIcon, requestStatusLabel);
-            if(request.current_stage === "rejected") warnType(requestStatusContainer, "", 'red', requestStatusIcon, requestStatusLabel);
-            requestStatusLabel.innerText = `${request.current_stage}`;
+            if(request.status === "pending") warnType(requestStatusContainer, "", 'yellow', requestStatusIcon, requestStatusLabel);
+            if(request.status === "approved") warnType(requestStatusContainer, "", 'green', requestStatusIcon, requestStatusLabel);
+            if(request.status === "rejected") warnType(requestStatusContainer, "", 'red', requestStatusIcon, requestStatusLabel);
+            requestStatusLabel.innerText = `${request.status}`;
             const requestCardDate = div(`requestCardDate`, `request-card-date`);
             requestCardDate.innerText = `${dateFormatting(request.created_at, 'dateTime')}`; 
             
+            const requestStage = div('requestCardStage', 'request-stage-text');
+            requestStage.innerText = `Stage: ${formatString(request.current_stage)}`;
+
             requestCardContainer.append(requestCardLeft, requestCardRight);
-            requestCardLeft.append(requestCardHeader, requestCardBody, requestCardDate);
+            requestCardLeft.append(requestCardHeader, requestCardBody, requestCardDate, requestStage);
             requestCardHeader.append(requestCardTitle, requestCardPriority);
             requestCardBody.append(requestCardName, requestCardItemCount, requestCardCost);
             requestCardRight.append(requestStatusContainer);

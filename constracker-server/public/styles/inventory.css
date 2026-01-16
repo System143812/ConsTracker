@@ -39,33 +39,32 @@
 
 .project-select-container {
     display: flex;
-    align-items: center;
-    gap: 12px;
-    flex: 1;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0 0.5rem;
+    height: fit-content;
     min-width: 250px;
 }
 
 .project-select-container label {
-    font-size: 0.95rem;
     font-weight: 600;
     color: var(--text-primary-color);
     white-space: nowrap;
 }
 
 .filter-select {
-    padding: 10px 14px;
-    border-radius: 8px;
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
     border: 1px solid var(--border-color);
-    background-color: var(--surface-color);
-    color: var(--text-primary-color);
-    font-size: 0.95rem;
+    color: var(--grayed-text);
     cursor: pointer;
     transition: all 0.2s ease;
-    border: 1px solid var(--border-color);
-    background-color: #fff;
-    font-size: 1rem;
+    border: 1px solid var(--light-border);
+    background-color: #f2f2f2;
+    font-size: 12px;
     font-weight: 500;
     min-width: 220px;
+    max-width: 700px;
     transition: all 0.3s ease;
 }
 
@@ -77,14 +76,15 @@
 
 .inventory-filter-container {
     display: flex;
+    width: 100%;
+    height: fit-content;
     align-items: center;
 }
 
 #inventory-name-filter {
-    padding: 10px 16px;
-    border-radius: 8px;
+    padding: 0.5rem 1rem;
+    border-radius: 50px;
     border: 1px solid var(--border-color);
-    font-size: 1rem;
     width: 300px;
     transition: all 0.3s ease;
 }
@@ -96,9 +96,13 @@
 }
 
 .inventory-list-container {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 24px;
+    display: flex;
+    flex-wrap: wrap;
+    flex: 1;
+    gap: 1.5rem;
+    width: 100%;
+    padding: 0.5rem 0;
+    justify-content: center;
 }
 
 .inventory-item-card {
@@ -110,7 +114,7 @@
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     display: flex;
     flex-direction: column;
-    height: 100%;
+    width: 280px;
 }
 
 .inventory-item-card:hover {

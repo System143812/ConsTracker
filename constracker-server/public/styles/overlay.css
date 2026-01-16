@@ -371,9 +371,17 @@
 
 @media (max-width: 850px){
     .overlay-containers {
-        max-width: 80%;
+        max-width: 90%;
         max-height: 70%;
-        min-width: 50%;
+        min-width: 60%;
+    }
+}
+
+@media (max-width: 480px){
+    .overlay-containers {
+        max-width: 90%;
+        max-height: 70%;
+        min-width: 85%;
     }
 }
 
