@@ -28,6 +28,101 @@ const indexDir = path.join(__dirName, "public");
 const privDir = path.join(__dirName, "private");
 const JWT_KEY = process.env.JWT_SECRET_KEY;
 
+// ---- User preferences / profile assets ----
+const AVATAR_DIR = path.join(__dirName, 'public', 'avatarImages');
+
+function ensureDir(dirPath) {
+    try {
+        if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
+    } catch (e) {
+        console.error('Failed to ensure directory:', dirPath, e);
+    }
+}
+
+async function ensureUserSettingsTable() {
+    // Stores per-user UI preferences and avatar pointers.
+    // Intentionally kept minimal (no FK) to avoid environment-specific MySQL settings.
+    await pool.execute(`
+        CREATE TABLE IF NOT EXISTS user_settings (
+            user_id INT PRIMARY KEY,
+            dark_mode TINYINT(1) NOT NULL DEFAULT 0,
+            font_size VARCHAR(8) NOT NULL DEFAULT 'md',
+            avatar_path VARCHAR(255) DEFAULT NULL,
+            avatar_url VARCHAR(2048) DEFAULT NULL,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )
+    `);
+}
+
+async function ensureAssetsTable() {
+    // Basic asset register (admin-managed). Kept simple and additive.
+    await pool.execute(`
+        CREATE TABLE IF NOT EXISTS assets (
+            asset_id INT NOT NULL AUTO_INCREMENT,
+            asset_name VARCHAR(255) NOT NULL,
+            asset_type VARCHAR(120) DEFAULT NULL,
+            asset_tag VARCHAR(120) DEFAULT NULL,
+            project_id INT DEFAULT NULL,
+            status ENUM('available','in_use','maintenance','retired') NOT NULL DEFAULT 'available',
+            purchase_date DATE DEFAULT NULL,
+            asset_value DECIMAL(12,2) DEFAULT NULL,
+            notes VARCHAR(500) DEFAULT NULL,
+            created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            updated_by INT DEFAULT NULL,
+            PRIMARY KEY (asset_id),
+            KEY idx_assets_project (project_id),
+            KEY idx_assets_updated_by (updated_by)
+        )
+    `);
+}
+
+async function ensureReportsTable() {
+    // Lightweight user reporting module.
+    await pool.execute(`
+        CREATE TABLE IF NOT EXISTS reports (
+            report_id INT NOT NULL AUTO_INCREMENT,
+            project_id INT DEFAULT NULL,
+            report_title VARCHAR(255) NOT NULL,
+            report_body TEXT NOT NULL,
+            created_by INT NOT NULL,
+            created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (report_id),
+            KEY idx_reports_project (project_id),
+            KEY idx_reports_created_by (created_by)
+        )
+    `);
+}
+
+async function getOrCreateUserSettings(userId) {
+    const [rows] = await pool.execute('SELECT * FROM user_settings WHERE user_id = ?', [userId]);
+    if (rows.length > 0) return rows[0];
+    await pool.execute('INSERT INTO user_settings (user_id) VALUES (?)', [userId]);
+    const [after] = await pool.execute('SELECT * FROM user_settings WHERE user_id = ?', [userId]);
+    return after[0];
+}
+
+// Multer configuration for avatar uploads (max 5MB)
+const avatarStorage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        cb(null, AVATAR_DIR);
+    },
+    filename: function (req, file, cb) {
+        const hash = crypto.createHash('sha256').update(file.originalname + Date.now()).digest('hex');
+        const extension = path.extname(file.originalname);
+        cb(null, `${hash}${extension}`);
+    }
+});
+
+const avatarUpload = multer({
+    storage: avatarStorage,
+    limits: { fileSize: 5 * 1024 * 1024 },
+    fileFilter: function (req, file, cb) {
+        const ok = /^image\//.test(file.mimetype || '');
+        cb(ok ? null : new Error('Only image uploads are allowed'), ok);
+    }
+});
+
 // Multer configuration for file uploads
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
@@ -950,11 +1045,30 @@ async function getSelection(res, req, type) {
                 const [result] = await pool.execute(selectionQuery);
                 return result;
             } else {
-                const projectPlaceholders = req.user.projects.map(() => "?").join(",");
+                // Non-admin users can only select from their assigned projects.
+                // IMPORTANT: MariaDB will throw a syntax error on `IN ()`, so guard empty lists.
+                const projects = Array.isArray(req.user.projects) ? req.user.projects.filter(Boolean) : [];
+                if (projects.length === 0) return [];
+
+                const projectPlaceholders = projects.map(() => "?").join(",");
                 selectionQuery = `SELECT project_id AS id, project_name AS name FROM projects WHERE project_id IN(${projectPlaceholders})`;
-                const [result] = await pool.execute(selectionQuery, req.user.projects);
+                const [result] = await pool.execute(selectionQuery, projects);
                 return result;
             }
+        }
+
+        if (type === 'item') {
+            // Inventory selector: approved items only
+            selectionQuery = "SELECT item_id AS id, item_name AS name FROM items WHERE status = 'approved' ORDER BY name ASC";
+            const [result] = await pool.execute(selectionQuery);
+            return result;
+        }
+
+        if (type === 'user') {
+            // Report filters (admin): active users only
+            selectionQuery = "SELECT user_id AS id, full_name AS name FROM users WHERE role <> 'terminated' ORDER BY name ASC";
+            const [result] = await pool.execute(selectionQuery);
+            return result;
         }
     } catch (error) {
         failed(res, 500, `Database Error: ${error}`);
@@ -991,7 +1105,8 @@ app.get('/api/users/all', async (req, res) => {
     try {
         // Correct column names: user_id instead of id
         const [rows] = await pool.execute(
-            'SELECT user_id, full_name, email, is_active FROM users ORDER BY full_name ASC'
+            // Hide terminated accounts from generic user listings
+            "SELECT user_id, full_name, email, is_active FROM users WHERE role IS NULL OR role <> 'terminated' ORDER BY full_name ASC"
         );
         res.json(rows);
     } catch (error) {
@@ -1005,7 +1120,8 @@ app.get('/api/users', async (req, res) => {
         // Fetch users from database
         // We select full_name, email, role, and is_active (the column in your SQL)
         const [rows] = await pool.execute(
-            'SELECT user_id, full_name, email, role, is_active FROM users ORDER BY full_name ASC'
+            // Hide terminated accounts from generic user listings
+            "SELECT user_id, full_name, email, role, is_active FROM users WHERE role IS NULL OR role <> 'terminated' ORDER BY full_name ASC"
         );
         res.json(rows);
     } catch (error) {
@@ -1014,12 +1130,472 @@ app.get('/api/users', async (req, res) => {
     }
 });
 
+// --- Personnel management (Admin only) ---
+app.get('/api/users/:id', authMiddleware(['admin']), async (req, res) => {
+    try {
+        const userId = req.params.id;
+        const [rows] = await pool.execute(
+            'SELECT user_id, full_name, email, role, is_active FROM users WHERE user_id = ? LIMIT 1',
+            [userId]
+        );
+        if (rows.length === 0) return res.status(404).json({ success: false, message: 'User not found' });
+        res.status(200).json(rows[0]);
+    } catch (error) {
+        console.error('Error fetching user:', error);
+        res.status(500).json({ success: false, message: 'Internal Server Error' });
+    }
+});
+
+app.put('/api/users/:id', authMiddleware(['admin']), async (req, res) => {
+    try {
+        const userId = req.params.id;
+        const { full_name, email, role, password } = req.body || {};
+
+        if (!full_name || !String(full_name).trim()) {
+            return res.status(400).json({ success: false, message: 'Full name is required' });
+        }
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!email || !emailRegex.test(String(email))) {
+            return res.status(400).json({ success: false, message: 'Valid email is required' });
+        }
+        if (!role || !String(role).trim()) {
+            return res.status(400).json({ success: false, message: 'Role is required' });
+        }
+
+        const passwordProvided = typeof password === 'string' && password.trim().length > 0;
+        let hashedPassword = null;
+        if (passwordProvided) {
+            if (password.trim().length < 6) {
+                return res.status(400).json({ success: false, message: 'Password must be at least 6 characters' });
+            }
+            hashedPassword = await bcrypt.hash(password.trim(), 10);
+        }
+
+        // Capture old values for logs
+        const [existing] = await pool.execute(
+            'SELECT full_name, email, role FROM users WHERE user_id = ? LIMIT 1',
+            [userId]
+        );
+        if (existing.length === 0) return res.status(404).json({ success: false, message: 'User not found' });
+
+        if (passwordProvided) {
+            await pool.execute(
+                'UPDATE users SET full_name = ?, email = ?, role = ?, password = ? WHERE user_id = ?',
+                [String(full_name).trim(), String(email).trim(), String(role).trim(), hashedPassword, userId]
+            );
+        } else {
+            await pool.execute(
+                'UPDATE users SET full_name = ?, email = ?, role = ? WHERE user_id = ?',
+                [String(full_name).trim(), String(email).trim(), String(role).trim(), userId]
+            );
+        }
+
+        // Lightweight audit log (does not depend on createLogDetails routing)
+        try {
+            const [logRes] = await pool.execute(
+                'INSERT INTO logs (log_name, project_id, type, action, created_by) VALUES (?, ?, ?, ?, ?)',
+                ['Personnel Updated', null, 'personnel', 'update', req.user.id]
+            );
+            const details = {
+                user_id: Number(userId),
+                old: existing[0],
+                new: { full_name: String(full_name).trim(), email: String(email).trim(), role: String(role).trim(), password_updated: passwordProvided }
+            };
+            await pool.execute('INSERT INTO log_details (log_id, log_details) VALUES (?, ?)', [logRes.insertId, JSON.stringify(details)]);
+        } catch (e) {
+            // Logging failure should not block core action
+            console.warn('Personnel update logging failed:', e?.message || e);
+        }
+
+        res.status(200).json({ success: true });
+    } catch (error) {
+        console.error('Error updating user:', error);
+        // Duplicate email (unique key) handling
+        if (error && (error.code === 'ER_DUP_ENTRY' || error.errno === 1062)) {
+            return res.status(409).json({ success: false, message: 'Email already exists' });
+        }
+        res.status(500).json({ success: false, message: 'Internal Server Error' });
+    }
+});
+
+app.post('/api/users/:id/terminate', authMiddleware(['admin']), async (req, res) => {
+    try {
+        const userId = req.params.id;
+        const reason = String(req.body?.reason || '').trim();
+        if (!reason) return res.status(400).json({ success: false, message: 'Termination reason is required' });
+
+        const [existing] = await pool.execute(
+            'SELECT full_name, email, role, is_active FROM users WHERE user_id = ? LIMIT 1',
+            [userId]
+        );
+        if (existing.length === 0) return res.status(404).json({ success: false, message: 'User not found' });
+
+        // IMPORTANT:
+        // `is_active` is already used throughout the app for online/session status (set on login/logout).
+        // For termination we must prevent future logins reliably, so we:
+        // 1) set the role to a sentinel value (`terminated`) so access control will deny dashboard access
+        // 2) rotate the password hash to a new random value so previous credentials cannot be reused
+        // 3) clear assigned_projects so terminated users no longer appear as assigned anywhere
+        const terminationPassword = generatePassword();
+        const terminationHash = await bcrypt.hash(terminationPassword, 10);
+
+        await pool.execute('UPDATE users SET role = ?, password = ? WHERE user_id = ?', ['terminated', terminationHash, userId]);
+        await pool.execute('DELETE FROM assigned_projects WHERE user_id = ?', [userId]);
+
+        // Audit log
+        try {
+            const [logRes] = await pool.execute(
+                'INSERT INTO logs (log_name, project_id, type, action, created_by) VALUES (?, ?, ?, ?, ?)',
+                ['Personnel Terminated', null, 'personnel', 'terminate', req.user.id]
+            );
+            const details = {
+                user_id: Number(userId),
+                reason,
+                user: {
+                    full_name: existing[0].full_name,
+                    email: existing[0].email,
+                    role: existing[0].role
+                }
+            };
+            await pool.execute('INSERT INTO log_details (log_id, log_details) VALUES (?, ?)', [logRes.insertId, JSON.stringify(details)]);
+        } catch (e) {
+            console.warn('Personnel termination logging failed:', e?.message || e);
+        }
+
+        res.status(200).json({ success: true });
+    } catch (error) {
+        console.error('Error terminating user:', error);
+        res.status(500).json({ success: false, message: 'Internal Server Error' });
+    }
+});
+
 app.get('/api/roles', async (req, res) => {
     try {
-        const [rows] = await pool.execute('SELECT DISTINCT role FROM users WHERE role IS NOT NULL');
+        const [rows] = await pool.execute("SELECT DISTINCT role FROM users WHERE role IS NOT NULL AND role <> 'terminated'");
         res.json(rows.map(row => row.role)); 
     } catch (error) {
         res.status(500).json({ success: false, message: 'Could not fetch roles' });
+    }
+});
+
+// ---------------------------------
+// Admin: Inventory Management
+// ---------------------------------
+
+function computeInventoryStatus(current_amount, min_amount) {
+    const cur = Number(current_amount) || 0;
+    const min = Number(min_amount) || 0;
+    return cur <= min ? 'low' : 'good';
+}
+
+app.get('/api/inventory', authMiddleware(['admin']), async (req, res) => {
+    try {
+        const projectId = req.query.project_id ? Number(req.query.project_id) : null;
+        let sql = `
+            SELECT i.inventory_id, i.project_id, p.project_name,
+                   i.item_id, it.item_name, it.image_url,
+                   i.current_amount, i.max_capacity, i.min_amount, i.status,
+                   i.updated_at, u.full_name AS updated_by_name
+            FROM inventory i
+            JOIN projects p ON i.project_id = p.project_id
+            JOIN items it ON i.item_id = it.item_id
+            LEFT JOIN users u ON i.updated_by = u.user_id
+        `;
+        const params = [];
+        if (projectId) {
+            sql += ' WHERE i.project_id = ?';
+            params.push(projectId);
+        }
+        sql += ' ORDER BY p.project_name ASC, it.item_name ASC';
+        const [rows] = await pool.execute(sql, params);
+        res.status(200).json(rows);
+    } catch (error) {
+        console.error('Error fetching inventory:', error);
+        res.status(500).json({ success: false, message: 'Internal Server Error' });
+    }
+});
+
+app.post('/api/inventory', authMiddleware(['admin']), async (req, res) => {
+    try {
+        const { project_id, item_id, current_amount, max_capacity, min_amount } = req.body || {};
+        const proj = Number(project_id);
+        const item = Number(item_id);
+        const cur = Number(current_amount);
+        const max = Number(max_capacity);
+        const min = Number(min_amount);
+
+        if (!proj || !item || !Number.isFinite(max)) {
+            return res.status(400).json({ success: false, message: 'Project, Item, and Max Capacity are required' });
+        }
+        if (!Number.isFinite(cur) || cur < 0) {
+            return res.status(400).json({ success: false, message: 'Current amount must be a non-negative number' });
+        }
+        if (max <= 0) {
+            return res.status(400).json({ success: false, message: 'Max capacity must be greater than 0' });
+        }
+        const minSafe = Number.isFinite(min) && min >= 0 ? min : 0;
+        const status = computeInventoryStatus(cur, minSafe);
+
+        // Prevent duplicate inventory rows for the same project+item
+        const [existing] = await pool.execute('SELECT inventory_id FROM inventory WHERE project_id = ? AND item_id = ? LIMIT 1', [proj, item]);
+        if (existing.length > 0) {
+            return res.status(409).json({ success: false, message: 'This item is already tracked for the selected project' });
+        }
+
+        await pool.execute(
+            'INSERT INTO inventory (project_id, item_id, current_amount, max_capacity, min_amount, status, updated_by) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [proj, item, cur, max, minSafe, status, req.user.id]
+        );
+        res.status(201).json({ success: true });
+    } catch (error) {
+        console.error('Error creating inventory item:', error);
+        res.status(500).json({ success: false, message: 'Internal Server Error' });
+    }
+});
+
+app.put('/api/inventory/:id', authMiddleware(['admin']), async (req, res) => {
+    try {
+        const invId = Number(req.params.id);
+        const { current_amount, max_capacity, min_amount } = req.body || {};
+        const cur = Number(current_amount);
+        const max = Number(max_capacity);
+        const min = Number(min_amount);
+
+        if (!invId) return res.status(400).json({ success: false, message: 'Invalid inventory id' });
+        if (!Number.isFinite(cur) || cur < 0) return res.status(400).json({ success: false, message: 'Current amount must be a non-negative number' });
+        if (!Number.isFinite(max) || max <= 0) return res.status(400).json({ success: false, message: 'Max capacity must be greater than 0' });
+        const minSafe = Number.isFinite(min) && min >= 0 ? min : 0;
+
+        const status = computeInventoryStatus(cur, minSafe);
+        await pool.execute(
+            'UPDATE inventory SET current_amount = ?, max_capacity = ?, min_amount = ?, status = ?, updated_by = ? WHERE inventory_id = ?',
+            [cur, max, minSafe, status, req.user.id, invId]
+        );
+        res.status(200).json({ success: true });
+    } catch (error) {
+        console.error('Error updating inventory item:', error);
+        res.status(500).json({ success: false, message: 'Internal Server Error' });
+    }
+});
+
+app.delete('/api/inventory/:id', authMiddleware(['admin']), async (req, res) => {
+    try {
+        const invId = Number(req.params.id);
+        if (!invId) return res.status(400).json({ success: false, message: 'Invalid inventory id' });
+        await pool.execute('DELETE FROM inventory WHERE inventory_id = ?', [invId]);
+        res.status(200).json({ success: true });
+    } catch (error) {
+        console.error('Error deleting inventory item:', error);
+        res.status(500).json({ success: false, message: 'Internal Server Error' });
+    }
+});
+
+// ---------------------------------
+// Admin: Assets Management
+// ---------------------------------
+
+app.get('/api/assets', authMiddleware(['admin']), async (req, res) => {
+    try {
+        const projectId = req.query.project_id ? Number(req.query.project_id) : null;
+        let sql = `
+            SELECT a.*, p.project_name, u.full_name AS updated_by_name
+            FROM assets a
+            LEFT JOIN projects p ON a.project_id = p.project_id
+            LEFT JOIN users u ON a.updated_by = u.user_id
+        `;
+        const params = [];
+        if (projectId) {
+            sql += ' WHERE a.project_id = ?';
+            params.push(projectId);
+        }
+        sql += ' ORDER BY a.updated_at DESC';
+        const [rows] = await pool.execute(sql, params);
+        res.status(200).json(rows);
+    } catch (error) {
+        console.error('Error fetching assets:', error);
+        res.status(500).json({ success: false, message: 'Internal Server Error' });
+    }
+});
+
+app.post('/api/assets', authMiddleware(['admin']), async (req, res) => {
+    try {
+        const { asset_name, asset_type, asset_tag, project_id, status, purchase_date, asset_value, notes } = req.body || {};
+        if (!asset_name || !String(asset_name).trim()) return res.status(400).json({ success: false, message: 'Asset name is required' });
+        const proj = project_id ? Number(project_id) : null;
+        const value = (asset_value === '' || typeof asset_value === 'undefined' || asset_value === null) ? null : Number(asset_value);
+        if (value !== null && (!Number.isFinite(value) || value < 0)) return res.status(400).json({ success: false, message: 'Asset value must be a non-negative number' });
+
+        await pool.execute(
+            `INSERT INTO assets (asset_name, asset_type, asset_tag, project_id, status, purchase_date, asset_value, notes, updated_by)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            ,
+            [
+                String(asset_name).trim(),
+                asset_type ? String(asset_type).trim() : null,
+                asset_tag ? String(asset_tag).trim() : null,
+                proj,
+                status || 'available',
+                purchase_date || null,
+                value,
+                notes ? String(notes).trim() : null,
+                req.user.id
+            ]
+        );
+        res.status(201).json({ success: true });
+    } catch (error) {
+        console.error('Error creating asset:', error);
+        res.status(500).json({ success: false, message: 'Internal Server Error' });
+    }
+});
+
+app.put('/api/assets/:id', authMiddleware(['admin']), async (req, res) => {
+    try {
+        const assetId = Number(req.params.id);
+        const { asset_name, asset_type, asset_tag, project_id, status, purchase_date, asset_value, notes } = req.body || {};
+        if (!assetId) return res.status(400).json({ success: false, message: 'Invalid asset id' });
+        if (!asset_name || !String(asset_name).trim()) return res.status(400).json({ success: false, message: 'Asset name is required' });
+        const proj = project_id ? Number(project_id) : null;
+        const value = (asset_value === '' || typeof asset_value === 'undefined' || asset_value === null) ? null : Number(asset_value);
+        if (value !== null && (!Number.isFinite(value) || value < 0)) return res.status(400).json({ success: false, message: 'Asset value must be a non-negative number' });
+
+        await pool.execute(
+            `UPDATE assets SET asset_name = ?, asset_type = ?, asset_tag = ?, project_id = ?, status = ?, purchase_date = ?, asset_value = ?, notes = ?, updated_by = ?
+             WHERE asset_id = ?`,
+            [
+                String(asset_name).trim(),
+                asset_type ? String(asset_type).trim() : null,
+                asset_tag ? String(asset_tag).trim() : null,
+                proj,
+                status || 'available',
+                purchase_date || null,
+                value,
+                notes ? String(notes).trim() : null,
+                req.user.id,
+                assetId
+            ]
+        );
+        res.status(200).json({ success: true });
+    } catch (error) {
+        console.error('Error updating asset:', error);
+        res.status(500).json({ success: false, message: 'Internal Server Error' });
+    }
+});
+
+app.delete('/api/assets/:id', authMiddleware(['admin']), async (req, res) => {
+    try {
+        const assetId = Number(req.params.id);
+        if (!assetId) return res.status(400).json({ success: false, message: 'Invalid asset id' });
+        await pool.execute('DELETE FROM assets WHERE asset_id = ?', [assetId]);
+        res.status(200).json({ success: true });
+    } catch (error) {
+        console.error('Error deleting asset:', error);
+        res.status(500).json({ success: false, message: 'Internal Server Error' });
+    }
+});
+
+// ---------------------------------
+// Admin: Reports (view other users)
+// ---------------------------------
+
+app.get('/api/reports', authMiddleware(['admin']), async (req, res) => {
+    try {
+        const projectId = req.query.project_id ? Number(req.query.project_id) : null;
+        const userId = req.query.user_id ? Number(req.query.user_id) : null;
+        let sql = `
+            SELECT r.report_id, r.project_id, p.project_name, r.report_title, r.report_body,
+                   r.created_by, u.full_name AS created_by_name, r.created_at
+            FROM reports r
+            LEFT JOIN projects p ON r.project_id = p.project_id
+            JOIN users u ON r.created_by = u.user_id
+        `;
+        const params = [];
+        const where = [];
+        if (projectId) {
+            where.push('r.project_id = ?');
+            params.push(projectId);
+        }
+        if (userId) {
+            where.push('r.created_by = ?');
+            params.push(userId);
+        }
+        if (where.length) sql += ' WHERE ' + where.join(' AND ');
+        sql += ' ORDER BY r.created_at DESC';
+        const [rows] = await pool.execute(sql, params);
+        res.status(200).json(rows);
+    } catch (error) {
+        console.error('Error fetching reports:', error);
+        res.status(500).json({ success: false, message: 'Internal Server Error' });
+    }
+});
+
+// Optional: allow any authenticated user to create their own report (enables real data for admin Reports)
+app.post('/api/reports', authMiddleware(['admin', 'engineer', 'foreman', 'project manager']), async (req, res) => {
+    try {
+        const { project_id, report_title, report_body } = req.body || {};
+        if (!report_title || !String(report_title).trim()) return res.status(400).json({ success: false, message: 'Report title is required' });
+        if (!report_body || !String(report_body).trim()) return res.status(400).json({ success: false, message: 'Report body is required' });
+
+        const proj = project_id ? Number(project_id) : null;
+        await pool.execute(
+            'INSERT INTO reports (project_id, report_title, report_body, created_by) VALUES (?, ?, ?, ?)',
+            [proj, String(report_title).trim(), String(report_body).trim(), req.user.id]
+        );
+        res.status(201).json({ success: true });
+    } catch (error) {
+        console.error('Error creating report:', error);
+        res.status(500).json({ success: false, message: 'Internal Server Error' });
+    }
+});
+
+// ---------------------------------
+// Admin: Analytics
+// ---------------------------------
+
+app.get('/api/analytics/summary', authMiddleware(['admin']), async (req, res) => {
+    try {
+        const [projectCounts] = await pool.execute(
+            "SELECT "
+            + "(SELECT COUNT(*) FROM projects) AS total_projects, "
+            + "(SELECT COUNT(*) FROM projects WHERE status = 'in progress') AS in_progress_projects, "
+            + "(SELECT COUNT(*) FROM projects WHERE status = 'completed') AS completed_projects, "
+            + "(SELECT COUNT(*) FROM projects WHERE status = 'planning') AS planning_projects, "
+            + "(SELECT COALESCE(SUM(project_budget), 0) FROM projects) AS total_budget"
+        );
+
+        const [inventoryCounts] = await pool.execute(
+            "SELECT "
+            + "(SELECT COUNT(*) FROM inventory) AS tracked_items, "
+            + "(SELECT COUNT(*) FROM inventory WHERE status = 'low') AS low_items"
+        );
+
+        const [assetCounts] = await pool.execute(
+            "SELECT "
+            + "(SELECT COUNT(*) FROM assets) AS total_assets, "
+            + "(SELECT COUNT(*) FROM assets WHERE status = 'available') AS available_assets, "
+            + "(SELECT COUNT(*) FROM assets WHERE status = 'in_use') AS in_use_assets, "
+            + "(SELECT COUNT(*) FROM assets WHERE status = 'maintenance') AS maintenance_assets, "
+            + "(SELECT COUNT(*) FROM assets WHERE status = 'retired') AS retired_assets"
+        );
+
+        const [projectsByStatus] = await pool.execute(
+            "SELECT status, COUNT(*) AS count FROM projects GROUP BY status"
+        );
+        const [lowInventoryByProject] = await pool.execute(
+            "SELECT p.project_name, COUNT(*) AS count "
+            + "FROM inventory i JOIN projects p ON i.project_id = p.project_id "
+            + "WHERE i.status = 'low' GROUP BY i.project_id ORDER BY count DESC, p.project_name ASC"
+        );
+
+        res.status(200).json({
+            summary: { ...projectCounts[0], ...inventoryCounts[0], ...assetCounts[0] },
+            charts: {
+                projectsByStatus,
+                lowInventoryByProject
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching analytics summary:', error);
+        res.status(500).json({ success: false, message: 'Internal Server Error' });
     }
 });
 
@@ -1138,6 +1714,10 @@ app.post('/login', async(req, res) => {
         );
         if(result.length === 0) return failed(res, 401, "Invalid Credentials");
         const user = result[0];
+        // Terminated accounts are explicitly blocked from logging in.
+        if (String(user.role || '').toLowerCase() === 'terminated') {
+            return failed(res, 403, 'Account terminated');
+        }
         const projects = [];
         const [assignedProjects] = await pool.execute('SELECT project_id FROM assigned_projects WHERE user_id = ?', [user.user_id]);
         for (const assigned of assignedProjects) {
@@ -1153,7 +1733,8 @@ app.post('/login', async(req, res) => {
             sameSite: isProduction ? "none" : "lax",
             maxAge: 1000 * 3600
         });
-        await pool.execute("UPDATE users SET is_active = 1 WHERE user_id = ?", [user.user_id]);
+        // NOTE: `is_active` is used as an online/session indicator across the app.
+        // Do not force-enable it here, otherwise terminated/disabled status becomes ineffective.
         res.status(200).json({status: "success", message: "Logged in successfully", role: user.role});
     } catch (error) {
         res.status(500).json({status: "failed", message: "Database error", error: error});
@@ -1169,6 +1750,161 @@ app.get('/profile', authMiddleware(['all']), async(req, res) => {
         failed(res, 500, "Database error");
     }
 });
+
+// --- Settings APIs (dark mode, font size, avatar) ---
+app.get('/api/settings', authMiddleware(['all']), async (req, res) => {
+    try {
+        const userId = req.user.id;
+        await pool.execute(
+            'INSERT INTO user_settings (user_id) VALUES (?) ON DUPLICATE KEY UPDATE user_id = user_id',
+            [userId]
+        );
+        const [rows] = await pool.execute(
+            'SELECT dark_mode, font_size, avatar_path, avatar_url FROM user_settings WHERE user_id = ?',
+            [userId]
+        );
+        res.status(200).json(rows[0] || { dark_mode: 0, font_size: 'md', avatar_path: null, avatar_url: null });
+    } catch (e) {
+        failed(res, 500, 'Database error');
+    }
+});
+
+app.put('/api/settings', authMiddleware(['all']), async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const darkMode = req.body?.dark_mode ? 1 : 0;
+        const fontSize = String(req.body?.font_size || 'md').toLowerCase();
+        const allowedSizes = new Set(['sm', 'md', 'lg']);
+        if (!allowedSizes.has(fontSize)) {
+            return failed(res, 400, 'Invalid font size');
+        }
+
+        await pool.execute(
+            'INSERT INTO user_settings (user_id, dark_mode, font_size) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE dark_mode = VALUES(dark_mode), font_size = VALUES(font_size)',
+            [userId, darkMode, fontSize]
+        );
+        res.status(200).json({ status: 'success' });
+    } catch (e) {
+        failed(res, 500, 'Database error');
+    }
+});
+
+app.put('/api/profile/full-name', authMiddleware(['all']), async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const fullName = String(req.body?.full_name || '').trim();
+        if (fullName.length < 2 || fullName.length > 120) {
+            return failed(res, 400, 'Full name must be between 2 and 120 characters');
+        }
+        await pool.execute('UPDATE users SET full_name = ? WHERE user_id = ?', [fullName, userId]);
+        res.status(200).json({ status: 'success', full_name: fullName });
+    } catch (e) {
+        failed(res, 500, 'Database error');
+    }
+});
+
+function avatarUploadMiddleware(req, res, next) {
+    const single = avatarUpload.single('avatar');
+    single(req, res, (err) => {
+        if (err) {
+            const msg = err.message && err.message.includes('File too large')
+                ? 'Max image size is 5 MB'
+                : (err.message || 'Upload failed');
+            return res.status(400).json({ status: 'failed', message: msg });
+        }
+        next();
+    });
+}
+
+app.post('/api/profile/avatar/upload', authMiddleware(['all']), avatarUploadMiddleware, async (req, res) => {
+    try {
+        const userId = req.user.id;
+        if (!req.file?.filename) return failed(res, 400, 'No file uploaded');
+
+        // Remove previously stored avatar file (if it was an upload)
+        const [existingRows] = await pool.execute('SELECT avatar_path FROM user_settings WHERE user_id = ?', [userId]);
+        const oldPath = existingRows?.[0]?.avatar_path;
+        if (oldPath) {
+            const fullOldPath = path.join(AVATAR_DIR, oldPath);
+            if (fs.existsSync(fullOldPath)) {
+                try { fs.unlinkSync(fullOldPath); } catch (_) {}
+            }
+        }
+
+        await pool.execute(
+            'INSERT INTO user_settings (user_id, avatar_path, avatar_url) VALUES (?, ?, NULL) ON DUPLICATE KEY UPDATE avatar_path = VALUES(avatar_path), avatar_url = NULL',
+            [userId, req.file.filename]
+        );
+
+        res.status(200).json({ status: 'success', avatar_path: req.file.filename });
+    } catch (e) {
+        failed(res, 500, 'Database error');
+    }
+});
+
+app.put('/api/profile/avatar/url', authMiddleware(['all']), async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const avatarUrl = String(req.body?.avatar_url || '').trim();
+        if (!avatarUrl) {
+            // Clear avatar URL (keep path null)
+            await pool.execute(
+                'INSERT INTO user_settings (user_id, avatar_url, avatar_path) VALUES (?, NULL, NULL) ON DUPLICATE KEY UPDATE avatar_url = NULL, avatar_path = NULL',
+                [userId]
+            );
+            return res.status(200).json({ status: 'success', avatar_url: null });
+        }
+        if (!/^https?:\/\//i.test(avatarUrl) || avatarUrl.length > 2048) {
+            return failed(res, 400, 'Invalid image URL');
+        }
+
+        // If switching from uploaded avatar -> remove old file
+        const [existingRows] = await pool.execute('SELECT avatar_path FROM user_settings WHERE user_id = ?', [userId]);
+        const oldPath = existingRows?.[0]?.avatar_path;
+        if (oldPath) {
+            const fullOldPath = path.join(AVATAR_DIR, oldPath);
+            if (fs.existsSync(fullOldPath)) {
+                try { fs.unlinkSync(fullOldPath); } catch (_) {}
+            }
+        }
+
+        await pool.execute(
+            'INSERT INTO user_settings (user_id, avatar_url, avatar_path) VALUES (?, ?, NULL) ON DUPLICATE KEY UPDATE avatar_url = VALUES(avatar_url), avatar_path = NULL',
+            [userId, avatarUrl]
+        );
+        res.status(200).json({ status: 'success', avatar_url: avatarUrl });
+    } catch (e) {
+        failed(res, 500, 'Database error');
+    }
+});
+
+// Remove avatar (clears both uploaded avatar_path and avatar_url)
+// Method matches the frontend usage (PUT).
+app.put('/api/profile/avatar/remove', authMiddleware(['all']), async (req, res) => {
+    try {
+        const userId = req.user.id;
+
+        // If there is an existing uploaded avatar, delete the file from disk
+        const [existingRows] = await pool.execute('SELECT avatar_path FROM user_settings WHERE user_id = ?', [userId]);
+        const oldPath = existingRows?.[0]?.avatar_path;
+        if (oldPath) {
+            const fullOldPath = path.join(AVATAR_DIR, oldPath);
+            if (fs.existsSync(fullOldPath)) {
+                try { fs.unlinkSync(fullOldPath); } catch (_) {}
+            }
+        }
+
+        await pool.execute(
+            'INSERT INTO user_settings (user_id, avatar_path, avatar_url) VALUES (?, NULL, NULL) ON DUPLICATE KEY UPDATE avatar_path = NULL, avatar_url = NULL',
+            [userId]
+        );
+
+        res.status(200).json({ status: 'success', avatar_path: null, avatar_url: null });
+    } catch (e) {
+        failed(res, 500, 'Database error');
+    }
+});
+
 
 app.get('/api/milestones/:projectId', authMiddleware(['all']), async(req, res) => {
     res.status(200).json(await getAllMilestones(res, req.params.projectId));
@@ -1918,6 +2654,16 @@ app.use((req, res) => {
     showNotFound(res);
 });
 
-app.listen(PORT, () => {
-    console.log(`Server running on port: ${PORT}`);
-});
+(async () => {
+    ensureDir(AVATAR_DIR);
+    try {
+        await ensureUserSettingsTable();
+        await ensureAssetsTable();
+        await ensureReportsTable();
+    } catch (e) {
+        console.error("Failed to ensure user_settings table:", e?.message || e);
+    }
+    app.listen(PORT, () => {
+        console.log(`Server running on port: ${PORT}`);
+    });
+})();
