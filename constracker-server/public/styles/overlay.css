@@ -193,6 +193,7 @@
 #milestoneFormHeader, #taskFormHeader, .create-form-headers {
     display: flex;
     flex-direction: column;
+    gap: 0.75rem;
 }
 
 #weightFormHeader {

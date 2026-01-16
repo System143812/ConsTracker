@@ -206,11 +206,6 @@
     background-color: var(--hover-light);
 }
 
-/* Create Report Overlays */
-.form-edit-forms .input-box-containers {
-    margin-bottom: 1rem;
-}
-
 .form-edit-forms textarea {
     min-height: 80px;
     resize: vertical;

@@ -263,20 +263,9 @@ async function createMaterialOverlay(material = null, refreshMaterialsContentFn)
     });
 
     // --- Selects (Category, Supplier, Unit) ---
-    const createSelect = (id, labelText, apiEndpoint, initialData, editValue, options) => {
-        const container = div(`${id}Container`, 'input-box-containers');
-        const label = document.createElement('label');
-        label.htmlFor = id;
-        label.classList.add('input-labels');
-        label.innerText = labelText;
-        const select = createFilterInput('select', 'dropdown', id, `material ${labelText.toLowerCase()}`, editValue, '', '', 'single', 1, options);
-        container.append(label, select);
-        return { container, select };
-    };
-    
-    const { container: categorySelectContainer, select: categorySelect } = createSelect('materialCategorySelect', 'Category', '/api/materials/categories', material, material?.category_id, categories);
-    const { container: supplierSelectContainer, select: supplierSelect } = createSelect('materialSupplierSelect', 'Supplier', '/api/materials/suppliers', material, material?.supplier_id, suppliers);
-    const { container: unitSelectContainer, select: unitSelect } = createSelect('materialUnitSelect', 'Unit', '/api/materials/units', material, material?.unit_id, units);
+    const { container: categorySelectContainer, select: categorySelect } = createSelect('materialCategorySelect', 'Category', null, material, material?.category_id, categories);
+    const { container: supplierSelectContainer, select: supplierSelect } = createSelect('materialSupplierSelect', 'Supplier', null, material, material?.supplier_id, suppliers);
+    const { container: unitSelectContainer, select: unitSelect } = createSelect('materialUnitSelect', 'Unit', null, material, material?.unit_id, units);
 
 
     createMaterialFormHeader.append(
@@ -723,18 +712,16 @@ async function createUnitOverlay(unit = null, refreshCallback) {
 }
 
 async function generateMaterialsContent(role) {
-    const materialsBodyContent = document.getElementById('materialsBodyContainer'); // Assuming a div with this ID in the HTML
+    const materialsBodyHeader = document.getElementById('materialsBodyHeader');
+    const materialsBodyContent = document.getElementById('materialsBodyContent'); 
     materialsBodyContent.innerHTML = ''; // Clear existing content
 
-    // New Header
-    const bodyHeader = div('', 'body-header');
-    const bodyHeaderContainer = div('', 'body-header-container');
-    const title = span('', 'body-header-title');
+    // Update header section
+    const bodyHeaderContainer = materialsBodyHeader.querySelector('.body-header-container');
+    const title = bodyHeaderContainer.querySelector('.body-header-title');
+    const subtitle = bodyHeaderContainer.querySelector('.body-header-subtitle');
     title.innerText = 'Materials';
-    const subtitle = span('', 'body-header-subtitle');
     subtitle.innerText = 'Manage and track all construction materials.';
-    bodyHeaderContainer.append(title, subtitle);
-    bodyHeader.append(bodyHeaderContainer);
     
     const user = await fetchData('/profile');
     if (user === 'error') {
@@ -742,14 +729,16 @@ async function generateMaterialsContent(role) {
     }
     const currentUserId = user.user_id;
 
-    // Add Material Button (Admin, PM, Engineer, Foreman)
+    // Clear any previous buttons and add Material Button (Admin, PM, Engineer, Foreman)
+    const existingBtn = materialsBodyHeader.querySelector('.solid-buttons');
+    if (existingBtn) existingBtn.remove();
     const allowedRolesForAdd = ['admin', 'engineer', 'project manager', 'foreman'];
     if (allowedRolesForAdd.includes(role)) {
-        const addMaterialBtn = createButton('addMaterialBtn', 'solid-buttons', 'Add Material', 'addMaterialBtnText', 'addMaterialBtnIcon');
+        const addMaterialBtn = createButton('addMaterialBtn', 'solid-buttons btn-blue', 'Add Material', 'addMaterialBtnText', 'addIconWhite');
         addMaterialBtn.addEventListener('click', () => {
             createMaterialOverlay(null, () => renderMaterials(new URLSearchParams(), role, currentUserId));
         });
-        bodyHeader.append(addMaterialBtn);
+        materialsBodyHeader.append(addMaterialBtn);
     }
 
     const materialsContainer = div('materials-main-container');
@@ -774,8 +763,8 @@ async function generateMaterialsContent(role) {
     const materialsListContainer = div('materials-list-container');
     const paginationContainer = div('materialsPaginationContainer', 'pagination-container');
     
-    materialsContainer.append(materialsSubHeader, filterContainer, materialsListContainer, paginationContainer);
-    materialsBodyContent.append(bodyHeader, materialsContainer);
+    materialsContainer.append(filterContainer, materialsListContainer, paginationContainer);
+    materialsBodyContent.append(materialsSubHeader, materialsContainer);
 
     let currentPage = 1;
     let itemsPerPage = 10;
