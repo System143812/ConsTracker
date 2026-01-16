@@ -1292,6 +1292,26 @@ app.get('/api/allProjects', authMiddleware(['admin', 'engineer']), async(req, re
     res.status(200).json(await getAllProjects(res, req.query));
 });
 
+app.get('/api/projects', authMiddleware(['admin']), async(req, res) => {
+    try {
+        const [projects] = await pool.execute(`
+            SELECT 
+                p.project_id, p.project_name, p.status as project_status, p.project_location, p.created_at as start_date, p.duedate, p.created_at,
+                (SELECT COUNT(*) FROM assigned_projects ap WHERE ap.project_id = p.project_id) AS total_personnel, 
+                (SELECT COUNT(*) FROM project_milestones pm WHERE pm.status = 'completed' AND pm.project_id = p.project_id) AS completed_milestone, 
+                (SELECT COUNT(*) FROM project_milestones pm WHERE pm.project_id = p.project_id) AS total_milestone,
+                (SELECT COUNT(*) FROM project_milestones pm WHERE pm.status = 'pending' AND pm.project_id = p.project_id) AS pending_milestone,
+                (SELECT COUNT(*) FROM tasks t JOIN project_milestones pm ON t.milestone_id = pm.id WHERE pm.project_id = p.project_id AND t.status = 'overdue') AS overdue_tasks_count
+            FROM projects p
+            ORDER BY p.created_at DESC
+        `);
+        res.status(200).json(projects);
+    } catch (error) {
+        console.error('Error fetching projects:', error);
+        res.status(500).json({ error: 'Failed to fetch projects' });
+    }
+});
+
 app.get('/api/inprogressProjects', authMiddleware(['admin']), async(req, res) => { 
     res.status(200).json(await getInprogressProjects(res));
 });

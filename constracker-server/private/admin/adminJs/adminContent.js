@@ -9,6 +9,460 @@ const defaultImageBackgroundColors = [
     '#F48FB1', '#81D4FA', '#FFF59D', '#A7FFEB', '#FFAB91'
 ];
 
+// ======================================================
+// REUSABLE MODAL COMPONENT SYSTEM
+// ======================================================
+/**
+ * Creates a reusable modal with consistent design across the application
+ * 
+ * @param {Object} config - Modal configuration object
+ * @param {string} config.title - Modal title text
+ * @param {string} [config.description] - Optional description/subtitle
+ * @param {HTMLElement|string} config.content - Dynamic content area (HTML element or string)
+ * @param {Object} [config.actions] - Footer action buttons configuration
+ * @param {Function} [config.actions.onClose] - Close button callback
+ * @param {Function} [config.actions.onAction] - Primary action button callback
+ * @param {string} [config.actions.actionLabel='Confirm'] - Primary action button text
+ * @param {string} [config.actions.actionClass='primary'] - Action button style class
+ * @param {boolean} [config.actions.showAction=true] - Show/hide primary action button
+ * @param {string} [config.statusBadge] - Optional status badge text
+ * @param {string} [config.statusClass] - Status badge CSS class
+ * @param {string} [config.icon] - Optional icon/emoji to display
+ * @param {string} [config.modalClass='reusable-modal'] - Custom modal class
+ * @param {boolean} [config.closeOnOverlay=true] - Close modal when clicking overlay
+ * 
+ * @returns {HTMLElement} Modal background element (append to document.body)
+ * 
+ * @example
+ * // Simple modal
+ * const modal = createReusableModal({
+ *     title: 'Milestone Details',
+ *     content: 'This is the milestone content',
+ *     actions: {
+ *         onClose: () => console.log('Closed'),
+ *         onAction: () => console.log('Action clicked'),
+ *         actionLabel: 'Save Changes'
+ *     }
+ * });
+ * document.body.append(modal);
+ * 
+ * @example
+ * // Modal with dynamic content
+ * const contentEl = div('', 'custom-content');
+ * contentEl.innerHTML = '<ul><li>Item 1</li><li>Item 2</li></ul>';
+ * const modal = createReusableModal({
+ *     title: 'Task List',
+ *     description: 'Associated tasks for this milestone',
+ *     content: contentEl,
+ *     statusBadge: 'In Progress',
+ *     statusClass: 'status-in-progress'
+ * });
+ * document.body.append(modal);
+ */
+function createReusableModal(config) {
+    const {
+        title,
+        description,
+        content,
+        actions = {},
+        statusBadge,
+        statusClass,
+        icon,
+        modalClass = 'reusable-modal',
+        closeOnOverlay = true
+    } = config;
+    
+    const {
+        onClose,
+        onAction,
+        actionLabel = 'Confirm',
+        actionClass = 'primary',
+        showAction = true
+    } = actions;
+    
+    // Create modal structure
+    const modalBg = div('', 'modal-overlay');
+    const modal = div('', `modal-container ${modalClass}`);
+    
+    // HEADER SECTION
+    const header = div('', 'modal-header-section');
+    const headerContent = div('', 'modal-header-content-wrapper');
+    
+    // Icon (if provided)
+    if (icon) {
+        const iconEl = span('', 'modal-icon');
+        iconEl.innerText = icon;
+        headerContent.append(iconEl);
+    }
+    
+    // Title
+    const titleEl = span('', 'modal-title-text');
+    titleEl.innerText = title;
+    headerContent.append(titleEl);
+    
+    // Status badge (if provided)
+    if (statusBadge) {
+        const badge = span('', `modal-status-badge ${statusClass || ''}`);
+        badge.innerText = statusBadge;
+        headerContent.append(badge);
+    }
+    
+    header.append(headerContent);
+    
+    // Close button
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'modal-close-button';
+    closeBtn.innerHTML = '×';
+    closeBtn.setAttribute('aria-label', 'Close modal');
+    header.append(closeBtn);
+    
+    modal.append(header);
+    
+    // DESCRIPTION SECTION (if provided)
+    if (description) {
+        const descEl = div('', 'modal-description');
+        descEl.innerText = description;
+        modal.append(descEl);
+    }
+    
+    // CONTENT SECTION
+    const contentWrapper = div('', 'modal-content-area');
+    if (typeof content === 'string') {
+        contentWrapper.innerHTML = content;
+    } else if (content instanceof HTMLElement) {
+        contentWrapper.append(content);
+    }
+    modal.append(contentWrapper);
+    
+    // FOOTER SECTION
+    const footer = div('', 'modal-footer-section');
+    
+    const closeBtnFooter = createButton('Close', 'modal-btn-close', ['secondary-btn']);
+    footer.append(closeBtnFooter);
+    
+    if (showAction && onAction) {
+        const actionBtn = createButton(actionLabel, 'modal-btn-action', [actionClass + '-btn']);
+        footer.append(actionBtn);
+        
+        // Action button click handler
+        actionBtn.addEventListener('click', async () => {
+            try {
+                await onAction();
+            } catch (error) {
+                console.error('Modal action error:', error);
+                alertPopup('An error occurred', warnType.bad);
+            }
+        });
+    }
+    
+    modal.append(footer);
+    modalBg.append(modal);
+    
+    // EVENT HANDLERS
+    
+    // Close button (header X)
+    closeBtn.addEventListener('click', () => {
+        closeModal(modalBg);
+        if (onClose) onClose();
+    });
+    
+    // Close button (footer)
+    closeBtnFooter.addEventListener('click', () => {
+        closeModal(modalBg);
+        if (onClose) onClose();
+    });
+    
+    // Overlay click
+    if (closeOnOverlay) {
+        modalBg.addEventListener('click', (e) => {
+            if (e.target === modalBg) {
+                closeModal(modalBg);
+                if (onClose) onClose();
+            }
+        });
+    }
+    
+    // ESC key
+    const escapeHandler = (e) => {
+        if (e.key === 'Escape') {
+            closeModal(modalBg);
+            if (onClose) onClose();
+            document.removeEventListener('keydown', escapeHandler);
+        }
+    };
+    document.addEventListener('keydown', escapeHandler);
+    
+    // Add animation class after append
+    requestAnimationFrame(() => {
+        modalBg.classList.add('modal-fade-in');
+    });
+    
+    return modalBg;
+}
+
+/**
+ * Closes modal with fade-out animation
+ */
+function closeModal(modalBg) {
+    modalBg.classList.add('modal-fade-out');
+    setTimeout(() => {
+        if (modalBg.parentElement) {
+            modalBg.remove();
+        }
+    }, 300);
+}
+
+/**
+ * Helper function to create content lists for modals
+ */
+function createModalContentList(items, itemRenderer) {
+    const list = div('', 'modal-content-list');
+    
+    if (!items || items.length === 0) {
+        const empty = span('', 'modal-empty-message');
+        empty.innerText = 'No items to display';
+        list.append(empty);
+        return list;
+    }
+    
+    items.forEach(item => {
+        const itemEl = itemRenderer(item);
+        list.append(itemEl);
+    });
+    
+    return list;
+}
+
+/**
+ * Helper function to create detail rows for modals
+ */
+function createModalDetailGrid(details) {
+    const grid = div('', 'modal-detail-grid');
+    
+    Object.entries(details).forEach(([label, value]) => {
+        if (value !== null && value !== undefined && value !== '') {
+            const row = div('', 'modal-detail-row');
+            
+            const labelEl = span('', 'modal-detail-label');
+            labelEl.innerText = label;
+            
+            const valueEl = span('', 'modal-detail-value');
+            if (typeof value === 'string' || typeof value === 'number') {
+                valueEl.innerText = value;
+            } else if (value instanceof HTMLElement) {
+                valueEl.append(value);
+            }
+            
+            row.append(labelEl, valueEl);
+            grid.append(row);
+        }
+    });
+    
+    return grid;
+}
+
+// ======================================================
+// EXAMPLE IMPLEMENTATIONS - Using Reusable Modal
+// ======================================================
+
+/**
+ * Example 1: Milestone Details Modal using reusable component
+ */
+async function showMilestoneModalExample(milestone) {
+    // Fetch associated tasks
+    const tasks = milestone.id ? await fetchData(`/api/tasks/${milestone.id}`) : [];
+    
+    // Create detail grid
+    const detailsContent = createModalDetailGrid({
+        'Due Date': dateFormatting(milestone.dueDate, 'date'),
+        'Status': milestone.status.charAt(0).toUpperCase() + milestone.status.slice(1),
+        'Progress': milestone.progress ? `${Math.round(milestone.progress)}%` : 'Not started',
+        'Days Until Due': milestone.dueDate ? Math.ceil((milestone.dueDate - new Date()) / (1000 * 60 * 60 * 24)) : 'N/A'
+    });
+    
+    // Create tasks list
+    const tasksList = createModalContentList(
+        tasks !== 'error' && Array.isArray(tasks) ? tasks : [],
+        (task) => {
+            const taskItem = div('', 'milestone-task-item');
+            const taskName = span('', 'task-item-name');
+            taskName.innerText = task.task_name;
+            const taskStatus = span('', `task-item-status status-${(task.status || 'pending').toLowerCase()}`);
+            taskStatus.innerText = (task.status || 'pending').charAt(0).toUpperCase() + (task.status || 'pending').slice(1);
+            taskItem.append(taskName, taskStatus);
+            return taskItem;
+        }
+    );
+    
+    // Combine content
+    const contentWrapper = div('', 'modal-combined-content');
+    
+    if (milestone.description) {
+        const descSection = div('', 'content-section');
+        const descTitle = span('', 'section-title');
+        descTitle.innerText = 'Description';
+        const descText = span('', 'section-text');
+        descText.innerText = milestone.description;
+        descSection.append(descTitle, descText);
+        contentWrapper.append(descSection);
+    }
+    
+    const detailsSection = div('', 'content-section');
+    const detailsTitle = span('', 'section-title');
+    detailsTitle.innerText = 'Details';
+    detailsSection.append(detailsTitle, detailsContent);
+    contentWrapper.append(detailsSection);
+    
+    const tasksSection = div('', 'content-section');
+    const tasksTitle = span('', 'section-title');
+    tasksTitle.innerText = 'Associated Tasks';
+    tasksSection.append(tasksTitle, tasksList);
+    contentWrapper.append(tasksSection);
+    
+    // Create and show modal
+    const modal = createReusableModal({
+        title: milestone.name,
+        icon: milestone.isOverdue ? '⚠️' : '📍',
+        statusBadge: milestone.status,
+        statusClass: `status-${milestone.status.toLowerCase().replace(/\s+/g, '-')}`,
+        content: contentWrapper,
+        actions: {
+            actionLabel: 'Edit Milestone',
+            onAction: async () => {
+                console.log('Edit milestone:', milestone);
+                alertPopup('Edit functionality coming soon', warnType.info);
+            },
+            onClose: () => {
+                console.log('Modal closed');
+            }
+        }
+    });
+    
+    document.body.append(modal);
+}
+
+/**
+ * Example 2: Task Details Modal using reusable component
+ */
+function showTaskModalExample(task) {
+    const detailsContent = createModalDetailGrid({
+        'Assigned To': task.assignee || 'Unassigned',
+        'Priority': task.priority || 'Medium',
+        'Due Date': task.dueDate ? dateFormatting(task.dueDate, 'date') : 'Not set',
+        'Status': task.status || 'Pending',
+        'Progress': task.progress ? `${task.progress}%` : '0%'
+    });
+    
+    const modal = createReusableModal({
+        title: task.name,
+        description: task.description || 'No description provided',
+        icon: '✓',
+        statusBadge: task.status || 'Pending',
+        statusClass: `status-${(task.status || 'pending').toLowerCase()}`,
+        content: detailsContent,
+        actions: {
+            actionLabel: 'Mark Complete',
+            actionClass: 'success',
+            onAction: async () => {
+                console.log('Mark task complete:', task);
+                alertPopup('Task marked as complete', warnType.good);
+                closeModal(document.querySelector('.modal-overlay'));
+            }
+        }
+    });
+    
+    document.body.append(modal);
+}
+
+/**
+ * Example 3: Project Details Modal using reusable component
+ */
+async function showProjectModalExample(project) {
+    const milestones = await fetchData(`/api/milestones/${project.project_id}`);
+    
+    const detailsContent = createModalDetailGrid({
+        'Project ID': project.project_id,
+        'Location': project.project_location || 'Not specified',
+        'Start Date': project.start_date ? dateFormatting(new Date(project.start_date), 'date') : 'N/A',
+        'Due Date': project.duedate ? dateFormatting(new Date(project.duedate), 'date') : 'N/A',
+        'Status': project.project_status || 'Active',
+        'Total Milestones': milestones !== 'error' && Array.isArray(milestones) ? milestones.length : 0,
+        'Completed Milestones': project.completed_milestone || 0
+    });
+    
+    const modal = createReusableModal({
+        title: project.project_name,
+        description: `${project.project_location || 'Project'} - ${project.project_status || 'Active'}`,
+        icon: '📊',
+        statusBadge: project.project_status || 'Active',
+        statusClass: `status-${(project.project_status || 'active').toLowerCase()}`,
+        content: detailsContent,
+        actions: {
+            actionLabel: 'View Full Details',
+            onAction: () => {
+                console.log('View project details:', project);
+                alertPopup('Navigating to project details...', warnType.info);
+            }
+        }
+    });
+    
+    document.body.append(modal);
+}
+
+/**
+ * Example 4: Confirmation Modal using reusable component
+ */
+function showConfirmationModal(title, message, onConfirm) {
+    const contentEl = div('', 'confirmation-message');
+    contentEl.innerText = message;
+    contentEl.style.textAlign = 'center';
+    contentEl.style.padding = '20px';
+    contentEl.style.fontSize = '15px';
+    contentEl.style.color = '#333';
+    
+    const modal = createReusableModal({
+        title: title,
+        icon: '⚠️',
+        content: contentEl,
+        modalClass: 'confirmation-modal',
+        actions: {
+            actionLabel: 'Confirm',
+            actionClass: 'danger',
+            onAction: async () => {
+                await onConfirm();
+                closeModal(document.querySelector('.modal-overlay'));
+            }
+        }
+    });
+    
+    document.body.append(modal);
+}
+
+/**
+ * Example 5: Simple info modal with trigger button
+ */
+function createTriggerButtonExample() {
+    const triggerBtn = createButton('Show Modal Example', 'trigger-modal-btn', ['primary-btn']);
+    
+    triggerBtn.addEventListener('click', () => {
+        const modal = createReusableModal({
+            title: 'Welcome to Reusable Modals!',
+            description: 'This is a demonstration of the reusable modal component',
+            icon: '🎉',
+            content: '<p style="padding: 20px; text-align: center;">You can use this modal system for milestones, tasks, projects, confirmations, and more!</p>',
+            actions: {
+                actionLabel: 'Got It!',
+                actionClass: 'primary',
+                showAction: true
+            }
+        });
+        
+        document.body.append(modal);
+    });
+    
+    return triggerBtn;
+}
+
 function roundDecimal(number) {
     return Math.floor(number * 100) / 100;
 }
@@ -1239,6 +1693,10 @@ async function generateAnalyticsContent() {
     wasteDamageHeader.append(wasteDamageTitle, wasteDamageTable.searchSection);
     
     analyticsBodyContent.append(wasteDamageHeader, wasteDamageTable.container);
+
+    // Milestones, Tasks, and Project Progress Section
+    const projectProgressSection = await createProjectProgressSection();
+    analyticsBodyContent.append(projectProgressSection);
 }
 
 function createWasteDamageTable() {
@@ -2568,4 +3026,2216 @@ async function refreshAdminProjectContent(currentProjectId, role) {
 
     selectionTabContent.innerHTML = '';
     selectionTabContent.append(await currentRenderFunction(role, currentProjectId));
+}
+
+async function createProjectProgressSection() {
+    const section = div('', 'project-progress-analytics-section');
+    
+    // Filter controls
+    const filterContainer = div('', 'project-progress-filters');
+    
+    // Project Filter
+    const projectFilterControl = div('', 'filter-control');
+    const projectFilterLabel = span('', 'filter-label');
+    projectFilterLabel.innerText = 'Project Filter';
+    const projectFilterSelect = document.createElement('select');
+    projectFilterSelect.className = 'filter-select';
+    projectFilterSelect.id = 'projectProgressFilter';
+    
+    const projects = await fetchData('/api/projects');
+    projectFilterSelect.innerHTML = '<option value="">All Projects</option>';
+    if (projects !== 'error' && Array.isArray(projects)) {
+        projects.forEach(project => {
+            const option = document.createElement('option');
+            option.value = project.project_id;
+            option.innerText = project.project_name;
+            projectFilterSelect.append(option);
+        });
+    }
+    
+    projectFilterControl.append(projectFilterLabel, projectFilterSelect);
+    filterContainer.append(projectFilterControl);
+    
+    // Milestone Status Filter
+    const milestoneFilterControl = div('', 'filter-control');
+    const milestoneFilterLabel = span('', 'filter-label');
+    milestoneFilterLabel.innerText = 'Milestone Status';
+    const milestoneFilterSelect = document.createElement('select');
+    milestoneFilterSelect.className = 'filter-select';
+    milestoneFilterSelect.id = 'milestoneStatusFilter';
+    milestoneFilterSelect.innerHTML = `
+        <option value="">All Statuses</option>
+        <option value="completed">Completed</option>
+        <option value="in-progress">In Progress</option>
+        <option value="pending">Pending</option>
+        <option value="upcoming">Upcoming</option>
+    `;
+    
+    milestoneFilterControl.append(milestoneFilterLabel, milestoneFilterSelect);
+    filterContainer.append(milestoneFilterControl);
+    
+    section.append(filterContainer);
+    
+    // Tabs
+    const tabContainer = div('', 'project-progress-tabs');
+    const tabs = ['Overview', 'Milestones', 'Tasks'];
+    let activeTab = 'Overview';
+    
+    tabs.forEach(tab => {
+        const tabBtn = document.createElement('button');
+        tabBtn.className = `progress-tab-btn ${tab === activeTab ? 'active' : ''}`;
+        tabBtn.innerText = tab;
+        tabBtn.addEventListener('click', async () => {
+            document.querySelectorAll('.progress-tab-btn').forEach(btn => btn.classList.remove('active'));
+            tabBtn.classList.add('active');
+            activeTab = tab;
+            await renderTabContent();
+        });
+        tabContainer.append(tabBtn);
+    });
+    
+    section.append(tabContainer);
+    
+    // Content container
+    const contentContainer = div('', 'project-progress-content-container');
+    section.append(contentContainer);
+    
+    // Render tab content function
+    async function renderTabContent() {
+        contentContainer.innerHTML = '';
+        const selectedProjectId = projectFilterSelect.value || null;
+        const selectedMilestoneStatus = milestoneFilterSelect.value || '';
+        const dateRange = 'this-month';
+        
+        let content;
+        if (activeTab === 'Overview') {
+            content = await renderProjectProgressOverview(selectedProjectId, dateRange, selectedMilestoneStatus);
+        } else if (activeTab === 'Milestones') {
+            content = await renderMilestonesTracking(selectedProjectId, dateRange, selectedMilestoneStatus);
+        } else if (activeTab === 'Tasks') {
+            content = await renderTaskAnalytics(selectedProjectId, dateRange);
+        }
+        
+        contentContainer.append(content);
+    }
+    
+    // Event listeners for filters
+    projectFilterSelect.addEventListener('change', renderTabContent);
+    milestoneFilterSelect.addEventListener('change', renderTabContent);
+    
+    // Initial render
+    await renderTabContent();
+    
+    return section;
+}
+
+async function renderProjectProgressOverview(projectId = null, dateRange = 'this-month', statusFilter = '') {
+    const container = div('', 'progress-overview-container');
+    
+    // Fetch project data
+    const projects = await fetchData('/api/projects');
+    if (projects === 'error') {
+        const empty = div('', 'empty-state');
+        empty.innerText = 'Failed to load projects';
+        container.append(empty);
+        return container;
+    }
+    
+    if (!projects || !Array.isArray(projects) || projects.length === 0) {
+        const emptyState = div('', 'empty-state-container');
+        emptyState.className = 'empty-state-container';
+        const emptyIcon = div('', 'empty-state-icon');
+        emptyIcon.style.backgroundImage = 'url(/assets/icons/projects.png)';
+        const emptyMessage = span('', 'empty-state-message');
+        emptyMessage.innerText = 'No projects available';
+        const emptyDescription = span('', 'empty-state-description');
+        emptyDescription.innerText = 'Create a new project to get started';
+        emptyState.append(emptyIcon, emptyMessage, emptyDescription);
+        container.append(emptyState);
+        return container;
+    }
+    
+    // ===== OVERALL PROJECT COMPLETION SECTION =====
+    const overallCompletionSection = div('', 'overall-completion-section');
+    
+    // Add title
+    const overallTitle = span('', 'section-subtitle');
+    overallTitle.innerText = 'Overall Project Completion';
+    overallCompletionSection.append(overallTitle);
+    
+    // Container for layout
+    const overallCompletionContainer = div('', 'overall-completion-container');
+    
+    // Calculate overall completion
+    let totalMilestones = 0;
+    let completedMilestones = 0;
+    let activeProjects = 0;
+    let onTimeProjects = 0;
+    
+    projects.forEach(project => {
+        totalMilestones += project.total_milestone || 0;
+        completedMilestones += project.completed_milestone || 0;
+        if (project.project_status === 'in progress') {
+            activeProjects++;
+        }
+        const status = getProjectStatus(project);
+        if (status === 'On Track' || project.project_status === 'completed') {
+            onTimeProjects++;
+        }
+    });
+    
+    const overallPercent = totalMilestones > 0 ? Math.round((completedMilestones / totalMilestones) * 100) : 0;
+    
+    // Left side - Overall completion percentage
+    const overallCompletionLeft = div('', 'overall-completion-left');
+    const percentageDisplay = span('', 'overall-percentage-display');
+    percentageDisplay.innerText = `${overallPercent}%`;
+    const percentageLabel = span('', 'overall-percentage-label');
+    percentageLabel.innerText = 'Overall Portfolio Completion';
+    overallCompletionLeft.append(percentageDisplay, percentageLabel);
+    
+    // Right side - Project cards
+    const overallCompletionRight = div('', 'overall-completion-right');
+    
+    let filteredProjects = projects;
+    if (projectId) {
+        filteredProjects = projects.filter(p => p.project_id == projectId);
+    }
+    if (statusFilter) {
+        filteredProjects = filteredProjects.filter(p => {
+            const status = getProjectStatus(p);
+            return status.toLowerCase() === statusFilter.toLowerCase();
+        });
+    }
+    
+    filteredProjects.forEach(project => {
+        const projectCardCompact = createProjectCompactCard(project);
+        overallCompletionRight.append(projectCardCompact);
+    });
+    
+    overallCompletionContainer.append(overallCompletionLeft, overallCompletionRight);
+    overallCompletionSection.append(overallCompletionContainer);
+    container.append(overallCompletionSection);
+    
+    // ===== METRICS CARDS SECTION =====
+    const metricsSection = div('', 'overview-metrics-section');
+    
+    // Find project closest to deadline
+    let daysToDeadline = 999;
+    let criticalProject = null;
+    projects.forEach(project => {
+        const days = calculateDaysRemaining(project.duedate);
+        if (days > 0 && days < daysToDeadline) {
+            daysToDeadline = days;
+            criticalProject = project.project_name || 'Unknown Project';
+        }
+    });
+    
+    const onTimePercent = projects.length > 0 ? Math.round((onTimeProjects / projects.length) * 100) : 0;
+    
+    const metrics = [
+        {
+            label: 'ACTIVE PROJECTS',
+            value: activeProjects.toString(),
+            subtext: 'All projects in progress',
+            status: 'success',
+            statusText: 'Total portfolio'
+        },
+        {
+            label: 'DAYS TO CRITICAL DEADLINE',
+            value: daysToDeadline === 999 ? '—' : daysToDeadline.toString(),
+            subtext: criticalProject || 'No critical deadlines',
+            status: daysToDeadline < 7 ? 'warning' : 'info',
+            statusText: daysToDeadline < 7 ? 'Urgent attention' : 'On track'
+        },
+        {
+            label: 'ON-TIME COMPLETION RATE',
+            value: `${onTimePercent}%`,
+            subtext: `${onTimeProjects} of ${projects.length} projects`,
+            status: onTimePercent >= 70 ? 'success' : (onTimePercent >= 50 ? 'warning' : 'error'),
+            statusText: 'Monitor closely'
+        }
+    ];
+    
+    metrics.forEach(metric => {
+        const card = createOverviewMetricCard(metric);
+        metricsSection.append(card);
+    });
+    
+    container.append(metricsSection);
+    
+    // ===== PROJECT STATUS SUMMARY TABLE =====
+    const summaryTitle = span('', 'section-subtitle');
+    summaryTitle.innerText = 'Project Status Summary';
+    container.append(summaryTitle);
+    
+    const summaryTable = createProjectStatusSummaryTable(filteredProjects.length > 0 ? filteredProjects : projects);
+    container.append(summaryTable);
+    
+    return container;
+}
+
+function createProjectCompactCard(project) {
+    const card = div('', 'project-card-item');
+    
+    // Header with name and percentage
+    const header = div('', 'project-card-header');
+    const name = span('', 'project-card-name');
+    name.innerText = project.project_name;
+    
+    const percentageValue = span('', 'project-card-percentage');
+    const progressPercent = project.total_milestone > 0 ? Math.round((project.completed_milestone / project.total_milestone) * 100) : 0;
+    percentageValue.innerText = `${progressPercent}%`;
+    
+    header.append(name, percentageValue);
+    
+    // Progress bar
+    const progressBar = createProgressBar(progressPercent, '100%');
+    
+    // Footer with dates and status
+    const footer = div('', 'project-card-footer');
+    const startDate = span('', 'project-card-date');
+    startDate.innerText = `Start: ${dateFormatting(project.start_date || project.created_at || new Date(), 'date')}`;
+    
+    const targetDate = span('', 'project-card-date');
+    targetDate.innerText = `Target: ${dateFormatting(project.duedate || new Date(), 'date')}`;
+    
+    const statusValue = getProjectStatus(project);
+    const statusBadge = span('', `project-card-status status-${statusValue.toLowerCase().replace(/\s+/g, '-')}`);
+    statusBadge.innerText = statusValue;
+    
+    footer.append(startDate, targetDate, statusBadge);
+    
+    card.append(header, progressBar, footer);
+    
+    // Add click event
+    card.addEventListener('click', () => {
+        showProjectDetailsModal(project);
+    });
+    card.style.cursor = 'pointer';
+    
+    return card;
+}
+
+function createOverviewMetricCard(metric) {
+    const card = div('', 'overview-metric-card');
+    
+    const label = span('', 'metric-label');
+    label.innerText = metric.label;
+    
+    const value = span('', 'metric-value');
+    value.innerText = metric.value;
+    
+    const subtext = span('', 'metric-subtext');
+    subtext.innerText = metric.subtext;
+    
+    const statusBadge = span('', `metric-badge metric-badge-${metric.status}`);
+    statusBadge.innerText = metric.statusText;
+    
+    card.append(label, value, subtext, statusBadge);
+    return card;
+}
+
+function createProjectStatusSummaryTable(projects) {
+    const tableContainer = div('', 'project-status-table-container');
+    
+    const table = document.createElement('table');
+    table.className = 'project-status-summary-table';
+    
+    // Table header
+    const thead = document.createElement('thead');
+    const headerRow = document.createElement('tr');
+    const headers = ['PROJECT', 'PROGRESS', 'STATUS', 'START DATE', 'TARGET END', 'DAYS REMAINING', 'OVERDUE TASKS'];
+    
+    headers.forEach(headerText => {
+        const th = document.createElement('th');
+        th.innerText = headerText;
+        headerRow.append(th);
+    });
+    
+    thead.append(headerRow);
+    table.append(thead);
+    
+    // Table body
+    const tbody = document.createElement('tbody');
+    
+    projects.forEach(project => {
+        const row = document.createElement('tr');
+        
+        // Project name
+        const nameCell = document.createElement('td');
+        nameCell.className = 'project-name-cell';
+        nameCell.innerText = project.project_name;
+        
+        // Progress
+        const progressCell = document.createElement('td');
+        progressCell.className = 'progress-cell';
+        const percent = project.total_milestone > 0 ? Math.round((project.completed_milestone / project.total_milestone) * 100) : 0;
+        const progressBar = createProgressBar(percent, '120px');
+        progressCell.append(progressBar);
+        
+        // Status
+        const statusCell = document.createElement('td');
+        statusCell.className = 'status-cell';
+        const status = getProjectStatus(project);
+        const statusSpan = span('', `status-badge status-${status.toLowerCase().replace(/\s+/g, '-')}`);
+        statusSpan.innerText = status;
+        statusCell.append(statusSpan);
+        
+        // Start date
+        const startDateCell = document.createElement('td');
+        startDateCell.innerText = dateFormatting(project.start_date || project.created_at || new Date(), 'date');
+        
+        // Target end date
+        const endDateCell = document.createElement('td');
+        endDateCell.innerText = dateFormatting(project.duedate || new Date(), 'date');
+        
+        // Days remaining
+        const daysCell = document.createElement('td');
+        const daysRemaining = calculateDaysRemaining(project.duedate);
+        daysCell.innerText = daysRemaining > 0 ? `${daysRemaining} days` : 'Overdue';
+        if (daysRemaining < 0) {
+            daysCell.style.color = '#d32f2f';
+            daysCell.style.fontWeight = '600';
+        }
+        
+        // Overdue tasks count
+        const overdueCell = document.createElement('td');
+        overdueCell.className = 'overdue-cell';
+        overdueCell.innerText = (project.overdue_tasks_count || 0).toString();
+        if (project.overdue_tasks_count > 0) {
+            overdueCell.style.color = '#d32f2f';
+            overdueCell.style.fontWeight = '600';
+        }
+        
+        row.append(nameCell, progressCell, statusCell, startDateCell, endDateCell, daysCell, overdueCell);
+        
+        // Add row click event with visual feedback
+        row.style.cursor = 'pointer';
+        row.classList.add('clickable-row');
+        row.addEventListener('click', async (e) => {
+            console.log('Project row clicked:', project.project_name);
+            try {
+                await showProjectDetailsModal(project);
+            } catch (error) {
+                console.error('Error showing project modal:', error);
+                alertPopup('Unable to load project details', warnType.bad);
+            }
+        });
+        
+        // Add hover effect
+        row.addEventListener('mouseenter', () => {
+            row.style.backgroundColor = '#f5f5f5';
+        });
+        row.addEventListener('mouseleave', () => {
+            row.style.backgroundColor = '';
+        });
+        
+        tbody.append(row);
+    });
+    
+    table.append(tbody);
+    tableContainer.append(table);
+    
+    return tableContainer;
+}
+
+function createProgressBar(percent, width = '100%') {
+    const container = div('', 'progress-bar-container');
+    container.style.width = width;
+    
+    const bar = div('', 'progress-bar-fill');
+    bar.style.width = `${Math.min(percent, 100)}%`;
+    
+    // Color based on percentage
+    if (percent >= 75) {
+        bar.style.backgroundColor = '#388e3c'; // Green
+    } else if (percent >= 50) {
+        bar.style.backgroundColor = '#1976d2'; // Blue
+    } else if (percent >= 25) {
+        bar.style.backgroundColor = '#f57c00'; // Orange
+    } else {
+        bar.style.backgroundColor = '#d32f2f'; // Red
+    }
+    
+    container.append(bar);
+    return container;
+}
+
+function getProjectStatus(project) {
+    const percent = project.total_milestone > 0 ? (project.completed_milestone / project.total_milestone) * 100 : 0;
+    const daysRemaining = calculateDaysRemaining(project.duedate);
+    
+    if (project.project_status === 'completed') {
+        return 'Completed';
+    } else if (daysRemaining < 0) {
+        return 'Delayed';
+    } else if (percent < 50 && daysRemaining < 7) {
+        return 'At Risk';
+    } else if (daysRemaining < 3 && percent < 100) {
+        return 'At Risk';
+    }
+    return 'On Track';
+}
+
+function calculateDaysRemaining(endDate) {
+    if (!endDate) return 0;
+    const today = new Date();
+    const end = new Date(endDate);
+    const diff = end.getTime() - today.getTime();
+    return Math.ceil(diff / (1000 * 3600 * 24));
+}
+
+function calculateProjectDuration(startDate, endDate) {
+    if (!startDate || !endDate) return 'N/A';
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const diff = end.getTime() - start.getTime();
+    const days = Math.ceil(diff / (1000 * 3600 * 24));
+    
+    if (days < 30) {
+        return `${days} days`;
+    } else if (days < 365) {
+        const months = Math.round(days / 30);
+        return `${months} month${months !== 1 ? 's' : ''}`;
+    } else {
+        const years = Math.floor(days / 365);
+        const remainingMonths = Math.round((days % 365) / 30);
+        return remainingMonths > 0 
+            ? `${years} year${years !== 1 ? 's' : ''}, ${remainingMonths} month${remainingMonths !== 1 ? 's' : ''}`
+            : `${years} year${years !== 1 ? 's' : ''}`;
+    }
+}
+
+// ======================================================
+// MILESTONES TRACKING - Refactored for Better Readability
+// ======================================================
+/**
+ * REFACTORING SUMMARY (January 2026)
+ * 
+ * This section has been refactored to improve code organization and maintainability:
+ * 
+ * KEY IMPROVEMENTS:
+ * 1. Separation of Concerns:
+ *    - Data fetching (_fetchProjectsData)
+ *    - Data validation and processing (_processMilestoneData)
+ *    - UI rendering (_renderProjectMilestoneSection, _renderMilestoneTimeline)
+ *    - Event handling (_createMilestoneStep with click handlers)
+ * 
+ * 2. Modular Helper Functions:
+ *    - _filterProjects: Project filtering logic
+ *    - _calculateMilestoneStats: Statistics calculation
+ *    - _createStatusIndicator: Status icon generation
+ *    - _createMilestoneContent: Content section building
+ *    - _renderEmptyState: Centralized empty state handling
+ * 
+ * 3. Enhanced Modal System:
+ *    - showMilestoneDetailsModalRefactored: Main modal function
+ *    - _createMilestoneModalHeader: Header with close button
+ *    - _createMilestoneModalBody: Details grid and description
+ *    - _createMilestoneTasksSection: Async tasks fetching
+ *    - _setupModalCloseEvents: Event listener management
+ * 
+ * 4. Validation & Error Handling:
+ *    - Comprehensive data validation at each step
+ *    - Multiple empty state scenarios (no projects, no milestones, filtered results)
+ *    - Try-catch blocks for async operations
+ *    - Graceful degradation on API failures
+ * 
+ * 5. Color-Coded Status System:
+ *    - Completed: Green (#388e3c)
+ *    - In Progress: Orange (#f57c00)
+ *    - Pending: Blue (#1976d2)
+ *    - Overdue: Red (#d32f2f)
+ *    - Not Started: Gray (#999)
+ * 
+ * 6. Interactive Features:
+ *    - Clickable milestones open detailed modal
+ *    - Modal shows: title, status, due date, progress, description, associated tasks
+ *    - Overlay click and close button dismiss modal
+ *    - Smooth transitions and hover effects
+ * 
+ * 7. Dynamic Updates:
+ *    - Filters update without page reload
+ *    - Status badges reflect real-time milestone state
+ *    - Overdue detection based on current date comparison
+ *    - Progress percentages display when available
+ */
+
+/**
+ * Main renderer for the Milestones Tracking tab
+ * Handles: data fetching, validation, project filtering, and UI composition
+ */
+async function renderMilestonesTracking(projectId = null, dateRange = 'this-month', statusFilter = '') {
+    const container = div('', 'milestones-tracking-container');
+    
+    try {
+        // PHASE 1: DATA FETCHING & VALIDATION
+        const projects = await _fetchProjectsData();
+        if (!projects || projects.length === 0) {
+            return _renderEmptyState(container, 'No projects available', 'Create a project to manage milestones');
+        }
+        
+        // PHASE 2: PROJECT FILTERING
+        const filteredProjects = _filterProjects(projects, projectId);
+        
+        // PHASE 3: RENDER EACH PROJECT'S MILESTONES
+        for (const project of filteredProjects) {
+            const projectSection = await _renderProjectMilestoneSection(project, statusFilter);
+            if (projectSection) {
+                container.append(projectSection);
+            }
+        }
+        
+        // If no sections rendered, show empty state
+        if (container.children.length === 0) {
+            return _renderEmptyState(container, 'No milestones available', 'Create a milestone to get started');
+        }
+        
+    } catch (error) {
+        console.error('Error rendering milestones:', error);
+        return _renderEmptyState(container, 'Error loading milestones', 'Please try again later');
+    }
+    
+    return container;
+}
+
+/**
+ * PHASE 1: DATA FETCHING
+ * Fetches all projects from the API
+ */
+async function _fetchProjectsData() {
+    const projects = await fetchData('/api/projects');
+    return (projects === 'error' || !Array.isArray(projects)) ? [] : projects;
+}
+
+/**
+ * PHASE 2: FILTERING
+ * Filters projects by ID if specified
+ */
+function _filterProjects(projects, projectId) {
+    return projectId ? projects.filter(p => p.project_id == projectId) : projects;
+}
+
+/**
+ * PHASE 3: RENDER PROJECT SECTION
+ * Builds a complete project milestone section with header, stats, and timeline
+ */
+async function _renderProjectMilestoneSection(project, statusFilter) {
+    try {
+        // Fetch milestones for this project
+        const milestones = await fetchData(`/api/milestones/${project.project_id}`);
+        if (milestones === 'error' || !Array.isArray(milestones) || milestones.length === 0) {
+            return null;
+        }
+        
+        // Create project section container
+        const projectSection = div('', 'milestone-project-section');
+        
+        // Render project header with stats
+        const projectHeader = _renderProjectMilestoneHeader(project, milestones);
+        projectSection.append(projectHeader);
+        
+        // Render milestone timeline
+        const timeline = await _renderMilestoneTimeline(milestones, project.project_id, statusFilter);
+        projectSection.append(timeline);
+        
+        return projectSection;
+    } catch (error) {
+        console.error(`Error rendering milestones for project ${project.project_id}:`, error);
+        return null;
+    }
+}
+
+/**
+ * Renders the project header with milestone statistics
+ */
+function _renderProjectMilestoneHeader(project, milestones) {
+    const header = div('', 'milestone-project-header');
+    const projectName = span('', 'project-name');
+    projectName.innerText = project.project_name;
+    
+    // Calculate milestone statistics
+    const stats = _calculateMilestoneStats(milestones);
+    
+    // Render stats badges
+    const statsContainer = span('', 'milestone-stats');
+    statsContainer.innerHTML = `
+        <span class="stat completed"><strong>${stats.completed}</strong> Completed</span>
+        <span class="stat pending"><strong>${stats.pending}</strong> Pending</span>
+        <span class="stat upcoming"><strong>${stats.upcoming}</strong> Upcoming</span>
+        ${stats.overdue > 0 ? `<span class="stat overdue"><strong>${stats.overdue}</strong> Overdue</span>` : ''}
+    `;
+    
+    header.append(projectName, statsContainer);
+    return header;
+}
+
+/**
+ * Calculates milestone statistics (completed, pending, upcoming, overdue counts)
+ */
+function _calculateMilestoneStats(milestones) {
+    const today = new Date();
+    const stats = { total: milestones.length, completed: 0, pending: 0, overdue: 0, upcoming: 0 };
+    
+    milestones.forEach(m => {
+        const dueDate = new Date(m.duedate);
+        
+        if (m.status === 'completed') {
+            stats.completed++;
+        } else if (m.status === 'pending') {
+            stats.pending++;
+            if (dueDate < today) stats.overdue++;
+        } else if (m.status === 'not started') {
+            if (dueDate < today) stats.overdue++;
+            else stats.upcoming++;
+        }
+    });
+    
+    stats.upcoming = stats.total - stats.completed - stats.pending;
+    return stats;
+}
+
+/**
+ * PHASE 3: RENDER TIMELINE
+ * Creates the visual milestone timeline with all steps and indicators
+ */
+async function _renderMilestoneTimeline(milestones, projectId, statusFilter = '') {
+    const timeline = div('', 'milestone-timeline');
+    
+    try {
+        // STEP 1: Validate and process milestone data
+        let processedMilestones = _processMilestoneData(milestones);
+        
+        // STEP 2: Apply status filter if provided
+        if (statusFilter) {
+            processedMilestones = _filterMilestonesByStatus(processedMilestones, statusFilter);
+        }
+        
+        // STEP 3: Render milestones or empty state
+        if (processedMilestones.length === 0) {
+            return _renderMilestoneEmptyState(timeline, statusFilter);
+        }
+        
+        // STEP 4: Render each milestone as a timeline step
+        processedMilestones.forEach((milestone, index) => {
+            const step = _createMilestoneStep(milestone, projectId);
+            timeline.append(step);
+            
+            // Add connecting line between steps
+            if (index < processedMilestones.length - 1) {
+                const connector = div('', 'milestone-connector');
+                timeline.append(connector);
+            }
+        });
+        
+    } catch (error) {
+        console.error('Error rendering timeline:', error);
+        return _renderMilestoneEmptyState(timeline, false, 'Error loading milestones');
+    }
+    
+    return timeline;
+}
+
+/**
+ * Processes raw milestone data from API into standardized format with status detection
+ */
+function _processMilestoneData(milestones) {
+    if (!Array.isArray(milestones) || milestones.length === 0) return [];
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Reset to start of day for accurate comparison
+    
+    return milestones.map(m => {
+        const dueDate = new Date(m.duedate);
+        const isOverdue = dueDate < today && (m.status === 'pending' || m.status === 'not started');
+        
+        return {
+            id: m.id || m.milestone_id,
+            name: m.milestone_name,
+            description: m.milestone_description || '',
+            status: isOverdue ? 'overdue' : m.status,
+            dueDate: dueDate,
+            isOverdue: isOverdue,
+            progress: m.milestone_progress || 0
+        };
+    });
+}
+
+/**
+ * Filters milestones by status for display
+ */
+function _filterMilestonesByStatus(milestones, statusFilter) {
+    if (!statusFilter) return milestones;
+    return milestones.filter(m => m.status === statusFilter || (statusFilter === 'overdue' && m.isOverdue));
+}
+
+/**
+ * Renders empty state for milestone timeline
+ */
+function _renderMilestoneEmptyState(timeline, statusFilter, customMessage = null) {
+    const emptyState = div('', 'empty-milestone-state');
+    const emptyIcon = div('', 'empty-state-icon');
+    emptyIcon.style.backgroundImage = 'url(/assets/icons/noMilestones.png)';
+    
+    const emptyMessage = span('', 'empty-state-message');
+    const emptyDescription = span('', 'empty-state-description');
+    
+    if (customMessage) {
+        emptyMessage.innerText = customMessage;
+        emptyDescription.innerText = 'Please check your settings or try again';
+    } else if (statusFilter) {
+        emptyMessage.innerText = 'No milestones matching the selected status';
+        emptyDescription.innerText = 'Try adjusting your filters';
+    } else {
+        emptyMessage.innerText = 'No milestones available';
+        emptyDescription.innerText = 'Create a milestone to get started';
+    }
+    
+    emptyState.append(emptyIcon, emptyMessage, emptyDescription);
+    timeline.append(emptyState);
+    return timeline;
+}
+
+/**
+ * Creates a single milestone step element with all visual indicators
+ */
+function _createMilestoneStep(milestone, projectId) {
+    const step = div('', `milestone-step ${milestone.status}`);
+    
+    // Create status indicator
+    const indicator = _createStatusIndicator(milestone.status);
+    
+    // Create step content
+    const content = _createMilestoneContent(milestone);
+    
+    step.append(indicator, content);
+    
+    // EVENT HANDLING: Make milestone clickable to show details
+    step.style.cursor = 'pointer';
+    step.addEventListener('click', async () => {
+        await showMilestoneDetailsModal(milestone, projectId);
+    });
+    
+    return step;
+}
+
+/**
+ * Creates the status indicator icon based on milestone status
+ */
+function _createStatusIndicator(status) {
+    const indicator = div('', 'step-indicator');
+    const indicatorIcon = span('', 'indicator-icon');
+    
+    const statusConfig = {
+        'completed': { icon: '✓', class: 'completed-indicator' },
+        'in progress': { icon: '●', class: 'in-progress-indicator' },
+        'overdue': { icon: '⚠', class: 'overdue-indicator' },
+        'not started': { icon: '○', class: 'not-started-indicator' },
+        'pending': { icon: '○', class: 'not-started-indicator' }
+    };
+    
+    const config = statusConfig[status] || { icon: '○', class: 'not-started-indicator' };
+    indicatorIcon.innerHTML = config.icon;
+    indicator.classList.add(config.class);
+    indicator.append(indicatorIcon);
+    
+    return indicator;
+}
+
+/**
+ * Creates the content section of a milestone step (name, details, badges, description)
+ */
+function _createMilestoneContent(milestone) {
+    const content = div('', 'step-content');
+    
+    // Milestone name
+    const name = span('', 'milestone-name');
+    name.innerText = milestone.name;
+    
+    // Milestone details and badges
+    const details = span('', 'milestone-details');
+    details.innerHTML = `<strong>${dateFormatting(milestone.dueDate, 'date')}</strong>`;
+    
+    // Status badge
+    const statusBadge = span('', `milestone-status-badge status-${milestone.status.toLowerCase().replace(/\s+/g, '-')}`);
+    statusBadge.innerText = milestone.status.charAt(0).toUpperCase() + milestone.status.slice(1);
+    details.append(statusBadge);
+    
+    // Overdue warning badge
+    if (milestone.isOverdue) {
+        const overdueWarning = span('', 'milestone-overdue-warning');
+        overdueWarning.innerText = '⚠ OVERDUE';
+        details.append(overdueWarning);
+    }
+    
+    // Progress display
+    if (milestone.progress > 0) {
+        const progressDisplay = span('', 'milestone-progress-display');
+        progressDisplay.innerText = `${Math.round(milestone.progress)}% complete`;
+        details.append(progressDisplay);
+    }
+    
+    content.append(name, details);
+    
+    // Description section
+    if (milestone.description) {
+        const descriptionText = span('', 'milestone-description');
+        descriptionText.innerText = milestone.description;
+        content.append(descriptionText);
+    }
+    
+    return content;
+}
+
+/**
+ * Renders empty state UI with icon, message, and description
+ */
+function _renderEmptyState(container, message, description) {
+    const emptyState = div('', 'empty-state-container');
+    const emptyIcon = div('', 'empty-state-icon');
+    emptyIcon.style.backgroundImage = 'url(/assets/icons/noMilestones.png)';
+    
+    const emptyMessage = span('', 'empty-state-message');
+    emptyMessage.innerText = message;
+    
+    const emptyDescription = span('', 'empty-state-description');
+    emptyDescription.innerText = description;
+    
+    emptyState.append(emptyIcon, emptyMessage, emptyDescription);
+    container.append(emptyState);
+    return container;
+}
+
+/**
+ * ============================================================================
+ * REFACTORED MILESTONE MODAL FUNCTIONS
+ * Organized with clear separation of concerns for maintainability
+ * ============================================================================
+ */
+
+/**
+ * MILESTONE DETAILS MODAL - REFACTORED
+ * Displays comprehensive milestone information in an interactive modal
+ * Organized with clear sections: header, details, description, tasks
+ */
+/**
+ * Shows milestone details modal with comprehensive information
+ * Refactored to match project and task modal styles
+ */
+async function showMilestoneDetailsModalRefactored(milestone, projectId) {
+    try {
+        // Create modal background
+        const modalBg = div('', 'modal-overlay');
+        const modal = div('', 'modal-container project-info-modal');
+        
+        // HEADER
+        const header = div('', 'modal-header-simple');
+        const titleEl = span('', 'modal-title-simple');
+        titleEl.innerText = milestone.name;
+        
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'modal-close-button-simple';
+        closeBtn.innerHTML = '×';
+        closeBtn.setAttribute('aria-label', 'Close modal');
+        
+        header.append(titleEl, closeBtn);
+        modal.append(header);
+        
+        // Fetch associated tasks
+        const tasks = milestone.id ? await fetchData(`/api/tasks/${milestone.id}`) : [];
+        const tasksData = tasks !== 'error' && Array.isArray(tasks) ? tasks : [];
+        
+        // Calculate milestone statistics
+        const totalTasks = tasksData.length;
+        const completedTasks = tasksData.filter(t => t.status === 'completed').length;
+        const inProgressTasks = tasksData.filter(t => t.status === 'in progress').length;
+        const overdueTasks = tasksData.filter(t => {
+            const dueDate = new Date(t.due_date);
+            const today = new Date();
+            return dueDate < today && t.status !== 'completed';
+        }).length;
+        
+        const dueDate = new Date(milestone.dueDate);
+        const today = new Date();
+        const daysRemaining = calculateDaysRemaining(dueDate);
+        const isOverdue = milestone.isOverdue || (dueDate < today && milestone.status !== 'completed');
+        
+        // MILESTONE INFORMATION SECTION
+        const infoContainer = div('', 'modal-table-container');
+        const infoTable = document.createElement('table');
+        infoTable.className = 'modal-info-table';
+        
+        // Table header
+        const infoThead = document.createElement('thead');
+        const infoHeaderRow = document.createElement('tr');
+        const infoHeaders = ['Milestone Information', 'Details', 'Status'];
+        
+        infoHeaders.forEach(headerText => {
+            const th = document.createElement('th');
+            th.innerText = headerText;
+            infoHeaderRow.append(th);
+        });
+        
+        infoThead.append(infoHeaderRow);
+        infoTable.append(infoThead);
+        
+        // Table body with milestone details
+        const infoTbody = document.createElement('tbody');
+        
+        const milestoneInfo = [
+            {
+                label: 'Milestone ID',
+                value: `#${milestone.id}`,
+                status: milestone.status.charAt(0).toUpperCase() + milestone.status.slice(1)
+            },
+            {
+                label: 'Due Date',
+                value: dateFormatting(dueDate, 'date'),
+                status: isOverdue ? '⚠️ Overdue' : (daysRemaining > 0 ? `${daysRemaining} days left` : 'Due today')
+            },
+            {
+                label: 'Progress',
+                value: milestone.progress ? `${Math.round(milestone.progress)}%` : '0%',
+                status: milestone.progress >= 75 ? 'On Track' : (milestone.progress >= 50 ? 'In Progress' : 'Behind')
+            },
+            {
+                label: 'Current Status',
+                value: milestone.status.charAt(0).toUpperCase() + milestone.status.slice(1),
+                status: isOverdue ? 'Needs Attention' : 'Normal'
+            },
+            {
+                label: 'Total Tasks',
+                value: totalTasks.toString(),
+                status: `${completedTasks} completed`
+            },
+            {
+                label: 'Tasks in Progress',
+                value: inProgressTasks.toString(),
+                status: inProgressTasks > 0 ? 'Active' : 'None'
+            },
+            {
+                label: 'Overdue Tasks',
+                value: overdueTasks.toString(),
+                status: overdueTasks > 0 ? '⚠️ Action Required' : '✓ All Clear'
+            }
+        ];
+        
+        milestoneInfo.forEach(info => {
+            const row = document.createElement('tr');
+            
+            const labelCell = document.createElement('td');
+            labelCell.innerText = info.label;
+            labelCell.style.fontWeight = '500';
+            
+            const valueCell = document.createElement('td');
+            valueCell.innerText = info.value;
+            
+            const statusCell = document.createElement('td');
+            statusCell.innerText = info.status;
+            
+            // Color coding
+            if (info.label === 'Due Date' && isOverdue) {
+                statusCell.style.color = '#d32f2f';
+                statusCell.style.fontWeight = '600';
+            }
+            
+            if (info.label === 'Overdue Tasks' && overdueTasks > 0) {
+                statusCell.style.color = '#d32f2f';
+                statusCell.style.fontWeight = '600';
+            }
+            
+            if (info.label === 'Progress' && milestone.progress < 50) {
+                statusCell.style.color = '#f57c00';
+            } else if (info.label === 'Progress' && milestone.progress >= 75) {
+                statusCell.style.color = '#2e7d32';
+                statusCell.style.fontWeight = '600';
+            }
+            
+            row.append(labelCell, valueCell, statusCell);
+            infoTbody.append(row);
+        });
+        
+        infoTable.append(infoTbody);
+        infoContainer.append(infoTable);
+        modal.append(infoContainer);
+        
+        // DESCRIPTION SECTION (if available)
+        if (milestone.description) {
+            const descContainer = div('', 'modal-table-container');
+            descContainer.style.marginTop = '24px';
+            
+            const descTitle = div('', 'modal-section-subtitle');
+            descTitle.innerText = 'MILESTONE DESCRIPTION';
+            descContainer.append(descTitle);
+            
+            const descContent = div('', 'task-description-content');
+            descContent.innerText = milestone.description;
+            descContainer.append(descContent);
+            
+            modal.append(descContainer);
+        }
+        
+        // ASSOCIATED TASKS TABLE (if available)
+        if (tasksData.length > 0) {
+            const tasksTableContainer = div('', 'modal-table-container');
+            tasksTableContainer.style.marginTop = '24px';
+            
+            const tasksTitle = div('', 'modal-section-subtitle');
+            tasksTitle.innerText = 'ASSOCIATED TASKS';
+            tasksTableContainer.append(tasksTitle);
+            
+            const tasksTable = document.createElement('table');
+            tasksTable.className = 'modal-info-table';
+            
+            const tThead = document.createElement('thead');
+            const tHeaderRow = document.createElement('tr');
+            const tHeaders = ['Task Name', 'Status', 'Assignee', 'Priority'];
+            
+            tHeaders.forEach(headerText => {
+                const th = document.createElement('th');
+                th.innerText = headerText;
+                tHeaderRow.append(th);
+            });
+            
+            tThead.append(tHeaderRow);
+            tasksTable.append(tThead);
+            
+            const tTbody = document.createElement('tbody');
+            
+            tasksData.slice(0, 8).forEach(task => {
+                const row = document.createElement('tr');
+                
+                const nameCell = document.createElement('td');
+                nameCell.innerText = task.task_name;
+                nameCell.style.fontWeight = '500';
+                
+                const statusCell = document.createElement('td');
+                const statusText = (task.status || 'pending').charAt(0).toUpperCase() + (task.status || 'pending').slice(1);
+                statusCell.innerText = statusText;
+                
+                // Add color coding for status
+                if (task.status === 'completed') {
+                    statusCell.style.color = '#2e7d32';
+                    statusCell.style.fontWeight = '600';
+                } else if (task.status === 'in progress') {
+                    statusCell.style.color = '#1976d2';
+                    statusCell.style.fontWeight = '600';
+                }
+                
+                const assigneeCell = document.createElement('td');
+                assigneeCell.innerText = task.assigned_to || 'Unassigned';
+                
+                const priorityCell = document.createElement('td');
+                const taskDueDate = task.due_date ? new Date(task.due_date) : null;
+                const isTaskOverdue = taskDueDate && taskDueDate < today && task.status !== 'completed';
+                
+                if (isTaskOverdue) {
+                    priorityCell.innerText = '⚠️ Overdue';
+                    priorityCell.style.color = '#d32f2f';
+                    priorityCell.style.fontWeight = '600';
+                } else if (task.status === 'completed') {
+                    priorityCell.innerText = '✓ Complete';
+                    priorityCell.style.color = '#2e7d32';
+                } else {
+                    priorityCell.innerText = task.priority || 'Normal';
+                }
+                
+                row.append(nameCell, statusCell, assigneeCell, priorityCell);
+                tTbody.append(row);
+            });
+            
+            tasksTable.append(tTbody);
+            tasksTableContainer.append(tasksTable);
+            
+            // Show count if more tasks exist
+            if (tasksData.length > 8) {
+                const moreText = span('', 'modal-more-items-text');
+                moreText.innerText = `+ ${tasksData.length - 8} more task${tasksData.length - 8 !== 1 ? 's' : ''}`;
+                tasksTableContainer.append(moreText);
+            }
+            
+            modal.append(tasksTableContainer);
+        }
+        
+        // SUMMARY SECTION
+        const summarySection = div('', 'modal-summary-section');
+        const summaryTitle = div('', 'modal-summary-title');
+        summaryTitle.innerText = 'MILESTONE SUMMARY';
+        summarySection.append(summaryTitle);
+        
+        const summaryGrid = div('', 'modal-summary-grid');
+        
+        const summaryItems = [
+            { label: 'Total Tasks:', value: totalTasks },
+            { label: 'Completed:', value: completedTasks },
+            { label: 'In Progress:', value: inProgressTasks },
+            { label: 'Overdue:', value: overdueTasks }
+        ];
+        
+        summaryItems.forEach(item => {
+            const itemEl = div('', 'modal-summary-item');
+            const label = span('', 'summary-label');
+            label.innerText = item.label;
+            const value = span('', 'summary-value');
+            value.innerText = item.value;
+            itemEl.append(label, value);
+            summaryGrid.append(itemEl);
+        });
+        
+        summarySection.append(summaryGrid);
+        modal.append(summarySection);
+        
+        modalBg.append(modal);
+        
+        // Event handlers
+        closeBtn.addEventListener('click', () => {
+            modalBg.classList.add('modal-fade-out');
+            setTimeout(() => modalBg.remove(), 300);
+        });
+        
+        modalBg.addEventListener('click', (e) => {
+            if (e.target === modalBg) {
+                modalBg.classList.add('modal-fade-out');
+                setTimeout(() => modalBg.remove(), 300);
+            }
+        });
+        
+        document.addEventListener('keydown', function escHandler(e) {
+            if (e.key === 'Escape') {
+                modalBg.classList.add('modal-fade-out');
+                setTimeout(() => modalBg.remove(), 300);
+                document.removeEventListener('keydown', escHandler);
+            }
+        });
+        
+        document.body.append(modalBg);
+        requestAnimationFrame(() => modalBg.classList.add('modal-fade-in'));
+        
+    } catch (error) {
+        console.error('Error showing milestone details:', error);
+        alertPopup('Unable to load milestone details', warnType.bad);
+    }
+}
+
+/**
+ * Creates the modal header with title, status badge, and close button
+ */
+function _createMilestoneModalHeader(milestone) {
+    const header = div('', 'modal-header modal-header-style');
+    const headerContent = div('', 'modal-header-content');
+    
+    // Milestone title
+    const title = span('', 'modal-title modal-title-style');
+    title.innerText = milestone.name;
+    
+    // Status badge
+    const statusBadge = span('', `milestone-badge status-${milestone.status.toLowerCase().replace(/\s+/g, '-')}`);
+    statusBadge.innerText = milestone.status.charAt(0).toUpperCase() + milestone.status.slice(1);
+    
+    headerContent.append(title, statusBadge);
+    header.append(headerContent);
+    
+    // Close button
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'modal-close-btn';
+    closeBtn.innerHTML = '✕';
+    closeBtn.setAttribute('aria-label', 'Close modal');
+    closeBtn.style.background = 'none';
+    closeBtn.style.border = 'none';
+    closeBtn.style.fontSize = '24px';
+    closeBtn.style.cursor = 'pointer';
+    closeBtn.style.color = '#999';
+    closeBtn.style.transition = 'color 0.3s ease';
+    closeBtn.addEventListener('mouseenter', () => closeBtn.style.color = '#333');
+    closeBtn.addEventListener('mouseleave', () => closeBtn.style.color = '#999');
+    
+    header.append(closeBtn);
+    header.closeBtn = closeBtn; // Store reference for event setup
+    
+    return header;
+}
+
+/**
+ * Creates the modal body with details grid, description, and tasks section label
+ */
+function _createMilestoneModalBody(milestone) {
+    const body = div('', 'modal-body modal-body-style');
+    
+    // Details grid
+    const detailsGrid = div('', 'milestone-details-grid');
+    
+    // Due date row
+    const dueDateRow = _createDetailRow('Due Date:', dateFormatting(milestone.dueDate, 'date'));
+    detailsGrid.append(dueDateRow);
+    
+    // Status row
+    const statusRow = _createDetailRow('Status:', milestone.status.charAt(0).toUpperCase() + milestone.status.slice(1));
+    detailsGrid.append(statusRow);
+    
+    // Progress row (if available)
+    if (milestone.progress && milestone.progress > 0) {
+        const progressRow = _createDetailRow('Progress:', `${Math.round(milestone.progress)}%`);
+        detailsGrid.append(progressRow);
+    }
+    
+    // Overdue warning (if applicable)
+    if (milestone.isOverdue) {
+        const overdueRow = _createDetailRow('⚠ Status:', 'OVERDUE', true);
+        detailsGrid.append(overdueRow);
+    }
+    
+    body.append(detailsGrid);
+    
+    // Description section (if available)
+    if (milestone.description) {
+        const descriptionSection = div('', 'milestone-description-section');
+        const descriptionLabel = span('', 'section-label');
+        descriptionLabel.innerText = 'Description';
+        
+        const descriptionText = span('', 'milestone-description-text');
+        descriptionText.innerText = milestone.description;
+        
+        descriptionSection.append(descriptionLabel, descriptionText);
+        body.append(descriptionSection);
+    }
+    
+    return body;
+}
+
+/**
+ * Fetches and creates the associated tasks section
+ */
+async function _createMilestoneTasksSection(milestoneId) {
+    const tasksSection = div('', 'milestone-tasks-section');
+    const tasksLabel = span('', 'section-label');
+    tasksLabel.innerText = 'Associated Tasks';
+    
+    const tasksList = div('', 'milestone-tasks-list');
+    
+    try {
+        const tasks = await fetchData(`/api/tasks/${milestoneId}`);
+        
+        if (tasks !== 'error' && Array.isArray(tasks) && tasks.length > 0) {
+            // Render each task
+            tasks.forEach(task => {
+                const taskItem = _createTaskItemForModal(task);
+                tasksList.append(taskItem);
+            });
+        } else {
+            // No tasks available
+            const noTasks = span('', 'no-tasks-message');
+            noTasks.innerText = 'No tasks for this milestone';
+            tasksList.append(noTasks);
+        }
+    } catch (error) {
+        console.error('Error fetching tasks:', error);
+        const noTasks = span('', 'no-tasks-message');
+        noTasks.innerText = 'Unable to load tasks';
+        tasksList.append(noTasks);
+    }
+    
+    tasksSection.append(tasksLabel, tasksList);
+    return tasksSection;
+}
+
+/**
+ * Creates a single task item for display in the milestone modal
+ */
+function _createTaskItemForModal(task) {
+    const taskItem = div('', 'milestone-task-item');
+    
+    const taskName = span('', 'task-item-name');
+    taskName.innerText = task.task_name;
+    
+    const taskStatus = span('', `task-item-status status-${(task.status || 'pending').toLowerCase()}`);
+    taskStatus.innerText = (task.status || 'pending').charAt(0).toUpperCase() + (task.status || 'pending').slice(1);
+    
+    taskItem.append(taskName, taskStatus);
+    return taskItem;
+}
+
+/**
+ * Creates a detail row for the modal details grid
+ */
+function _createDetailRow(label, value, isWarning = false) {
+    const row = div('', 'detail-row');
+    if (isWarning) row.style.color = '#d32f2f';
+    
+    const labelSpan = span('', 'detail-label');
+    labelSpan.innerText = label;
+    
+    const valueSpan = span('', 'detail-value');
+    valueSpan.innerText = value;
+    
+    row.append(labelSpan, valueSpan);
+    return row;
+}
+
+/**
+ * Creates error state in modal body
+ */
+function _createModalErrorState(modal, message) {
+    const errorBody = div('', 'modal-body');
+    const errorMessage = span('', 'no-tasks-message');
+    errorMessage.innerText = message;
+    errorBody.append(errorMessage);
+    modal.append(errorBody);
+}
+
+/**
+ * Sets up close event listeners for modal
+ */
+function _setupModalCloseEvents(modal, modalBg) {
+    const header = modal.querySelector('.modal-header');
+    if (header && header.closeBtn) {
+        header.closeBtn.addEventListener('click', () => modalBg.remove());
+    }
+    
+    modalBg.addEventListener('click', (e) => {
+        if (e.target === modalBg) modalBg.remove();
+    });
+}
+
+// ============================================================================
+// Legacy functions below - kept for compatibility, superseded by refactored code
+// ============================================================================
+
+async function createMilestoneTimeline(milestones, projectId, statusFilter = '') {
+    const timeline = div('', 'milestone-timeline');
+    
+    // Validate milestones array
+    if (!Array.isArray(milestones) || milestones.length === 0) {
+        const emptyState = div('', 'empty-milestone-state');
+        const emptyIcon = div('', 'empty-state-icon');
+        emptyIcon.style.backgroundImage = 'url(/assets/icons/noMilestones.png)';
+        const emptyMessage = span('', 'empty-state-message');
+        emptyMessage.innerText = 'No milestones available';
+        const emptyDescription = span('', 'empty-state-description');
+        emptyDescription.innerText = 'Create a milestone to get started';
+        emptyState.append(emptyIcon, emptyMessage, emptyDescription);
+        timeline.append(emptyState);
+        return timeline;
+    }
+    
+    // Process milestones data
+    let processedMilestones = milestones.map(m => {
+        const dueDate = new Date(m.duedate);
+        const today = new Date();
+        const isOverdue = dueDate < today && (m.status === 'pending' || m.status === 'not started');
+        
+        // Map API status to display status
+        let displayStatus = m.status;
+        if (isOverdue) {
+            displayStatus = 'overdue';
+        }
+        
+        return {
+            id: m.id || m.milestone_id,
+            name: m.milestone_name,
+            description: m.milestone_description || '',
+            status: displayStatus,
+            dueDate: dueDate,
+            isOverdue: isOverdue,
+            progress: m.milestone_progress || 0
+        };
+    });
+    
+    // Filter by status if provided
+    if (statusFilter) {
+        processedMilestones = processedMilestones.filter(m => 
+            m.status === statusFilter || (statusFilter === 'overdue' && m.isOverdue)
+        );
+    }
+    
+    // Show empty state if no milestones match filter
+    if (processedMilestones.length === 0) {
+        const emptyState = div('', 'empty-milestone-state');
+        const emptyIcon = div('', 'empty-state-icon');
+        emptyIcon.style.backgroundImage = 'url(/assets/icons/noMilestones.png)';
+        const emptyMessage = span('', 'empty-state-message');
+        emptyMessage.innerText = 'No milestones matching the selected status';
+        const emptyDescription = span('', 'empty-state-description');
+        emptyDescription.innerText = `Try adjusting your filters`;
+        emptyState.append(emptyIcon, emptyMessage, emptyDescription);
+        timeline.append(emptyState);
+        return timeline;
+    }
+    
+    // Render each milestone
+    processedMilestones.forEach((milestone, index) => {
+        const step = div('', `milestone-step ${milestone.status}`);
+        
+        // Step indicator with status icon
+        const indicator = div('', 'step-indicator');
+        const indicatorIcon = span('', 'indicator-icon');
+        
+        switch (milestone.status) {
+            case 'completed':
+                indicatorIcon.innerHTML = '✓';
+                indicator.classList.add('completed-indicator');
+                break;
+            case 'in progress':
+                indicatorIcon.innerHTML = '●';
+                indicator.classList.add('in-progress-indicator');
+                break;
+            case 'overdue':
+                indicatorIcon.innerHTML = '⚠';
+                indicator.classList.add('overdue-indicator');
+                break;
+            case 'not started':
+                indicatorIcon.innerHTML = '○';
+                indicator.classList.add('not-started-indicator');
+                break;
+            default:
+                indicatorIcon.innerHTML = '○';
+                break;
+        }
+        
+        indicator.append(indicatorIcon);
+        
+        // Step content
+        const content = div('', 'step-content');
+        const name = span('', 'milestone-name');
+        name.innerText = milestone.name;
+        
+        const details = span('', 'milestone-details');
+        details.innerHTML = `<strong>${dateFormatting(milestone.dueDate, 'date')}</strong>`;
+        
+        // Add status badge
+        const statusBadge = span('', `milestone-status-badge status-${milestone.status.toLowerCase().replace(/\s+/g, '-')}`);
+        statusBadge.innerText = milestone.status.charAt(0).toUpperCase() + milestone.status.slice(1);
+        details.append(statusBadge);
+        
+        // Add overdue warning if applicable
+        if (milestone.isOverdue) {
+            const overdueWarning = span('', 'milestone-overdue-warning');
+            overdueWarning.innerText = '⚠ OVERDUE';
+            details.append(overdueWarning);
+        }
+        
+        // Add progress if available
+        if (milestone.progress > 0) {
+            const progressDisplay = span('', 'milestone-progress-display');
+            progressDisplay.innerText = `${Math.round(milestone.progress)}% complete`;
+            details.append(progressDisplay);
+        }
+        
+        content.append(name, details);
+        
+        // Add description if available
+        if (milestone.description) {
+            const descriptionText = span('', 'milestone-description');
+            descriptionText.innerText = milestone.description;
+            content.append(descriptionText);
+        }
+        
+        step.append(indicator, content);
+        
+        // Make milestone clickable for details
+        step.style.cursor = 'pointer';
+        step.addEventListener('click', async () => {
+            await showMilestoneDetailsModal(milestone, projectId);
+        });
+        
+        timeline.append(step);
+        
+        // Add connecting line between steps
+        if (index < processedMilestones.length - 1) {
+            const connector = div('', 'milestone-connector');
+            timeline.append(connector);
+        }
+    });
+    
+    return timeline;
+}
+
+async function renderTaskAnalytics(projectId = null, dateRange = 'this-month') {
+    const container = div('', 'task-analytics-container');
+    
+    // Task distribution chart
+    const chartSection = div('', 'task-chart-section');
+    const chartTitle = span('', 'section-subtitle');
+    chartTitle.innerText = 'Task Distribution by Status';
+    
+    const taskStats = {
+        completed: 45,
+        inProgress: 28,
+        pending: 32,
+        overdue: 8
+    };
+    
+    const chartContainer = div('', 'task-distribution-chart');
+    const pieChart = createTaskPieChart(taskStats);
+    chartContainer.append(pieChart);
+    
+    chartSection.append(chartTitle, chartContainer);
+    container.append(chartSection);
+    
+    // Task summary cards
+    const summarySection = div('', 'task-summary-section');
+    const summaryTitle = span('', 'section-subtitle');
+    summaryTitle.innerText = 'Task Summary';
+    
+    const summaryCards = div('', 'task-summary-grid');
+    
+    const summaryMetrics = [
+        { label: 'Total Tasks', value: Object.values(taskStats).reduce((a, b) => a + b, 0), color: '#1976d2' },
+        { label: 'Completed', value: taskStats.completed, color: '#388e3c' },
+        { label: 'In Progress', value: taskStats.inProgress, color: '#f57c00' },
+        { label: 'Overdue', value: taskStats.overdue, color: '#d32f2f' }
+    ];
+    
+    summaryMetrics.forEach(metric => {
+        const card = div('', 'task-summary-card');
+        const metricLabel = span('', 'task-metric-label');
+        metricLabel.innerText = metric.label;
+        const metricValue = span('', 'task-metric-value');
+        metricValue.innerText = metric.value.toString();
+        metricValue.style.color = metric.color;
+        card.append(metricLabel, metricValue);
+        summaryCards.append(card);
+    });
+    
+    summarySection.append(summaryTitle, summaryCards);
+    container.append(summarySection);
+    
+    // Grouped tasks list
+    const tasksSection = div('', 'tasks-list-section');
+    const tasksTitle = span('', 'section-subtitle');
+    tasksTitle.innerText = 'Tasks by Status';
+    tasksSection.append(tasksTitle);
+    
+    const statusGroups = [
+        { status: 'completed', label: 'Completed', color: '#388e3c' },
+        { status: 'in-progress', label: 'In Progress', color: '#f57c00' },
+        { status: 'pending', label: 'Pending', color: '#1976d2' },
+        { status: 'overdue', label: 'Overdue', color: '#d32f2f' }
+    ];
+    
+    // Sample tasks
+    const sampleTasks = [
+        { id: 1, name: 'Site Inspection', status: 'completed', assignee: 'John Smith', category: 'Inspection', priority: 'High', startDate: new Date(2026, 0, 5), dueDate: new Date(2026, 0, 10), completedDate: new Date(2026, 0, 9), description: 'Complete site inspection and safety assessment' },
+        { id: 2, name: 'Material Procurement', status: 'completed', assignee: 'Jane Doe', category: 'Procurement', priority: 'Medium', startDate: new Date(2026, 0, 6), dueDate: new Date(2026, 0, 12), completedDate: new Date(2026, 0, 11), description: 'Order and receive all necessary construction materials' },
+        { id: 3, name: 'Foundation Laying', status: 'in-progress', assignee: 'Mike Johnson', category: 'Construction', priority: 'High', startDate: new Date(2026, 0, 10), dueDate: new Date(2026, 0, 20), description: 'Excavate and pour foundation concrete' },
+        { id: 4, name: 'Framing Work', status: 'in-progress', assignee: 'Sarah Williams', category: 'Construction', priority: 'High', startDate: new Date(2026, 0, 12), dueDate: new Date(2026, 0, 25), description: 'Frame walls and install structural supports' },
+        { id: 5, name: 'Electrical Installation', status: 'pending', assignee: 'Tom Brown', category: 'Installation', priority: 'Medium', startDate: new Date(2026, 0, 20), dueDate: new Date(2026, 1, 5), description: 'Install electrical wiring and fixtures' },
+        { id: 6, name: 'Plumbing Installation', status: 'pending', assignee: 'Lisa Anderson', category: 'Installation', priority: 'Medium', startDate: new Date(2026, 0, 22), dueDate: new Date(2026, 1, 8), description: 'Install plumbing pipes and water systems' },
+        { id: 7, name: 'Concrete Pouring', status: 'overdue', assignee: 'Robert Davis', category: 'Construction', priority: 'Critical', startDate: new Date(2026, 0, 1), dueDate: new Date(2026, 0, 8), description: 'Pour concrete for second floor slab' },
+        { id: 8, name: 'Safety Inspection', status: 'overdue', assignee: 'Jennifer Wilson', category: 'Inspection', priority: 'Critical', startDate: new Date(2026, 0, 5), dueDate: new Date(2026, 0, 12), description: 'Complete safety compliance inspection' }
+    ];
+    
+    statusGroups.forEach(group => {
+        const groupTasks = sampleTasks.filter(t => t.status === group.status);
+        if (groupTasks.length === 0) return;
+        
+        const groupContainer = div('', 'task-status-group');
+        const groupHeader = div('', 'task-group-header');
+        const groupLabel = span('', 'task-group-label');
+        groupLabel.innerText = `${group.label} (${groupTasks.length})`;
+        groupLabel.style.color = group.color;
+        groupHeader.append(groupLabel);
+        groupContainer.append(groupHeader);
+        
+        const tasksList = div('', 'task-items-list');
+        groupTasks.forEach(task => {
+            const taskItem = createTaskItem(task, group.color);
+            tasksList.append(taskItem);
+        });
+        
+        groupContainer.append(tasksList);
+        tasksSection.append(groupContainer);
+    });
+    
+    container.append(tasksSection);
+    
+    return container;
+}
+
+function createTaskItem(task, statusColor) {
+    const item = div('', 'task-item');
+    
+    const indicator = div('', 'task-status-indicator');
+    indicator.style.backgroundColor = statusColor;
+    
+    const content = div('', 'task-item-content');
+    
+    const name = span('', 'task-item-name');
+    name.innerText = task.name;
+    
+    const assignee = span('', 'task-item-assignee');
+    assignee.innerText = task.assignee;
+    
+    content.append(name, assignee);
+    
+    item.append(indicator, content);
+    
+    // Make clickable
+    item.style.cursor = 'pointer';
+    item.addEventListener('click', () => {
+        showTaskDetailsModal(task);
+    });
+    
+    return item;
+}
+
+function createTaskPieChart(taskStats) {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 200 200');
+    svg.setAttribute('width', '150');
+    svg.setAttribute('height', '150');
+    
+    const total = Object.values(taskStats).reduce((a, b) => a + b, 0);
+    const colors = ['#388e3c', '#f57c00', '#1976d2', '#d32f2f'];
+    const labels = Object.keys(taskStats);
+    
+    let currentAngle = 0;
+    
+    labels.forEach((label, index) => {
+        const value = taskStats[label];
+        const sliceAngle = (value / total) * 360;
+        
+        // Create pie slice
+        const startAngle = (currentAngle - 90) * (Math.PI / 180);
+        const endAngle = ((currentAngle + sliceAngle) - 90) * (Math.PI / 180);
+        
+        const x1 = 100 + 80 * Math.cos(startAngle);
+        const y1 = 100 + 80 * Math.sin(startAngle);
+        const x2 = 100 + 80 * Math.cos(endAngle);
+        const y2 = 100 + 80 * Math.sin(endAngle);
+        
+        const largeArc = sliceAngle > 180 ? 1 : 0;
+        
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', `M 100 100 L ${x1} ${y1} A 80 80 0 ${largeArc} 1 ${x2} ${y2} Z`);
+        path.setAttribute('fill', colors[index]);
+        path.setAttribute('stroke', '#fff');
+        path.setAttribute('stroke-width', '2');
+        
+        svg.append(path);
+        
+        currentAngle += sliceAngle;
+    });
+    
+    return svg;
+}
+
+/**
+ * Shows comprehensive project details modal with milestones, tasks, and statistics
+ * Clean table-based layout matching the waste & damage modal style
+ */
+async function showProjectDetailsModal(project) {
+    try {
+        // Fetch related data
+        const milestones = await fetchData(`/api/milestones/${project.project_id}`);
+        const milestonesData = milestones !== 'error' && Array.isArray(milestones) ? milestones : [];
+        
+        // Calculate project statistics
+        const totalMilestones = milestonesData.length;
+        const completedMilestones = milestonesData.filter(m => m.status === 'completed').length;
+        const inProgressMilestones = milestonesData.filter(m => m.status === 'in progress').length;
+        const overdueMilestones = milestonesData.filter(m => {
+            const dueDate = new Date(m.duedate);
+            const today = new Date();
+            return dueDate < today && m.status !== 'completed';
+        }).length;
+        
+        const completionPercent = totalMilestones > 0 ? Math.round((completedMilestones / totalMilestones) * 100) : 0;
+        const daysRemaining = calculateDaysRemaining(project.duedate);
+        const status = getProjectStatus(project);
+        
+        // Create modal background
+        const modalBg = div('', 'modal-overlay');
+        const modal = div('', 'modal-container project-info-modal');
+        
+        // HEADER
+        const header = div('', 'modal-header-simple');
+        const titleEl = span('', 'modal-title-simple');
+        titleEl.innerText = project.project_name;
+        
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'modal-close-button-simple';
+        closeBtn.innerHTML = '×';
+        closeBtn.setAttribute('aria-label', 'Close modal');
+        
+        header.append(titleEl, closeBtn);
+        modal.append(header);
+        
+        // PROJECT INFORMATION SECTION
+        const infoContainer = div('', 'modal-table-container');
+        const infoTable = document.createElement('table');
+        infoTable.className = 'modal-info-table';
+        
+        // Table header
+        const infoThead = document.createElement('thead');
+        const infoHeaderRow = document.createElement('tr');
+        const infoHeaders = ['Project Information', 'Details', 'Status'];
+        
+        infoHeaders.forEach(headerText => {
+            const th = document.createElement('th');
+            th.innerText = headerText;
+            infoHeaderRow.append(th);
+        });
+        
+        infoThead.append(infoHeaderRow);
+        infoTable.append(infoThead);
+        
+        // Table body with project details
+        const infoTbody = document.createElement('tbody');
+        
+        const projectInfo = [
+            {
+                label: 'Project ID',
+                value: `#${project.project_id}`,
+                status: status
+            },
+            {
+                label: 'Location',
+                value: project.project_location || 'Not specified',
+                status: daysRemaining > 0 ? 'Active' : 'Overdue'
+            },
+            {
+                label: 'Start Date',
+                value: dateFormatting(project.start_date || project.created_at || new Date(), 'date'),
+                status: 'Commenced'
+            },
+            {
+                label: 'Target End Date',
+                value: dateFormatting(project.duedate || new Date(), 'date'),
+                status: daysRemaining > 0 ? `${daysRemaining} days left` : `${Math.abs(daysRemaining)} days overdue`
+            },
+            {
+                label: 'Project Duration',
+                value: calculateProjectDuration(project.start_date || project.created_at, project.duedate),
+                status: completionPercent >= 75 ? 'On Schedule' : 'Monitor'
+            },
+            {
+                label: 'Total Personnel',
+                value: (project.total_personnel || 0).toString(),
+                status: project.total_personnel > 0 ? 'Assigned' : 'None'
+            },
+            {
+                label: 'Overall Progress',
+                value: `${completionPercent}%`,
+                status: `${completedMilestones}/${totalMilestones} milestones`
+            },
+            {
+                label: 'Overdue Tasks',
+                value: (project.overdue_tasks_count || 0).toString(),
+                status: project.overdue_tasks_count > 0 ? 'Action Required' : 'All Clear'
+            }
+        ];
+        
+        projectInfo.forEach(info => {
+            const row = document.createElement('tr');
+            
+            const labelCell = document.createElement('td');
+            labelCell.innerText = info.label;
+            labelCell.style.fontWeight = '500';
+            
+            const valueCell = document.createElement('td');
+            valueCell.innerText = info.value;
+            
+            const statusCell = document.createElement('td');
+            statusCell.innerText = info.status;
+            
+            row.append(labelCell, valueCell, statusCell);
+            infoTbody.append(row);
+        });
+        
+        infoTable.append(infoTbody);
+        infoContainer.append(infoTable);
+        modal.append(infoContainer);
+        
+        // MILESTONES TABLE (if available)
+        if (milestonesData.length > 0) {
+            const milestonesTableContainer = div('', 'modal-table-container');
+            milestonesTableContainer.style.marginTop = '24px';
+            
+            const milestonesTitle = div('', 'modal-section-subtitle');
+            milestonesTitle.innerText = 'PROJECT MILESTONES';
+            milestonesTableContainer.append(milestonesTitle);
+            
+            const milestonesTable = document.createElement('table');
+            milestonesTable.className = 'modal-info-table';
+            
+            const mThead = document.createElement('thead');
+            const mHeaderRow = document.createElement('tr');
+            const mHeaders = ['Milestone Name', 'Status', 'Due Date', 'Progress'];
+            
+            mHeaders.forEach(headerText => {
+                const th = document.createElement('th');
+                th.innerText = headerText;
+                mHeaderRow.append(th);
+            });
+            
+            mThead.append(mHeaderRow);
+            milestonesTable.append(mThead);
+            
+            const mTbody = document.createElement('tbody');
+            
+            milestonesData.slice(0, 8).forEach(milestone => {
+                const row = document.createElement('tr');
+                row.style.cursor = 'pointer';
+                row.classList.add('clickable-milestone-row');
+                
+                const nameCell = document.createElement('td');
+                nameCell.innerText = milestone.milestone_name;
+                nameCell.style.fontWeight = '500';
+                
+                const statusCell = document.createElement('td');
+                const statusText = (milestone.status || 'pending').charAt(0).toUpperCase() + (milestone.status || 'pending').slice(1);
+                statusCell.innerText = statusText;
+                
+                // Add color coding for status
+                if (milestone.status === 'completed') {
+                    statusCell.style.color = '#2e7d32';
+                    statusCell.style.fontWeight = '600';
+                } else if (milestone.status === 'in progress') {
+                    statusCell.style.color = '#1976d2';
+                    statusCell.style.fontWeight = '600';
+                }
+                
+                const dateCell = document.createElement('td');
+                dateCell.innerText = dateFormatting(new Date(milestone.duedate), 'date');
+                
+                const progressCell = document.createElement('td');
+                const milestoneDate = new Date(milestone.duedate);
+                const today = new Date();
+                const isOverdue = milestoneDate < today && milestone.status !== 'completed';
+                
+                if (isOverdue) {
+                    progressCell.innerText = '⚠️ Overdue';
+                    progressCell.style.color = '#d32f2f';
+                    progressCell.style.fontWeight = '600';
+                } else if (milestone.status === 'completed') {
+                    progressCell.innerText = '✓ Completed';
+                    progressCell.style.color = '#2e7d32';
+                } else {
+                    const daysLeft = calculateDaysRemaining(milestone.duedate);
+                    progressCell.innerText = daysLeft > 0 ? `${daysLeft} days left` : 'Due today';
+                }
+                
+                row.append(nameCell, statusCell, dateCell, progressCell);
+                
+                // Make milestone row clickable
+                row.addEventListener('click', async () => {
+                    modalBg.remove();
+                    const processedMilestone = {
+                        id: milestone.milestone_id || milestone.id,
+                        name: milestone.milestone_name,
+                        description: milestone.milestone_description || '',
+                        status: milestone.status,
+                        dueDate: new Date(milestone.duedate),
+                        isOverdue: isOverdue,
+                        progress: milestone.milestone_progress || 0
+                    };
+                    await showMilestoneDetailsModal(processedMilestone, project.project_id);
+                });
+                
+                mTbody.append(row);
+            });
+            
+            milestonesTable.append(mTbody);
+            milestonesTableContainer.append(milestonesTable);
+            
+            // Show count if more milestones exist
+            if (milestonesData.length > 8) {
+                const moreText = span('', 'modal-more-items-text');
+                moreText.innerText = `+ ${milestonesData.length - 8} more milestone${milestonesData.length - 8 !== 1 ? 's' : ''}`;
+                milestonesTableContainer.append(moreText);
+            }
+            
+            modal.append(milestonesTableContainer);
+        }
+        
+        // SUMMARY SECTION
+        const summarySection = div('', 'modal-summary-section');
+        const summaryTitle = div('', 'modal-summary-title');
+        summaryTitle.innerText = 'PROJECT SUMMARY';
+        summarySection.append(summaryTitle);
+        
+        const summaryGrid = div('', 'modal-summary-grid');
+        
+        const summaryItems = [
+            { label: 'Total Milestones:', value: totalMilestones },
+            { label: 'Completed:', value: completedMilestones },
+            { label: 'In Progress:', value: inProgressMilestones },
+            { label: 'Overdue:', value: overdueMilestones }
+        ];
+        
+        summaryItems.forEach(item => {
+            const itemEl = div('', 'modal-summary-item');
+            const label = span('', 'summary-label');
+            label.innerText = item.label;
+            const value = span('', 'summary-value');
+            value.innerText = item.value;
+            itemEl.append(label, value);
+            summaryGrid.append(itemEl);
+        });
+        
+        summarySection.append(summaryGrid);
+        modal.append(summarySection);
+        
+        modalBg.append(modal);
+        
+        // Event handlers
+        closeBtn.addEventListener('click', () => {
+            modalBg.classList.add('modal-fade-out');
+            setTimeout(() => modalBg.remove(), 300);
+        });
+        
+        modalBg.addEventListener('click', (e) => {
+            if (e.target === modalBg) {
+                modalBg.classList.add('modal-fade-out');
+                setTimeout(() => modalBg.remove(), 300);
+            }
+        });
+        
+        document.addEventListener('keydown', function escHandler(e) {
+            if (e.key === 'Escape') {
+                modalBg.classList.add('modal-fade-out');
+                setTimeout(() => modalBg.remove(), 300);
+                document.removeEventListener('keydown', escHandler);
+            }
+        });
+        
+        document.body.append(modalBg);
+        requestAnimationFrame(() => modalBg.classList.add('modal-fade-in'));
+        
+    } catch (error) {
+        console.error('Error showing project details:', error);
+        alertPopup('Unable to load project details', warnType.bad);
+    }
+}
+
+/**
+ * Legacy wrapper - redirects to refactored modal function
+ * @deprecated Use showMilestoneDetailsModalRefactored for new code
+ */
+async function showMilestoneDetailsModal(milestone, projectId) {
+    return await showMilestoneDetailsModalRefactored(milestone, projectId);
+}
+
+/**
+ * Shows task details modal with comprehensive information
+ * Matches the project modal style for consistency
+ */
+function showTaskDetailsModal(task) {
+    // Create modal background
+    const modalBg = div('', 'modal-overlay');
+    const modal = div('', 'modal-container project-info-modal');
+    
+    // HEADER
+    const header = div('', 'modal-header-simple');
+    const titleEl = span('', 'modal-title-simple');
+    titleEl.innerText = task.name;
+    
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'modal-close-button-simple';
+    closeBtn.innerHTML = '×';
+    closeBtn.setAttribute('aria-label', 'Close modal');
+    
+    header.append(titleEl, closeBtn);
+    modal.append(header);
+    
+    // TASK INFORMATION SECTION
+    const infoContainer = div('', 'modal-table-container');
+    const infoTable = document.createElement('table');
+    infoTable.className = 'modal-info-table';
+    
+    // Table header
+    const infoThead = document.createElement('thead');
+    const infoHeaderRow = document.createElement('tr');
+    const infoHeaders = ['Task Information', 'Details', 'Status'];
+    
+    infoHeaders.forEach(headerText => {
+        const th = document.createElement('th');
+        th.innerText = headerText;
+        infoHeaderRow.append(th);
+    });
+    
+    infoThead.append(infoHeaderRow);
+    infoTable.append(infoThead);
+    
+    // Calculate task duration and days info
+    const today = new Date();
+    const dueDate = task.dueDate ? new Date(task.dueDate) : null;
+    const startDate = task.startDate ? new Date(task.startDate) : null;
+    const completedDate = task.completedDate ? new Date(task.completedDate) : null;
+    
+    let daysRemaining = 0;
+    let statusText = task.status.charAt(0).toUpperCase() + task.status.slice(1).replace('-', ' ');
+    
+    if (task.status === 'completed') {
+        statusText = completedDate ? `Completed on ${dateFormatting(completedDate, 'date')}` : 'Completed';
+    } else if (dueDate) {
+        daysRemaining = calculateDaysRemaining(dueDate);
+        if (daysRemaining < 0) {
+            statusText = `${Math.abs(daysRemaining)} days overdue`;
+        } else if (daysRemaining === 0) {
+            statusText = 'Due today';
+        } else {
+            statusText = `${daysRemaining} days remaining`;
+        }
+    }
+    
+    const duration = startDate && dueDate ? calculateProjectDuration(startDate, dueDate) : 'N/A';
+    
+    // Table body with task details
+    const infoTbody = document.createElement('tbody');
+    
+    const taskInfo = [
+        {
+            label: 'Task ID',
+            value: `#${task.id}`,
+            status: task.priority || 'Normal'
+        },
+        {
+            label: 'Category',
+            value: task.category || 'General',
+            status: task.status === 'overdue' ? '⚠️ Overdue' : statusText
+        },
+        {
+            label: 'Assigned To',
+            value: task.assignee,
+            status: task.status === 'in-progress' ? 'Working' : (task.status === 'completed' ? 'Completed' : 'Assigned')
+        },
+        {
+            label: 'Priority Level',
+            value: task.priority || 'Normal',
+            status: task.priority === 'Critical' ? '🔴 Critical' : (task.priority === 'High' ? '🟠 High' : '🟢 Normal')
+        },
+        {
+            label: 'Start Date',
+            value: startDate ? dateFormatting(startDate, 'date') : 'Not set',
+            status: startDate ? 'Commenced' : 'Pending'
+        },
+        {
+            label: 'Due Date',
+            value: dueDate ? dateFormatting(dueDate, 'date') : 'Not set',
+            status: daysRemaining < 0 ? `${Math.abs(daysRemaining)} days overdue` : (daysRemaining > 0 ? `${daysRemaining} days left` : 'Due today')
+        },
+        {
+            label: 'Task Duration',
+            value: duration,
+            status: task.status === 'completed' ? 'Finished' : 'In Timeline'
+        }
+    ];
+    
+    // Add completion date if task is completed
+    if (task.status === 'completed' && completedDate) {
+        taskInfo.push({
+            label: 'Completed Date',
+            value: dateFormatting(completedDate, 'date'),
+            status: '✓ Done'
+        });
+    }
+    
+    taskInfo.forEach(info => {
+        const row = document.createElement('tr');
+        
+        const labelCell = document.createElement('td');
+        labelCell.innerText = info.label;
+        labelCell.style.fontWeight = '500';
+        
+        const valueCell = document.createElement('td');
+        valueCell.innerText = info.value;
+        
+        const statusCell = document.createElement('td');
+        statusCell.innerText = info.status;
+        
+        // Color coding for specific fields
+        if (info.label === 'Priority Level') {
+            if (task.priority === 'Critical') {
+                statusCell.style.color = '#d32f2f';
+                statusCell.style.fontWeight = '600';
+            } else if (task.priority === 'High') {
+                statusCell.style.color = '#f57c00';
+                statusCell.style.fontWeight = '600';
+            }
+        }
+        
+        if (info.label === 'Due Date' && daysRemaining < 0) {
+            statusCell.style.color = '#d32f2f';
+            statusCell.style.fontWeight = '600';
+        }
+        
+        row.append(labelCell, valueCell, statusCell);
+        infoTbody.append(row);
+    });
+    
+    infoTable.append(infoTbody);
+    infoContainer.append(infoTable);
+    modal.append(infoContainer);
+    
+    // TASK DESCRIPTION SECTION (if available)
+    if (task.description) {
+        const descContainer = div('', 'modal-table-container');
+        descContainer.style.marginTop = '24px';
+        
+        const descTitle = div('', 'modal-section-subtitle');
+        descTitle.innerText = 'TASK DESCRIPTION';
+        descContainer.append(descTitle);
+        
+        const descContent = div('', 'task-description-content');
+        descContent.innerText = task.description;
+        descContainer.append(descContent);
+        
+        modal.append(descContainer);
+    }
+    
+    // SUMMARY SECTION
+    const summarySection = div('', 'modal-summary-section');
+    const summaryTitle = div('', 'modal-summary-title');
+    summaryTitle.innerText = 'TASK SUMMARY';
+    summarySection.append(summaryTitle);
+    
+    const summaryGrid = div('', 'modal-summary-grid');
+    
+    const summaryItems = [
+        { label: 'Status:', value: task.status.charAt(0).toUpperCase() + task.status.slice(1).replace('-', ' ') },
+        { label: 'Assignee:', value: task.assignee },
+        { label: 'Priority:', value: task.priority || 'Normal' },
+        { label: 'Category:', value: task.category || 'General' }
+    ];
+    
+    summaryItems.forEach(item => {
+        const itemEl = div('', 'modal-summary-item');
+        const label = span('', 'summary-label');
+        label.innerText = item.label;
+        const value = span('', 'summary-value');
+        value.innerText = item.value;
+        itemEl.append(label, value);
+        summaryGrid.append(itemEl);
+    });
+    
+    summarySection.append(summaryGrid);
+    modal.append(summarySection);
+    
+    modalBg.append(modal);
+    
+    // Event handlers
+    closeBtn.addEventListener('click', () => {
+        modalBg.classList.add('modal-fade-out');
+        setTimeout(() => modalBg.remove(), 300);
+    });
+    
+    modalBg.addEventListener('click', (e) => {
+        if (e.target === modalBg) {
+            modalBg.classList.add('modal-fade-out');
+            setTimeout(() => modalBg.remove(), 300);
+        }
+    });
+    
+    document.addEventListener('keydown', function escHandler(e) {
+        if (e.key === 'Escape') {
+            modalBg.classList.add('modal-fade-out');
+            setTimeout(() => modalBg.remove(), 300);
+            document.removeEventListener('keydown', escHandler);
+        }
+    });
+    
+    document.body.append(modalBg);
+    requestAnimationFrame(() => modalBg.classList.add('modal-fade-in'));
 }

@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reusable Modal Component - Demo</title>
+    <link rel="stylesheet" href="/styles/project-progress-analytics.css">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .demo-container {
+            background: white;
+            border-radius: 16px;
+            padding: 48px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 800px;
+            width: 100%;
+        }
+        
+        .demo-header {
+            text-align: center;
+            margin-bottom: 48px;
+        }
+        
+        .demo-title {
+            font-size: 32px;
+            font-weight: 700;
+            color: #1565c0;
+            margin-bottom: 12px;
+        }
+        
+        .demo-subtitle {
+            font-size: 16px;
+            color: #666;
+            line-height: 1.6;
+        }
+        
+        .demo-buttons {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+        
+        .demo-btn {
+            padding: 16px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        
+        .demo-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+        }
+        
+        .demo-btn:active {
+            transform: translateY(0);
+        }
+        
+        .btn-milestone {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-task {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+        }
+        
+        .btn-project {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+        }
+        
+        .btn-confirmation {
+            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+            color: white;
+        }
+        
+        .btn-info {
+            background: linear-gradient(135deg, #30cfd0 0%, #330867 100%);
+            color: white;
+        }
+        
+        .demo-info {
+            background: #f9f9f9;
+            border-left: 4px solid #1976d2;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 32px;
+        }
+        
+        .demo-info h3 {
+            margin-top: 0;
+            color: #1565c0;
+            font-size: 18px;
+        }
+        
+        .demo-info ul {
+            margin: 12px 0;
+            padding-left: 20px;
+        }
+        
+        .demo-info li {
+            margin: 8px 0;
+            color: #666;
+            line-height: 1.6;
+        }
+        
+        .demo-code {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 16px;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            margin-top: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div class="demo-container">
+        <div class="demo-header">
+            <h1 class="demo-title">🎯 Reusable Modal Component</h1>
+            <p class="demo-subtitle">
+                A flexible, accessible modal system designed for the Constracker project.<br>
+                Click the buttons below to see different modal implementations.
+            </p>
+        </div>
+        
+        <div class="demo-buttons">
+            <button class="demo-btn btn-milestone" id="btn-milestone">
+                📍 Milestone Details
+            </button>
+            <button class="demo-btn btn-task" id="btn-task">
+                ✓ Task Details
+            </button>
+            <button class="demo-btn btn-project" id="btn-project">
+                📊 Project Details
+            </button>
+            <button class="demo-btn btn-confirmation" id="btn-confirmation">
+                ⚠️ Confirmation
+            </button>
+            <button class="demo-btn btn-info" id="btn-info">
+                🎉 Info Modal
+            </button>
+        </div>
+        
+        <div class="demo-info">
+            <h3>✨ Features</h3>
+            <ul>
+                <li><strong>Flexible Content:</strong> Support for text, HTML, and dynamic elements</li>
+                <li><strong>Status Badges:</strong> Color-coded badges for different states</li>
+                <li><strong>Smooth Animations:</strong> Fade-in and slide-up effects</li>
+                <li><strong>Accessible:</strong> ESC key support, overlay click, and focus management</li>
+                <li><strong>Responsive:</strong> Mobile-optimized with touch-friendly buttons</li>
+                <li><strong>Customizable:</strong> Multiple button styles and action callbacks</li>
+            </ul>
+            
+            <h3 style="margin-top: 24px;">📝 Usage Example</h3>
+            <div class="demo-code">const modal = createReusableModal({
+    title: 'Milestone Details',
+    icon: '📍',
+    statusBadge: 'In Progress',
+    statusClass: 'status-in-progress',
+    content: detailsElement,
+    actions: {
+        actionLabel: 'Save Changes',
+        onAction: async () => { /* save logic */ }
+    }
+});
+document.body.append(modal);</div>
+        </div>
+    </div>
+    
+    <script type="module">
+        import { div, span, createButton } from '/js/components.js';
+        import { dateFormatting } from '/js/string.js';
+        import { alertPopup, warnType } from '/js/popups.js';
+        
+        // Helper functions from adminContent.js (simplified for demo)
+        function createReusableModal(config) {
+            const {
+                title, description, content, actions = {}, statusBadge, statusClass,
+                icon, modalClass = 'reusable-modal', closeOnOverlay = true
+            } = config;
+            
+            const { onClose, onAction, actionLabel = 'Confirm', actionClass = 'primary', showAction = true } = actions;
+            
+            const modalBg = div('', 'modal-overlay');
+            const modal = div('', `modal-container ${modalClass}`);
+            
+            const header = div('', 'modal-header-section');
+            const headerContent = div('', 'modal-header-content-wrapper');
+            
+            if (icon) {
+                const iconEl = span('', 'modal-icon');
+                iconEl.innerText = icon;
+                headerContent.append(iconEl);
+            }
+            
+            const titleEl = span('', 'modal-title-text');
+            titleEl.innerText = title;
+            headerContent.append(titleEl);
+            
+            if (statusBadge) {
+                const badge = span('', `modal-status-badge ${statusClass || ''}`);
+                badge.innerText = statusBadge;
+                headerContent.append(badge);
+            }
+            
+            header.append(headerContent);
+            
+            const closeBtn = document.createElement('button');
+            closeBtn.className = 'modal-close-button';
+            closeBtn.innerHTML = '×';
+            closeBtn.setAttribute('aria-label', 'Close modal');
+            header.append(closeBtn);
+            
+            modal.append(header);
+            
+            if (description) {
+                const descEl = div('', 'modal-description');
+                descEl.innerText = description;
+                modal.append(descEl);
+            }
+            
+            const contentWrapper = div('', 'modal-content-area');
+            if (typeof content === 'string') {
+                contentWrapper.innerHTML = content;
+            } else if (content instanceof HTMLElement) {
+                contentWrapper.append(content);
+            }
+            modal.append(contentWrapper);
+            
+            const footer = div('', 'modal-footer-section');
+            const closeBtnFooter = createButton('Close', 'modal-btn-close', ['secondary-btn']);
+            footer.append(closeBtnFooter);
+            
+            if (showAction && onAction) {
+                const actionBtn = createButton(actionLabel, 'modal-btn-action', [actionClass + '-btn']);
+                footer.append(actionBtn);
+                actionBtn.addEventListener('click', async () => {
+                    await onAction();
+                });
+            }
+            
+            modal.append(footer);
+            modalBg.append(modal);
+            
+            const closeModal = () => {
+                modalBg.classList.add('modal-fade-out');
+                setTimeout(() => modalBg.remove(), 300);
+                if (onClose) onClose();
+            };
+            
+            closeBtn.addEventListener('click', closeModal);
+            closeBtnFooter.addEventListener('click', closeModal);
+            
+            if (closeOnOverlay) {
+                modalBg.addEventListener('click', (e) => {
+                    if (e.target === modalBg) closeModal();
+                });
+            }
+            
+            document.addEventListener('keydown', function escHandler(e) {
+                if (e.key === 'Escape') {
+                    closeModal();
+                    document.removeEventListener('keydown', escHandler);
+                }
+            });
+            
+            requestAnimationFrame(() => modalBg.classList.add('modal-fade-in'));
+            return modalBg;
+        }
+        
+        function createModalDetailGrid(details) {
+            const grid = div('', 'modal-detail-grid');
+            Object.entries(details).forEach(([label, value]) => {
+                if (value !== null && value !== undefined && value !== '') {
+                    const row = div('', 'modal-detail-row');
+                    const labelEl = span('', 'modal-detail-label');
+                    labelEl.innerText = label;
+                    const valueEl = span('', 'modal-detail-value');
+                    valueEl.innerText = value;
+                    row.append(labelEl, valueEl);
+                    grid.append(row);
+                }
+            });
+            return grid;
+        }
+        
+        // Demo button handlers
+        document.getElementById('btn-milestone').addEventListener('click', () => {
+            const detailsContent = createModalDetailGrid({
+                'Due Date': 'January 25, 2026',
+                'Status': 'In Progress',
+                'Progress': '65%',
+                'Days Until Due': '9 days'
+            });
+            
+            const modal = createReusableModal({
+                title: 'Foundation Work Completion',
+                icon: '📍',
+                description: 'Complete all foundation and structural work for the main building',
+                statusBadge: 'In Progress',
+                statusClass: 'status-in-progress',
+                content: detailsContent,
+                actions: {
+                    actionLabel: 'Edit Milestone',
+                    onAction: () => {
+                        alert('Edit functionality would open here');
+                        document.querySelector('.modal-overlay').remove();
+                    }
+                }
+            });
+            document.body.append(modal);
+        });
+        
+        document.getElementById('btn-task').addEventListener('click', () => {
+            const detailsContent = createModalDetailGrid({
+                'Assigned To': 'John Smith',
+                'Priority': 'High',
+                'Due Date': 'January 20, 2026',
+                'Status': 'In Progress',
+                'Progress': '80%'
+            });
+            
+            const modal = createReusableModal({
+                title: 'Install Electrical Wiring',
+                description: 'Complete installation of all electrical wiring in building sections A and B',
+                icon: '✓',
+                statusBadge: 'In Progress',
+                statusClass: 'status-in-progress',
+                content: detailsContent,
+                actions: {
+                    actionLabel: 'Mark Complete',
+                    actionClass: 'success',
+                    onAction: () => {
+                        alert('Task marked as complete!');
+                        document.querySelector('.modal-overlay').remove();
+                    }
+                }
+            });
+            document.body.append(modal);
+        });
+        
+        document.getElementById('btn-project').addEventListener('click', () => {
+            const detailsContent = createModalDetailGrid({
+                'Project ID': 'PRJ-2026-001',
+                'Location': '123 Main Street, Construction Site',
+                'Start Date': 'December 1, 2025',
+                'Due Date': 'June 30, 2026',
+                'Status': 'On Track',
+                'Total Milestones': '12',
+                'Completed Milestones': '5'
+            });
+            
+            const modal = createReusableModal({
+                title: 'Downtown Office Complex',
+                description: 'Modern 10-story office building with underground parking',
+                icon: '📊',
+                statusBadge: 'On Track',
+                statusClass: 'status-completed',
+                content: detailsContent,
+                actions: {
+                    actionLabel: 'View Full Details',
+                    onAction: () => {
+                        alert('Navigating to project details page...');
+                        document.querySelector('.modal-overlay').remove();
+                    }
+                }
+            });
+            document.body.append(modal);
+        });
+        
+        document.getElementById('btn-confirmation').addEventListener('click', () => {
+            const contentEl = div('', 'confirmation-message');
+            contentEl.innerHTML = '<p style="font-size: 16px; margin: 20px 0;">Are you sure you want to delete this milestone?</p><p style="color: #999; font-size: 14px;">This action cannot be undone.</p>';
+            
+            const modal = createReusableModal({
+                title: 'Confirm Deletion',
+                icon: '⚠️',
+                content: contentEl,
+                modalClass: 'confirmation-modal',
+                actions: {
+                    actionLabel: 'Delete',
+                    actionClass: 'danger',
+                    onAction: () => {
+                        alert('Item deleted!');
+                        document.querySelector('.modal-overlay').remove();
+                    }
+                }
+            });
+            document.body.append(modal);
+        });
+        
+        document.getElementById('btn-info').addEventListener('click', () => {
+            const modal = createReusableModal({
+                title: 'Welcome to Reusable Modals!',
+                description: 'This modal system is designed for maximum flexibility',
+                icon: '🎉',
+                content: '<div style="padding: 20px; text-align: center; line-height: 1.8;"><p>✨ Easy to use</p><p>🎨 Fully customizable</p><p>📱 Mobile responsive</p><p>♿ Accessible</p></div>',
+                actions: {
+                    actionLabel: 'Got It!',
+                    actionClass: 'primary',
+                    showAction: true,
+                    onAction: () => {
+                        document.querySelector('.modal-overlay').remove();
+                    }
+                }
+            });
+            document.body.append(modal);
+        });
+    </script>
+</body>
+</html>
