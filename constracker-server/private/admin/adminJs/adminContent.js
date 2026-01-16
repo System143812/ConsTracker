@@ -1,11 +1,12 @@
 import { fetchData, fetchPostJson } from "/js/apiURL.js";
 import { formatString, dateFormatting } from "/js/string.js";
 import { alertPopup, warnType, showEmptyPlaceholder } from "/js/popups.js";
-import { div, span, button, createButton, createFilterContainer, createPaginationControls, createInput, createFilterInput, editFormButton, validateInput } from "/js/components.js";
+import { div, span, button, createButton, createFilterContainer, createPaginationControls, createInput, createFilterInput, editFormButton, validateInput, createSelect } from "/js/components.js";
 import { createMilestoneOl, milestoneFullOl, showLogDetailsOverlay, createOverlayWithBg, hideOverlayWithBg, showDeleteConfirmation, showOverlayWithBg } from "/mainJs/overlays.js";
 import { generateInventoryContent } from "/admin/inventoryContent.js";
 import { generateMaterialRequestsContent } from "/admin/materialRequestsContent.js";
 import { generateAssetsContent } from "/admin/assetsContent.js";
+import { generateReportsContent } from "/admin/reportsContent.js";
 
 const defaultImageBackgroundColors = [
     '#B388EB', '#FFD180', '#80CBC4', '#E1BEE7', '#C5E1A5',
@@ -263,16 +264,6 @@ async function createMaterialOverlay(material = null, refreshMaterialsContentFn)
     });
 
     // --- Selects (Category, Supplier, Unit) ---
-    const createSelect = (id, labelText, apiEndpoint, initialData, editValue, options) => {
-        const container = div(`${id}Container`, 'input-box-containers');
-        const label = document.createElement('label');
-        label.htmlFor = id;
-        label.classList.add('input-labels');
-        label.innerText = labelText;
-        const select = createFilterInput('select', 'dropdown', id, `material ${labelText.toLowerCase()}`, editValue, '', '', 'single', 1, options);
-        container.append(label, select);
-        return { container, select };
-    };
     
     const { container: categorySelectContainer, select: categorySelect } = createSelect('materialCategorySelect', 'Category', '/api/materials/categories', material, material?.category_id, categories);
     const { container: supplierSelectContainer, select: supplierSelect } = createSelect('materialSupplierSelect', 'Supplier', '/api/materials/suppliers', material, material?.supplier_id, suppliers);
@@ -391,9 +382,7 @@ async function createMaterialOverlay(material = null, refreshMaterialsContentFn)
     form.append(createMaterialFormHeader, createMaterialFormFooter);
     overlayBody.append(form);
 
-
-
-    overlayShow(overlayBackground);
+    showOverlayWithBg(overlayBackground);
 }
 
 async function createSupplierOverlay(supplier = null, refreshCallback) {
@@ -404,7 +393,7 @@ async function createSupplierOverlay(supplier = null, refreshCallback) {
     const overlayHeaderContainer = div('', 'overlay-header-containers');
     overlayHeaderContainer.innerText = overlayTitle;
     
-    const addSupplierBtn = createButton('addSupplierBtn', 'solid-buttons', 'Add Supplier', 'addSupplierBtnText', 'addSupplierBtnIcon');
+    const addSupplierBtn = createButton('addSupplierBtn', 'solid-buttons btn-blue', 'Add Supplier', 'addSupplierBtnText', 'addIconWhite');
     addSupplierBtn.addEventListener('click', () => {
         renderEditView(null); // Switch to the add/edit view
     });
@@ -526,7 +515,7 @@ async function createCategoryOverlay(category = null, refreshCallback) {
     const overlayHeaderContainer = div('', 'overlay-header-containers');
     overlayHeaderContainer.innerText = overlayTitle;
     
-    const addCategoryBtn = createButton('addCategoryBtn', 'solid-buttons', 'Add Category', 'addCategoryBtnText', 'addCategoryBtnIcon');
+    const addCategoryBtn = createButton('addCategoryBtn', 'solid-buttons btn-blue', 'Add Category', 'addCategoryBtnText', 'addIconWhite');
     addCategoryBtn.addEventListener('click', () => {
         renderEditView(null);
     });
@@ -642,7 +631,7 @@ async function createUnitOverlay(unit = null, refreshCallback) {
     const overlayHeaderContainer = div('', 'overlay-header-containers');
     overlayHeaderContainer.innerText = overlayTitle;
     
-    const addUnitBtn = createButton('addUnitBtn', 'solid-buttons', 'Add Unit', 'addUnitBtnText', 'addUnitBtnIcon');
+    const addUnitBtn = createButton('addUnitBtn', 'solid-buttons btn-blue', 'Add Unit', 'addUnitBtnText', 'addWhiteIcon');
     addUnitBtn.addEventListener('click', () => {
         renderEditView(null);
     });
@@ -751,18 +740,16 @@ async function createUnitOverlay(unit = null, refreshCallback) {
 }
 
 async function generateMaterialsContent(role) {
-    const materialsBodyContent = document.getElementById('materialsBodyContainer'); 
+    const materialsBodyHeader = document.getElementById('materialsBodyHeader');
+    const materialsBodyContent = document.getElementById('materialsBodyContent'); 
     materialsBodyContent.innerHTML = ''; // Clear existing content
 
-    // New Header
-    const bodyHeader = div('', 'body-header');
-    const bodyHeaderContainer = div('', 'body-header-container');
-    const title = span('', 'body-header-title');
+    // Update Header
+    const bodyHeaderContainer = materialsBodyHeader.querySelector('.body-header-container');
+    const title = bodyHeaderContainer.querySelector('.body-header-title');
+    const subtitle = bodyHeaderContainer.querySelector('.body-header-subtitle');
     title.innerText = 'Materials';
-    const subtitle = span('', 'body-header-subtitle');
     subtitle.innerText = 'Manage and track all construction materials.';
-    bodyHeaderContainer.append(title, subtitle);
-    bodyHeader.append(bodyHeaderContainer);
     
     const user = await fetchData('/profile');
     if (user === 'error') {
@@ -770,14 +757,16 @@ async function generateMaterialsContent(role) {
     }
     const currentUserId = user.user_id;
 
-    // Add Material Button (Admin, PM, Engineer, Foreman)
+    // Clear any previous buttons and add Material Button (Admin, PM, Engineer, Foreman)
+    const existingBtn = materialsBodyHeader.querySelector('.solid-buttons');
+    if (existingBtn) existingBtn.remove();
     const allowedRolesForAdd = ['admin', 'engineer', 'project manager', 'foreman'];
     if (allowedRolesForAdd.includes(role)) {
-        const addMaterialBtn = createButton('addMaterialBtn', 'solid-buttons blue white', 'Add Material', 'addMaterialBtnText', 'addMaterialBtnIcon');
+        const addMaterialBtn = createButton('addMaterialBtn', 'solid-buttons btn-blue', 'Add Material', 'addMaterialBtnText', 'addIconWhite');
         addMaterialBtn.addEventListener('click', () => {
             createMaterialOverlay(null, () => renderMaterials(new URLSearchParams(), role, currentUserId));
         });
-        bodyHeader.append(addMaterialBtn);
+        materialsBodyHeader.append(addMaterialBtn);
     }
 
     const materialsContainer = div('materials-main-container');
@@ -803,7 +792,7 @@ async function generateMaterialsContent(role) {
     const paginationContainer = div('materialsPaginationContainer', 'pagination-container');
     
     materialsContainer.append(filterContainer, materialsListContainer, paginationContainer);
-    materialsBodyContent.append(materialsSubHeader, bodyHeader, materialsContainer);
+    materialsBodyContent.append(materialsSubHeader, materialsContainer);
 
     let currentPage = 1;
     let itemsPerPage = 10;
@@ -1121,31 +1110,13 @@ const tabContents = {
 }
 
 export async function displayContents(tabName, tabType, role) {
-    if(role !== 'admin') return alertPopup('error', 'Unauthorized Role');
+    // Removed role restriction here, as per user's request that reports tab is available for all users.
+    // Specific role-based access for content generation should be handled within generateContent functions if needed.
     const pageName = document.getElementById('pageName');
     
     if(tabType === 'upperTabs'){
         pageName.innerText = formatString(tabName);
-        
-        // Handle the Personnel tab specifically
-        if (tabName === 'personnel') {
-            const personnelContainer = document.getElementById('personnelBodyContent');
-            const personnelBody = document.getElementById('personnelBodyContainer');
-            
-            // 1. Clear the "Coming Soon" text
-            personnelContainer.innerHTML = ''; 
-            
-            // 2. Build the new UI (Add Button + Filters)
-            const content = await displayPersonnel('personnelBodyContent', role);
-            personnelContainer.append(content);
-
-            // 3. Show the container (matching your sidebar logic)
-            personnelBody.style.display = 'flex';
-            setTimeout(() => { personnelBody.style.opacity = 1; }, 50);
-        } else {
-            // Default behavior for other tabs (Dashboard, Materials, etc.)
-            await generateContent(tabName, role);
-        }
+        await generateContent(tabName, role);
     } else {
         await generateProjectContent(tabName, role);
     }
@@ -1162,10 +1133,92 @@ async function generateContent(tabName, role) {
     pageData.generateGraphs();
 }
 
-async function generatePersonnelContent() {
+async function generatePersonnelContent(role) {
+    const personnelBodyHeader = document.getElementById('personnelBodyHeader');
+    personnelBodyHeader.innerHTML = ''; // Clear existing detail view header
+    personnelBodyHeader.style.backgroundImage = ''; // Clear any background image set by detail view
+
+    const personnelHeaderContainer = div('personnelHeaderContainer', 'body-header-container');
+    const personnelHeaderTitle = div('personnelHeaderTitle', 'body-header-title');
+    personnelHeaderTitle.innerText = 'Personnel Management';
+    const personnelHeaderSubtitle = div('personnelHeaderSubtitle', 'body-header-subtitle');
+    personnelHeaderSubtitle.innerText = 'Manage and track key personnel across all projects';
+    
+    personnelHeaderContainer.append(personnelHeaderTitle, personnelHeaderSubtitle);
+    personnelBodyHeader.append(personnelHeaderContainer);
+    const createPersonnelBtn = createButton('createPersonnelBtn', 'solid-buttons btn-blue', 'Add Personnel', 'createPersonnelBtnText', 'addIconWhite');
+    createPersonnelBtn.addEventListener('click', () => {
+        createPersonnelOverlay(() => generatePersonnelContent(role));
+    });
+    personnelBodyHeader.append(createPersonnelBtn);
     const personnelBodyContent = document.getElementById('personnelBodyContent');
-    personnelBodyContent.innerHTML = '';
-    showEmptyPlaceholder('/assets/icons/personnel.png', personnelBodyContent, null, "Personnel Content Coming Soon");
+    personnelBodyContent.innerHTML = ''; // Clear existing content
+    personnelBodyHeader.style.padding = '1.5rem';
+
+    const filterContainer = div('materials-filter-container');
+    const personnelContainer = div('personnel-main-container');
+    const personnelGrid = div('personnel-grid-container', 'personnel-grid');
+    const paginationContainer = div('personnelPaginationContainer', 'pagination-container');
+    
+    personnelContainer.append(personnelGrid);
+    personnelBodyContent.append(filterContainer, personnelContainer, paginationContainer);
+
+    let currentPage = 1;
+    let itemsPerPage = 10;
+
+    async function renderPersonnel(urlParams = new URLSearchParams()) {
+        personnelGrid.innerHTML = '<div class="loading-spinner"></div>';
+        paginationContainer.innerHTML = '';
+
+        urlParams.set('page', currentPage);
+        urlParams.set('limit', itemsPerPage);
+
+        const data = await fetchData(`/api/allPersonnel?${urlParams.toString()}`);
+        personnelGrid.innerHTML = '';
+        
+        if (data === 'error' || data.users.length === 0) {
+            showEmptyPlaceholder('/assets/icons/personnel.png', personnelGrid, null, "No personnel found.");
+            return;
+        }
+
+        data.users.forEach(user => {
+            const personnelCard = createPersonnelCard(user);
+            personnelGrid.append(personnelCard);
+        });
+
+        const paginationControls = createPaginationControls({
+            currentPage,
+            totalItems: data.total,
+            itemsPerPage,
+            onPageChange: (page) => {
+                currentPage = page;
+                renderPersonnel(urlParams);
+            },
+            onItemsPerPageChange: (limit) => {
+                itemsPerPage = limit;
+                currentPage = 1;
+                renderPersonnel(urlParams);
+            }
+        });
+        paginationContainer.append(paginationControls);
+    }
+
+    async function applyFilterToPersonnel(filteredUrlParams) {
+        currentPage = 1;
+        await renderPersonnel(filteredUrlParams);
+    }
+
+    const filters = await createFilterContainer(
+        applyFilterToPersonnel,
+        'Search by personnel name...', 
+        { name: true, sort: true },
+        'name',
+        'newest'
+    );
+    
+    filterContainer.append(filters);
+
+    await renderPersonnel(new URLSearchParams());
 }
 
 export async function renderPersonnel(params) {
@@ -1254,9 +1307,9 @@ export async function displayPersonnel(container, parentId, role) {
     const filterActionWrapper = div('', 'filter-action-wrapper');
     const filterArea = div('personnel-filter-container', 'materials-filter-container');
     
-    const addBtn = createButton('addPersonnelBtn', 'solid-buttons blue white', 'Add Personnel +');
+    const addBtn = createButton('addPersonnelBtn', 'solid-buttons btn-blue', 'Add Personnel', 'addPersonnelBtnText', 'addIconWhite');
     addBtn.style.setProperty('color', '#ffffff', 'important');
-    addBtn.addEventListener('click', () => showAddUserOverlay());
+    addBtn.addEventListener('click', () => showAddPersonnelOverlay());
 
     // Put both in the wrapper
     filterActionWrapper.append(filterArea, addBtn);
@@ -1403,74 +1456,91 @@ async function fetchAndRenderUsers(container) {
 
 
 
-async function generateReportsContent() {
-    const reportsBodyContent = document.getElementById('reportsBodyContent');
-    reportsBodyContent.innerHTML = '';
-    showEmptyPlaceholder('/assets/icons/logs.png', reportsBodyContent, null, "Reports Content Coming Soon");
-}
+
 
 async function generateAnalyticsContent() {
+    const analyticsBodyHeader = document.getElementById('analyticsBodyHeader');
     const analyticsBodyContent = document.getElementById('analyticsBodyContent');
     analyticsBodyContent.innerHTML = '';
+
+    const bodyHeaderContainer = analyticsBodyHeader.querySelector('.body-header-container');
+    const title = bodyHeaderContainer.querySelector('.body-header-title');
+    const subtitle = bodyHeaderContainer.querySelector('.body-header-subtitle');
+    title.innerText = 'Analytics';
+    subtitle.innerText = 'Visualize project data and key metrics';
+
     showEmptyPlaceholder('/assets/icons/analytics.png', analyticsBodyContent, null, "Analytics Content Coming Soon");
 }
 
 async function recentMaterialsRequest() {
-    const recentRequestContainer = div('recentRequestContainer', 'recent-request', 'content-cards');
-    const recentRequestHeader = div('recentRequestHeader', 'content-card-header');
-    const recentRequestTitle = div('recentRequestTitle', 'content-card-title');
+    const recentRequestContainer = div(`recentRequestContainer`, `recent-request-container`);
+    const recentRequestHeader = div(`recentRequestHeader`, `content-card-header`);
+    const recentRequestBody = div(`recentRequestBody`,  `content-card-body`);
+    const recentRequestTitle = div(`recentRequestTitle`, `content-card-title`);
     recentRequestTitle.innerText = 'Recent Material Requests';
-    const recentRequestSubtitle = div('recentRequestSubtitle', 'content-card-subtitle');
-    recentRequestSubtitle.innerText = "Monitor recent material requests";
-    const recentRequestViewMore = createButton('recentRequestViewMore', 'text-buttons', 'View More', 'recentRequestMoreText');
+    const recentRequestSubtitle = div(`recentRequestSubtitle`, `content-card-subtitle`);
+    recentRequestSubtitle.innerText = 'Latest material requests requiring attention';
     
-    recentRequestViewMore.addEventListener('click', () => {
-        const materialRequestsTab = document.getElementById('material-requestsTab');
-        if (materialRequestsTab) {
-            materialRequestsTab.click();
-        }
-    });
-    recentRequestHeader.append(recentRequestTitle, recentRequestSubtitle, recentRequestViewMore);
+    const data = await fetchData(`/api/recentMatReqs`);
+    if(data === 'error') return;
+    if(data.length === 0){
+        const requestCardContainer = div(`requestCardContainer`, `request-card-container`);
+        requestCardContainer.innerText = 'There are no requests so far';
+        recentRequestContainer.append(recentRequestHeader, recentRequestBody);
+        recentRequestHeader.append(recentRequestTitle, recentRequestSubtitle);
+        recentRequestBody.append(requestCardContainer);
 
-    const recentRequestBody = div('recentRequestBody', 'content-card-body');
-    const data = await fetchData('/api/recentMatReqs');
-
-    if (data === 'error' || data.length === 0) {
-        showEmptyPlaceholder('/assets/icons/materialsRequest.png', recentRequestBody, null, "No recent material requests found.");
-    } else {
-        const table = document.createElement('table');
-        table.classList.add('recent-requests-table');
-        const thead = document.createElement('thead');
-        thead.innerHTML = `
-            <tr>
-                <th>Project</th>
-                <th>Status</th>
-                <th>Requested By</th>
-                <th>Items</th>
-                <th>Cost</th>
-                <th>Date</th>
-            </tr>
-        `;
-        const tbody = document.createElement('tbody');
-        data.slice(0, 5).forEach(req => {
-            const row = document.createElement('tr');
-            const statusClass = req.status.toLowerCase().replace(/\s+/g, '-');
-            
-            row.innerHTML = `
-                <td>${req.project_name}</td>
-                <td><span class="status-pill status-${statusClass}">${formatString(req.status)}</span></td>
-                <td>${req.requested_by}</td>
-                <td>${req.item_count}</td>
-                <td>₱${parseFloat(req.cost).toLocaleString()}</td>
-                <td>${dateFormatting(req.request_date, 'date')}</td>
-            `;
-            tbody.appendChild(row);
-        });
-        table.append(thead, tbody);
-        recentRequestBody.append(table);
+        return recentRequestContainer;
     }
-    
-    recentRequestContainer.append(recentRequestHeader, recentRequestBody);
+    for (const requests of data) {
+
+        const requestCardContainer = div(`requestCardContainer`, `request-card-container`);
+        const requestCardLeft = div(`requestCardLeft`, `request-card-left`);
+        const requestCardHeader = div(`requestCardHeader`, `request-card-header`);
+        const requestCardTitle = div(`requestCardTitle`, `request-card-title`);
+        requestCardTitle.innerText = `${requests.project_name}`;
+        const requestCardPriority = div(`requestCardPriority`, `request-card-priority`);
+        if (requests.priority_level) {
+            if(requests.priority_level === "medium") warnType(requestCardPriority, "solid", 'yellow', '', '');
+            if(requests.priority_level === "low") warnType(requestCardPriority, "solid", 'green', '', '');
+            if(requests.priority_level === "high") warnType(requestCardPriority, "solid", 'red', '', '');
+            requestCardPriority.innerText = `${formatString(requests.priority_level)} Priority`;
+        } else {
+            requestCardPriority.innerText = 'No Priority';
+            warnType(requestCardPriority, "solid", 'grey', '', '');
+        }
+        const requestCardBody = div(`requestCardBody`, `request-card-body`);
+        const requestCardName = div(`requestCardName`, `request-card-name`);
+        requestCardName.innerText = `Requested by ${requests.requested_by} • `;
+        const requestCardItemCount = div(`requestCardItemCount`, `request-card-item-count`);
+        requestCardItemCount.innerText = `${requests.item_count} item(s) • `; 
+        const requestCardCost = div(`requestCardCost`, `request-card-cost`);
+        requestCardCost.innerText = `₱${requests.cost}`;
+        const requestCardRight = div(`requestCardRight`, `request-card-right`);
+        const requestStatusContainer = div(`requestStatusContainer`, `request-status-container`);
+        const requestStatusIcon = div(`requestStatusIcon`, `request-status-icon`);
+        requestStatusIcon.classList.add('icons');
+        const requestStatusLabel = div(`requestStatusLabel`, `request-status-label`);
+        if(requests.status === "pending") warnType(requestStatusContainer, "", 'yellow', requestStatusIcon, requestStatusLabel);
+        if(requests.status === "approved") warnType(requestStatusContainer, "", 'green', requestStatusIcon, requestStatusLabel);
+        if(requests.status === "rejected") warnType(requestStatusContainer, "", 'red', requestStatusIcon, requestStatusLabel);
+        requestStatusLabel.innerText = `${requests.status}`;
+        const requestCardDate = div(`requestCardDate`, `request-card-date`);
+        requestCardDate.innerText = `${dateFormatting(requests.request_date, 'dateTime')}`; 
+        
+        const requestStage = div('requestCardStage', 'request-stage-text');
+        requestStage.innerText = `Stage: ${formatString(requests.current_stage)}`;
+
+        recentRequestContainer.append(recentRequestHeader, recentRequestBody);
+        recentRequestHeader.append(recentRequestTitle, recentRequestSubtitle);
+        recentRequestBody.append(requestCardContainer);
+        requestCardContainer.append(requestCardLeft, requestCardRight);
+        requestCardLeft.append(requestCardHeader, requestCardBody, requestCardDate, requestStage);
+        requestCardHeader.append(requestCardTitle, requestCardPriority);
+        requestCardBody.append(requestCardName, requestCardItemCount, requestCardCost);
+        requestCardRight.append(requestStatusContainer);
+        requestStatusContainer.append(requestStatusIcon, requestStatusLabel);
+    }
     return recentRequestContainer;
 }
 
@@ -1668,7 +1738,7 @@ async function generateProjectsContent(role) {
     
     projectsHeaderContainer.append(projectsHeaderTitle, projectsHeaderSubtitle);
     adminProjectsBodyHeader.append(projectsHeaderContainer);
-    const createProjectBtn = createButton('createProjectBtn', 'solid-buttons', 'Create Project', 'createProjectBtnText', 'createProjectBtnIcon');
+    const createProjectBtn = createButton('createProjectBtn', 'solid-buttons btn-blue', 'Create Project', 'createProjectBtnText', 'addIconWhite');
     createProjectBtn.addEventListener('click', () => {
         createProjectOverlay(() => generateProjectsContent(role));
     });
@@ -1900,19 +1970,35 @@ function dashboardGraphContainer() {
     projectStatusGraph.className = 'graphs';
     projectStatus.append(projectStatusHeader, projectStatusGraph);
 
-    const budgetOverview = div('budgetOverview', 'graph-containers');
-    const budgetOverviewHeader = div('projectOverviewHeader', 'graph-headers');
-    const budgetOverviewTitle = div('budgetOverviewTitle', 'graph-titles');
-    const budgetOverviewSubtitle = div('budgetOverviewSubtitle', 'graph-subtitles');
-    budgetOverviewTitle.innerText = 'Budget Overview';
-    budgetOverviewSubtitle.innerText = "Budget vs actual spending by project (in millions)\nSTATIC PA TONG BAR GRAPH (WILL UPDATE SOON PAG MAY BUDGET SYSTEM NA)";
-    budgetOverviewHeader.append(budgetOverviewTitle, budgetOverviewSubtitle);
-    const budgetOverviewGraph = document.createElement('canvas');
-    budgetOverviewGraph.id = 'budgetOverviewGraph';
-    budgetOverviewGraph.className = 'graphs';
-    budgetOverview.append(budgetOverviewHeader, budgetOverviewGraph);
+    const materialUsageOverview = div('materialUsageOverview', 'graph-containers');
+    const materialUsageOverviewHeader = div('projectOverviewHeader', 'graph-headers');
+    const materialUsageOverviewTitle = div('materialUsageOverviewTitle', 'graph-titles');
+    const materialUsageOverviewSubtitle = div('materialUsageOverviewSubtitle', 'graph-subtitles');
+    materialUsageOverviewTitle.innerText = 'Material Usage by Category';
+    materialUsageOverviewSubtitle.innerText = 'Inventory distribution across material categories';
+    materialUsageOverviewHeader.append(materialUsageOverviewTitle, materialUsageOverviewSubtitle);
+    
+    const materialFilterContainer = div('materialFilterContainer', 'graph-filter-container');
+    const materialFilterLabel = span('', 'graph-filter-label');
+    materialFilterLabel.innerText = 'Filter: ';
+    const materialFilterSelect = document.createElement('select');
+    materialFilterSelect.id = 'materialFilterSelect';
+    materialFilterSelect.className = 'graph-filter-select';
+    materialFilterSelect.innerHTML = `
+        <option value="all">All Categories</option>
+        <option value="top5">Top 5</option>
+        <option value="top10">Top 10</option>
+        <option value="bottom5">Bottom 5</option>
+        <option value="bottom10">Bottom 10</option>
+    `;
+    materialFilterContainer.append(materialFilterLabel, materialFilterSelect);
+    
+    const materialUsageOverviewGraph = document.createElement('canvas');
+    materialUsageOverviewGraph.id = 'materialUsageOverviewGraph';
+    materialUsageOverviewGraph.className = 'graphs';
+    materialUsageOverview.append(materialUsageOverviewHeader, materialFilterContainer, materialUsageOverviewGraph);
 
-    projectOverviewContainer.append(projectStatus, budgetOverview);
+    projectOverviewContainer.append(projectStatus, materialUsageOverview);
     return projectOverviewContainer;
 }
 
@@ -1941,6 +2027,8 @@ async function initDashboardGraphs() {
         },
         options: {
             responsive: true,
+            maintainAspectRatio: true,
+            aspectRatio: 1,
             plugins: {
                 legend: {
                     position: 'top',
@@ -1971,52 +2059,154 @@ async function initDashboardGraphs() {
             }
         }
     });
-    const budgetOverviewGraph = document.getElementById('budgetOverviewGraph').getContext('2d');
-    new Chart(budgetOverviewGraph, {
-        type: 'bar', 
-        data: {
-            labels: ['Geanhs', 'City Hall', 'Dali Imus'],
-            datasets: [
-                {
-                    label: 'Budget',
-                    data: [4, 5, 3],
-                    backgroundColor: ['#1A3E72'],
-                    borderColor: ['#f0f0f0'],
-                    borderWidth: 1
-                }, {
-                    label: 'Spent',
-                    data: [2, 1, 2.5],
-                    backgroundColor: ['#4187bfff'],
-                    borderColor: ['#f0f0f0'],
-                    borderWidth: 1
-                }   
-            ]
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                legend: {
-                    position: 'top',
-                }
-            },
-            scales: {
-                x: {
-                    ticks: {
-                        callback: function(index) {
-                        const label = this.getLabelForValue(index);
-                        const maxLength = 10; 
-
-                        if (label.length > maxLength) {
-                            return label.substring(0, maxLength) + '…';
-                        }
-
-                        return label;
-                        }
-                    }
-                }
+    
+    const materialUsageData = await fetchData('/api/materialUsageGraph');
+    let materialUsageChart = null;
+    
+    if(materialUsageData && materialUsageData !== 'error') {
+        const filterSelect = document.getElementById('materialFilterSelect');
+        
+        // Function to filter and sort data
+        function getFilteredData(filter) {
+            let filtered = [...materialUsageData];
+            
+            // Sort by quantity descending
+            filtered.sort((a, b) => (b.total_quantity || 0) - (a.total_quantity || 0));
+            
+            switch(filter) {
+                case 'top5':
+                    return filtered.slice(0, 5);
+                case 'top10':
+                    return filtered.slice(0, 10);
+                case 'bottom5':
+                    return filtered.slice(-5).reverse();
+                case 'bottom10':
+                    return filtered.slice(-10).reverse();
+                case 'all':
+                default:
+                    return filtered;
             }
         }
-    });
+        
+        // Function to update chart
+        function updateMaterialUsageChart(filter) {
+            const filteredData = getFilteredData(filter);
+            const labels = filteredData.map(item => item.category_name || 'Uncategorized');
+            const quantities = filteredData.map(item => item.total_quantity || 0);
+            
+            if (materialUsageChart) {
+                materialUsageChart.data.labels = labels;
+                materialUsageChart.data.datasets[0].data = quantities;
+                materialUsageChart.update();
+            } else {
+                const materialUsageOverviewGraph = document.getElementById('materialUsageOverviewGraph').getContext('2d');
+                materialUsageChart = new Chart(materialUsageOverviewGraph, {
+                    type: 'bar', 
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            {
+                                label: 'Total Quantity (Units)',
+                                data: quantities,
+                                backgroundColor: [
+                                    '#1A3E72', '#4187bfff', '#97a6c4', '#5ba3d0', '#2c5aa0', 
+                                    '#7db8d4', '#3d6fa0', '#6b9fc4', '#1f4a7a', '#8cc4db',
+                                    '#2d5a9a', '#6ba3d5', '#5595c7', '#0f3a5f', '#9ecef5'
+                                ],
+                                borderColor: ['#f0f0f0'],
+                                borderWidth: 1,
+                                borderRadius: 4
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        aspectRatio: 1,
+                        plugins: {
+                            legend: {
+                                position: 'top',
+                                labels: {
+                                    font: {
+                                        size: 12,
+                                        weight: 500
+                                    },
+                                    padding: 15,
+                                    usePointStyle: true
+                                }
+                            },
+                            tooltip: {
+                                backgroundColor: 'rgba(0,0,0,0.7)',
+                                padding: 12,
+                                titleFont: {
+                                    size: 13,
+                                    weight: 'bold'
+                                },
+                                bodyFont: {
+                                    size: 12
+                                },
+                                borderColor: '#fff',
+                                borderWidth: 1,
+                                callbacks: {
+                                    label: function(context) {
+                                        const value = context.raw;
+                                        return `Quantity: ${value.toLocaleString()} units`;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    font: {
+                                        size: 11
+                                    },
+                                    callback: function(value) {
+                                        return value.toLocaleString();
+                                    }
+                                },
+                                grid: {
+                                    color: 'rgba(0,0,0,0.05)',
+                                    drawBorder: false
+                                }
+                            },
+                            x: {
+                                ticks: {
+                                    font: {
+                                        size: 11,
+                                        weight: 500
+                                    },
+                                    callback: function(index) {
+                                        const label = this.getLabelForValue(index);
+                                        const maxLength = 15; 
+
+                                        if (label && label.length > maxLength) {
+                                            return label.substring(0, maxLength) + '…';
+                                        }
+
+                                        return label;
+                                    }
+                                },
+                                grid: {
+                                    display: false,
+                                    drawBorder: false
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        }
+        
+        // Event listener for filter change
+        filterSelect.addEventListener('change', (e) => {
+            updateMaterialUsageChart(e.target.value);
+        });
+        
+        // Initial chart render
+        updateMaterialUsageChart('all');
+    }
 }
 
 async function dashboardActiveProjects(filter) {

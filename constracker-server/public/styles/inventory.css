@@ -1,0 +1,278 @@
+/* styles/inventory.css */
+
+#inventoryBodyContent {
+    --primary-color: #3498db;
+    --secondary-color: #f1c40f;
+    --background-color: #f5f7fa;
+    --surface-color: #ffffff;
+    --text-primary-color: #2c3e50;
+    --text-secondary-color: #7f8c8d;
+    --border-color: #ecf0f1;
+    --success-color: #27ae60;
+    --error-color: #e74c3c;
+    --warning-color: #f39c12;
+    --shadow-color: rgba(0, 0, 0, 0.08);
+    --shadow-md: rgba(0, 0, 0, 0.12);
+}
+
+.inventory-main-container {
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+    padding: 28px;
+    background: linear-gradient(135deg, #f5f7fa 0%, #ffffff 100%);
+    border-radius: 16px;
+}
+
+.inventory-controls-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+    padding: 20px 24px;
+    background-color: var(--surface-color);
+    border-radius: 12px;
+    box-shadow: 0 2px 8px var(--shadow-color);
+    border: 1px solid var(--border-color);
+    flex-wrap: wrap;
+}
+
+.project-select-container {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+    min-width: 250px;
+}
+
+.project-select-container label {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-primary-color);
+    white-space: nowrap;
+}
+
+.filter-select {
+    padding: 10px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    background-color: var(--surface-color);
+    color: var(--text-primary-color);
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 1px solid var(--border-color);
+    background-color: #fff;
+    font-size: 1rem;
+    font-weight: 500;
+    min-width: 220px;
+    transition: all 0.3s ease;
+}
+
+.filter-select:hover, .filter-select:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+    outline: none;
+}
+
+.inventory-filter-container {
+    display: flex;
+    align-items: center;
+}
+
+#inventory-name-filter {
+    padding: 10px 16px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    font-size: 1rem;
+    width: 300px;
+    transition: all 0.3s ease;
+}
+
+#inventory-name-filter:hover, #inventory-name-filter:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+    outline: none;
+}
+
+.inventory-list-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 24px;
+}
+
+.inventory-item-card {
+    background-color: var(--surface-color);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px var(--shadow-color);
+    border: 1px solid var(--border-color);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.inventory-item-card:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 8px 24px var(--shadow-md);
+    border-color: var(--primary-color);
+}
+
+.item-image-container {
+    width: 100%;
+    height: 180px;
+    background: linear-gradient(135deg, #ecf0f1 0%, #d5dbdb 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    position: relative;
+}
+
+.item-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.item-image-placeholder {
+    width: 80px;
+    height: 80px;
+    opacity: 0.5;
+}
+
+.item-info-container {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+}
+
+.inventory-item-card .item-name {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-primary-color);
+    margin-bottom: 8px;
+    letter-spacing: 0.3px;
+}
+
+.item-description {
+    font-size: 0.9rem;
+    color: var(--text-secondary-color);
+    margin-bottom: 16px;
+    flex-grow: 1;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.item-details-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-bottom: 16px;
+}
+
+.detail-item {
+    display: flex;
+    flex-direction: column;
+}
+
+.detail-label {
+    font-size: 0.75rem;
+    color: #7f8c8d;
+    text-transform: uppercase;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+}
+
+.detail-value {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-primary-color);
+}
+
+.item-stock-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 20px;
+    background: linear-gradient(90deg, rgba(52, 152, 219, 0.05) 0%, rgba(46, 204, 113, 0.05) 100%);
+    border-top: 1px solid var(--border-color);
+}
+
+.stock-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #555;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.stock-balance {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--primary-color);
+    padding: 6px 14px;
+    border-radius: 6px;
+    background-color: rgba(52, 152, 219, 0.15);
+    border: 1px solid rgba(52, 152, 219, 0.3);
+}
+
+.stock-balance.low-stock {
+    color: #f39c12;
+    background-color: rgba(243, 156, 18, 0.15);
+    border-color: rgba(243, 156, 18, 0.3);
+}
+
+.stock-balance.out-of-stock {
+    color: #e74c3c;
+    background-color: rgba(231, 76, 60, 0.15);
+    border-color: rgba(231, 76, 60, 0.3);
+}
+
+.empty-inventory-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 80px 40px;
+    border: 2px dashed var(--border-color);
+    border-radius: 16px;
+    background: linear-gradient(135deg, rgba(52, 152, 219, 0.05) 0%, rgba(46, 204, 113, 0.05) 100%);
+    grid-column: 1 / -1;
+    transition: all 0.3s ease;
+}
+
+.empty-inventory-placeholder:hover {
+    border-color: var(--primary-color);
+    background: linear-gradient(135deg, rgba(52, 152, 219, 0.1) 0%, rgba(46, 204, 113, 0.1) 100%);
+}
+
+.empty-inventory-placeholder img {
+    width: 120px;
+    height: 120px;
+    margin-bottom: 24px;
+    opacity: 0.5;
+    filter: grayscale(30%);
+}
+
+.empty-inventory-placeholder h3 {
+    font-size: 1.4rem;
+    font-weight: 600;
+    color: var(--text-primary-color);
+    margin: 0 0 12px;
+    letter-spacing: 0.3px;
+}
+
+.empty-inventory-placeholder p {
+    font-size: 0.95rem;
+    color: var(--text-secondary-color);
+    max-width: 400px;
+    margin: 0;
+    line-height: 1.5;
+}

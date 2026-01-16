@@ -1,36 +1,84 @@
 import { fetchData } from "/js/apiURL.js";
-import { div, span, createFilterContainer, createPaginationControls } from "/js/components.js";
-import { showEmptyPlaceholder } from "/js/popups.js";
+import { div, span, createPaginationControls } from "/js/components.js";
+
+function createEmptyPlaceholder() {
+    const placeholder = div('empty-inventory-placeholder');
+    const img = document.createElement('img');
+    img.src = '/assets/icons/inventory.png'; 
+    img.alt = 'Empty Inventory';
+
+    const title = document.createElement('h3');
+    title.textContent = 'No Items Found';
+
+    const message = document.createElement('p');
+    message.textContent = 'There are currently no items in this inventory that match your search.';
+
+    placeholder.append(img, title, message);
+    return placeholder;
+}
+
+function createInventoryCard(item) {
+    const card = div(null, 'inventory-item-card');
+
+    const imageContainer = div(null, 'item-image-container');
+    const itemImage = document.createElement('img');
+    
+    if (item.image_path) {
+        itemImage.src = `/itemImages/${item.image_path}`;
+        itemImage.alt = item.item_name;
+        itemImage.classList.add('item-image');
+    } else {
+        itemImage.src = '/assets/icons/weightsBlue.png';
+        itemImage.alt = 'Default Item Image';
+        itemImage.classList.add('item-image-placeholder');
+    }
+    imageContainer.append(itemImage);
+
+    const infoContainer = div(null, 'item-info-container');
+    const itemName = div(null, 'item-name');
+    itemName.textContent = item.item_name;
+
+    const itemDescription = div(null, 'item-description');
+    itemDescription.textContent = item.item_description || 'No description available.';
+
+    const detailsGrid = div(null, 'item-details-grid');
+    const categoryDetail = div(null, 'detail-item');
+    categoryDetail.innerHTML = `<span class="detail-label">Category</span><span class="detail-value">${item.category_name || 'N/A'}</span>`;
+    
+    const unitDetail = div(null, 'detail-item');
+    unitDetail.innerHTML = `<span class="detail-label">Unit</span><span class="detail-value">${item.unit_name || 'N/A'}</span>`;
+    
+    detailsGrid.append(categoryDetail, unitDetail);
+    infoContainer.append(itemName, itemDescription, detailsGrid);
+
+    const stockContainer = div(null, 'item-stock-container');
+    const stockLabel = span('Stock Balance', 'stock-label');
+    const stockBalance = span(item.stock_balance, 'stock-balance');
+
+    if (item.stock_balance <= 0) {
+        stockBalance.classList.add('out-of-stock');
+    } else if (item.stock_balance <= 10) { 
+        stockBalance.classList.add('low-stock');
+    }
+
+    stockContainer.append(stockLabel, stockBalance);
+    card.append(imageContainer, infoContainer, stockContainer);
+
+    return card;
+}
 
 export async function generateInventoryContent(role) {
-    const inventoryBodyContent = document.getElementById('inventoryBodyContainer'); 
-    inventoryBodyContent.innerHTML = '';
+    const inventoryBodyHeader = document.getElementById('inventoryBodyHeader');
+    const inventoryBodyContent = document.getElementById('inventoryBodyContent'); 
+    inventoryBodyContent.innerHTML = ''; 
 
-    const bodyHeader = div('', 'body-header');
-    const bodyHeaderContainer = div('', 'body-header-container');
-    const title = span('', 'body-header-title');
+    const inventoryBodyHeaderContainer = inventoryBodyHeader.querySelector('.body-header-container');
+    const title = inventoryBodyHeaderContainer.querySelector('.body-header-title');
+    const subtitle = inventoryBodyHeaderContainer.querySelector('.body-header-subtitle');
     title.innerText = 'Inventory Overview';
-    const subtitle = span('', 'body-header-subtitle');
     subtitle.innerText = 'Stock levels of all items in the main inventory or a specific project.';
-    bodyHeaderContainer.append(title, subtitle);
-    bodyHeader.append(bodyHeaderContainer);
 
-    const inventoryContainer = div('inventory-main-container');
-    const controlsContainer = div('inventory-controls-container');
-    const filterContainer = div('inventory-filter-container');
-    const inventoryListContainer = div('inventory-list-container');
-    const paginationContainer = div('inventoryPaginationContainer', 'pagination-container');
-    
-    inventoryContainer.append(controlsContainer, filterContainer, inventoryListContainer, paginationContainer);
-    inventoryBodyContent.append(bodyHeader, inventoryContainer);
-
-    let currentPage = 1;
-    let itemsPerPage = 10;
-    let allInventory = [];
-    let filteredInventory = [];
-
-    // --- Project Selection Dropdown ---
-    const projectSelectContainer = div('project-select-container');
+    const projectSelectContainer = div(null, 'project-select-container');
     const projectSelectLabel = document.createElement('label');
     projectSelectLabel.htmlFor = 'project-select';
     projectSelectLabel.innerText = 'Select Inventory:';
@@ -39,15 +87,13 @@ export async function generateInventoryContent(role) {
     projectSelect.id = 'project-select';
     projectSelect.classList.add('filter-select');
 
-    // Default Main Inventory Option
     const mainOption = document.createElement('option');
     mainOption.value = 'main';
     mainOption.innerText = 'Main Inventory';
     projectSelect.append(mainOption);
 
-    // Fetch and populate projects
     const projects = await fetchData('/api/selection/project');
-    if (projects !== 'error' && projects.length > 0) {
+    if (projects && projects !== 'error' && projects.length > 0) {
         projects.forEach(project => {
             const option = document.createElement('option');
             option.value = project.id;
@@ -57,92 +103,77 @@ export async function generateInventoryContent(role) {
     }
     
     projectSelectContainer.append(projectSelectLabel, projectSelect);
-    controlsContainer.append(projectSelectContainer);
-    
-    projectSelect.addEventListener('change', () => {
-        fetchAndRenderInventory();
-    });
 
-    function renderInventoryTable() {
+    const filterContainer = div('inventory-filter-container', 'inventory-filter-container');
+    const inventoryListContainer = div('inventory-list-container', 'inventory-list-container');
+    const paginationContainer = div('inventoryPaginationContainer', 'pagination-container');
+    
+    inventoryBodyContent.append(projectSelectContainer, filterContainer, inventoryListContainer, paginationContainer);
+
+    let currentPage = 1;
+    let itemsPerPage = 12;
+    let allInventory = [];
+    let filteredInventory = [];
+    
+    projectSelect.addEventListener('change', fetchAndRenderInventory);
+
+    function renderInventory() {
         inventoryListContainer.innerHTML = '';
         paginationContainer.innerHTML = '';
 
-        const itemsToRender = filteredInventory;
-
-        if (itemsToRender.length === 0) {
-            showEmptyPlaceholder('/assets/icons/inventory.png', inventoryListContainer, null, "No inventory data found.");
+        if (filteredInventory.length === 0) {
+            inventoryListContainer.append(createEmptyPlaceholder());
             return;
         }
 
-        const table = document.createElement('table');
-        table.classList.add('inventory-table');
-        const thead = document.createElement('thead');
-        const tbody = document.createElement('tbody');
-
-        const headers = ['Item Name', 'Description', 'Category', 'Unit', 'Stock Balance'];
-        const headerRow = document.createElement('tr');
-        headers.forEach(headerText => {
-            const th = document.createElement('th');
-            th.innerText = headerText;
-            headerRow.append(th);
-        });
-        thead.append(headerRow);
-
         const start = (currentPage - 1) * itemsPerPage;
         const end = start + itemsPerPage;
-        const pageItems = itemsToRender.slice(start, end);
+        const pageItems = filteredInventory.slice(start, end);
 
         pageItems.forEach(item => {
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td>${item.item_name}</td>
-                <td>${item.item_description || 'N/A'}</td>
-                <td>${item.category_name || 'N/A'}</td>
-                <td>${item.unit_name || 'N/A'}</td>
-                <td>${item.stock_balance}</td>
-            `;
-            tbody.append(row);
+            const card = createInventoryCard(item);
+            inventoryListContainer.append(card);
         });
-
-        table.append(thead, tbody);
-        inventoryListContainer.append(table);
 
         const paginationControls = createPaginationControls({
             currentPage,
-            totalItems: itemsToRender.length,
+            totalItems: filteredInventory.length,
             itemsPerPage,
             onPageChange: (page) => {
                 currentPage = page;
-                renderInventoryTable();
+                renderInventory();
             },
             onItemsPerPageChange: (limit) => {
                 itemsPerPage = limit;
-                currentPage = 1;
-                renderInventoryTable();
+                currentPage = 1; 
+                renderInventory();
             }
         });
-        paginationContainer.append(paginationControls);
+        if (filteredInventory.length > itemsPerPage) {
+            paginationContainer.append(paginationControls);
+        }
     }
 
     function applyFilters() {
         const nameFilter = document.getElementById('inventory-name-filter').value.toLowerCase();
         
-        filteredInventory = allInventory.filter(item => {
-            const nameMatch = !nameFilter || item.item_name.toLowerCase().includes(nameFilter);
-            return nameMatch;
-        });
+        filteredInventory = allInventory.filter(item => 
+            item.item_name.toLowerCase().includes(nameFilter)
+        );
 
         currentPage = 1;
-        renderInventoryTable();
+        renderInventory();
     }
 
     async function fetchAndRenderInventory() {
-        inventoryListContainer.innerHTML = '<div class="loading-spinner"></div>';
+        inventoryListContainer.innerHTML = '<div class="loading-dots"></div>'; 
         const selectedInventory = projectSelect.value;
         
-        let url = '/api/inventory';
+        let url = selectedInventory === 'main' 
+            ? '/api/inventory' 
+            : `/api/inventory/project/${selectedInventory}`;
+
         if (selectedInventory !== 'main') {
-            url = `/api/inventory/project/${selectedInventory}`;
             const selectedProject = projects.find(p => p.id == selectedInventory);
             title.innerText = `${selectedProject.name} Inventory`;
             subtitle.innerText = `Stock levels for the ${selectedProject.name} project.`;
@@ -153,14 +184,7 @@ export async function generateInventoryContent(role) {
 
         const data = await fetchData(url);
         
-        if (data === 'error') {
-            inventoryListContainer.innerHTML = '';
-            showEmptyPlaceholder('/assets/icons/inventory.png', inventoryListContainer, null, "An error occurred while fetching inventory data.");
-            allInventory = [];
-        } else {
-            allInventory = data;
-        }
-        
+        allInventory = (data && data !== 'error') ? data : [];
         applyFilters();
     }
     

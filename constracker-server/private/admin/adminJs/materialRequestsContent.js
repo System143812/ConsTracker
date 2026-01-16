@@ -1,8 +1,8 @@
 import { fetchData } from "/js/apiURL.js";
-import { div, span, createButton, createFilterContainer, createPaginationControls, createInput, createItemSearch } from "/js/components.js";
-import { showEmptyPlaceholder } from "/js/popups.js";
-import { createOverlayWithBg, hideOverlayWithBg } from "/mainJs/overlays.js";
-import { dateFormatting } from "/js/string.js";
+import { div, span, createButton, createFilterContainer, createPaginationControls, createInput, createItemSearch, createFilterInput } from "/js/components.js";
+import { showEmptyPlaceholder, warnType } from "/js/popups.js";
+import { createOverlayWithBg, hideOverlayWithBg, showOverlayWithBg } from "/mainJs/overlays.js";
+import { dateFormatting, formatString } from "/js/string.js";
 
 async function createMaterialRequestOverlay(refreshCallback) {
     const { overlayBackground, overlayHeader, overlayBody } = createOverlayWithBg();
@@ -121,9 +121,9 @@ async function createMaterialRequestOverlay(refreshCallback) {
     renderRequestedItems(); // Initial render
 }
 
-async function showMaterialRequestDetails(requestId, refreshCallback) {
+async function showMaterialRequestDetails(requestId, requestCode, refreshCallback) {
     const { overlayBackground, overlayHeader, overlayBody } = createOverlayWithBg();
-    overlayHeader.innerText = `Material Request #${requestId}`;
+    overlayHeader.innerText = `Material Request ${requestCode}`;
 
     const data = await fetchData(`/api/material-requests/${requestId}`);
     if (data === 'error') {
@@ -290,7 +290,7 @@ async function showMaterialRequestDetails(requestId, refreshCallback) {
     if (header.status === 'ordered') {
         const recordDeliveryButton = createButton('recordDeliveryBtn', 'solid-buttons', 'Record Delivery');
         recordDeliveryButton.addEventListener('click', () => {
-            createDeliveryOverlay(requestId, refreshCallback);
+            createDeliveryOverlay(requestId, requestCode, refreshCallback);
         });
         actionsContainer.append(recordDeliveryButton);
     }
@@ -298,7 +298,7 @@ async function showMaterialRequestDetails(requestId, refreshCallback) {
     if (header.status === 'verifying' || header.status === 'partially_verified') {
         const verifyButton = createButton('verifyDeliveryBtn', 'solid-buttons', 'Verify Items');
         verifyButton.addEventListener('click', () => {
-            createVerificationOverlay(requestId, items, refreshCallback);
+            createVerificationOverlay(requestId, requestCode, items, refreshCallback);
         });
         actionsContainer.append(verifyButton);
     }
@@ -339,9 +339,9 @@ async function showMaterialRequestDetails(requestId, refreshCallback) {
     overlayBody.append(closeButton);
 }
 
-function createVerificationOverlay(requestId, items, refreshCallback) {
+function createVerificationOverlay(requestId, requestCode, items, refreshCallback) {
     const { overlayBackground, overlayHeader, overlayBody } = createOverlayWithBg();
-    overlayHeader.innerText = `Verify Items for Request #${requestId}`;
+    overlayHeader.innerText = `Verify Items for Request ${requestCode}`;
 
     const form = document.createElement('form');
     form.id = 'verificationForm';
@@ -425,9 +425,9 @@ function createVerificationOverlay(requestId, items, refreshCallback) {
 }
 
 
-function createDeliveryOverlay(requestId, refreshCallback) {
+function createDeliveryOverlay(requestId, requestCode, refreshCallback) {
     const { overlayBackground, overlayHeader, overlayBody } = createOverlayWithBg();
-    overlayHeader.innerText = `Record Delivery for Request #${requestId}`;
+    overlayHeader.innerText = `Record Delivery for Request ${requestCode}`;
 
     const form = document.createElement('form');
 
@@ -484,27 +484,30 @@ function createDeliveryOverlay(requestId, refreshCallback) {
 }
 
 export async function generateMaterialRequestsContent(role) {
-    const materialRequestsBodyContent = document.getElementById('material-requestsBodyContainer'); 
+    const materialRequestsBodyHeader = document.getElementById('material-requestsBodyHeader'); 
+    const materialRequestsBodyContent = document.getElementById('material-requestsBodyContent');
     materialRequestsBodyContent.innerHTML = '';
 
-    const bodyHeader = div('', 'body-header');
-    const bodyHeaderContainer = div('', 'body-header-container');
-    const title = span('', 'body-header-title');
+    // Update header section
+    const bodyHeaderContainer = materialRequestsBodyHeader.querySelector('.body-header-container');
+    const title = bodyHeaderContainer.querySelector('.body-header-title');
+    const subtitle = bodyHeaderContainer.querySelector('.body-header-subtitle');
     title.innerText = 'Material Requests';
-    const subtitle = span('', 'body-header-subtitle');
     subtitle.innerText = 'Browse and manage all material requests.';
-    bodyHeaderContainer.append(title, subtitle);
-    const createRequestBtn = createButton('createRequestBtn', 'solid-buttons', 'Create Request', 'createRequestBtnText', 'addIcon');
+    
+    // Clear any previous buttons and add Create Request button
+    const existingBtn = materialRequestsBodyHeader.querySelector('.solid-buttons');
+    if (existingBtn) existingBtn.remove();
+    const createRequestBtn = createButton('createRequestBtn', 'solid-buttons btn-blue', 'Create Request', 'createRequestBtnText', 'addMaterialBtnIcon');
     createRequestBtn.addEventListener('click', () => createMaterialRequestOverlay(renderMaterialRequests));
-    bodyHeader.append(bodyHeaderContainer, createRequestBtn);
+    materialRequestsBodyHeader.append(createRequestBtn);
 
-    const materialRequestsContainer = div('material-requests-main-container');
+    // Setup content section
     const filterContainer = div('material-requests-filter-container');
     const materialRequestsListContainer = div('material-requests-list-container');
     const paginationContainer = div('material-requests-pagination-container', 'pagination-container');
     
-    materialRequestsContainer.append(filterContainer, materialRequestsListContainer, paginationContainer);
-    materialRequestsBodyContent.append(bodyHeader, materialRequestsContainer);
+    materialRequestsBodyContent.append(filterContainer, materialRequestsListContainer, paginationContainer);
 
     let currentPage = 1;
     let itemsPerPage = 10;
@@ -524,38 +527,54 @@ export async function generateMaterialRequestsContent(role) {
             return;
         }
 
-        const table = document.createElement('table');
-        table.classList.add('material-requests-table');
-        const thead = document.createElement('thead');
-        const tbody = document.createElement('tbody');
-
-        const headers = ['Request ID', 'Project', 'Requester', 'Type', 'Stage', 'Item Count', 'Total Cost', 'Date'];
-        const headerRow = document.createElement('tr');
-        headers.forEach(headerText => {
-            const th = document.createElement('th');
-            th.innerText = headerText;
-            headerRow.append(th);
-        });
-        thead.append(headerRow);
-
         data.requests.forEach(request => {
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td>${request.id}</td>
-                <td>${request.project_name}</td>
-                <td>${request.requester_name}</td>
-                <td>${request.request_type}</td>
-                <td>${request.current_stage}</td>
-                <td>${request.item_count}</td>
-                <td>₱${request.total_cost ? request.total_cost.toLocaleString() : '0'}</td>
-                <td>${dateFormatting(request.created_at, 'dateTime')}</td>
-            `;
-            row.addEventListener('click', () => showMaterialRequestDetails(request.id, renderMaterialRequests));
-            tbody.append(row);
-        });
+            const requestCardContainer = div(`requestCardContainer`, `request-card-container`);
+            requestCardContainer.classList.add('hoverable');
+            requestCardContainer.addEventListener('click', () => showMaterialRequestDetails(request.id, request.request_code, renderMaterialRequests));
+            const requestCardLeft = div(`requestCardLeft`, `request-card-left`);
+            const requestCardHeader = div(`requestCardHeader`, `request-card-header`);
+            const requestCardTitle = div(`requestCardTitle`, `request-card-title`);
+            requestCardTitle.innerText = `${request.project_name}`;
+            const requestCardPriority = div(`requestCardPriority`, `request-card-priority`);
+            if (request.priority_level) {
+                if(request.priority_level === "medium") warnType(requestCardPriority, "solid", 'yellow', '', '');
+                if(request.priority_level === "low") warnType(requestCardPriority, "solid", 'green', '', '');
+                if(request.priority_level === "high") warnType(requestCardPriority, "solid", 'red', '', '');
+                requestCardPriority.innerText = `${request.priority_level} Priority`;
+            } else {
+                requestCardPriority.innerText = 'No Priority';
+                warnType(requestCardPriority, "solid", 'grey', '', ''); // Apply a neutral style for 'No Priority'
+            }
+            const requestCardBody = div(`requestCardBody`, `request-card-body`);
+            const requestCardName = div(`requestCardName`, `request-card-name`);
+            requestCardName.innerText = `Requested by ${request.requester_name} • `;
+            const requestCardItemCount = div(`requestCardItemCount`, `request-card-item-count`);
+            requestCardItemCount.innerText = `${request.item_count} item(s) • `; 
+            const requestCardCost = div(`requestCardCost`, `request-card-cost`);
+            requestCardCost.innerText = `₱${request.total_cost ? request.total_cost.toLocaleString() : '0'}`;
+            const requestCardRight = div(`requestCardRight`, `request-card-right`);
+            const requestStatusContainer = div(`requestStatusContainer`, `request-status-container`);
+            const requestStatusIcon = div(`requestStatusIcon`, `request-status-icon`);
+            requestStatusIcon.classList.add('icons');
+            const requestStatusLabel = div(`requestStatusLabel`, `request-status-label`);
+            if(request.status === "pending") warnType(requestStatusContainer, "", 'yellow', requestStatusIcon, requestStatusLabel);
+            if(request.status === "approved") warnType(requestStatusContainer, "", 'green', requestStatusIcon, requestStatusLabel);
+            if(request.status === "rejected") warnType(requestStatusContainer, "", 'red', requestStatusIcon, requestStatusLabel);
+            requestStatusLabel.innerText = `${request.status}`;
+            const requestCardDate = div(`requestCardDate`, `request-card-date`);
+            requestCardDate.innerText = `${dateFormatting(request.created_at, 'dateTime')}`; 
+            
+            const requestStage = div('requestCardStage', 'request-stage-text');
+            requestStage.innerText = `Stage: ${formatString(request.current_stage)}`;
 
-        table.append(thead, tbody);
-        materialRequestsListContainer.append(table);
+            requestCardContainer.append(requestCardLeft, requestCardRight);
+            requestCardLeft.append(requestCardHeader, requestCardBody, requestCardDate, requestStage);
+            requestCardHeader.append(requestCardTitle, requestCardPriority);
+            requestCardBody.append(requestCardName, requestCardItemCount, requestCardCost);
+            requestCardRight.append(requestStatusContainer);
+            requestStatusContainer.append(requestStatusIcon, requestStatusLabel);
+            materialRequestsListContainer.append(requestCardContainer);
+        });
 
         const paginationControls = createPaginationControls({
             currentPage,

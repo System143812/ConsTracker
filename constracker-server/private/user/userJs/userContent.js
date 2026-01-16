@@ -3,8 +3,7 @@ import { formatString, dateFormatting } from "/js/string.js";
 import { alertPopup, warnType, showEmptyPlaceholder } from "/js/popups.js";
 import { hideContents } from "/mainJs/sidebar.js";
 import { createMilestoneOl, milestoneFullOl, showLogDetailsOverlay, createOverlayWithBg, hideOverlayWithBg, showDeleteConfirmation, showOverlayWithBg } from "/mainJs/overlays.js";
-import { div, span, button, createButton, createFilterContainer, createPaginationControls, createInput, createFilterInput, editFormButton } from "/js/components.js";
-import { generateMaterialRequestsContent } from "./materialRequestsContent.js";
+import { div, span, button, createButton, createFilterContainer, createPaginationControls, createInput, createFilterInput, editFormButton, createSelect } from "/js/components.js";
 
 const requiredRoles = ['engineer', 'foreman', 'project manager'];
 
@@ -378,7 +377,7 @@ async function createSupplierOverlay(supplier = null, refreshCallback) {
     const overlayHeaderContainer = div('', 'overlay-header-containers');
     overlayHeaderContainer.innerText = overlayTitle;
     
-    const addSupplierBtn = createButton('addSupplierBtn', 'solid-buttons', 'Add Supplier', 'addSupplierBtnText', 'addSupplierBtnIcon');
+    const addSupplierBtn = createButton('addSupplierBtn', 'solid-buttons btn-blue', 'Add Supplier', 'addSupplierBtnText', 'addIconWhite');
     addSupplierBtn.addEventListener('click', () => {
         renderEditView(null); // Switch to the add/edit view
     });
@@ -499,7 +498,7 @@ async function createCategoryOverlay(category = null, refreshCallback) {
     const overlayHeaderContainer = div('', 'overlay-header-containers');
     overlayHeaderContainer.innerText = overlayTitle;
     
-    const addCategoryBtn = createButton('addCategoryBtn', 'solid-buttons', 'Add Category', 'addCategoryBtnText', 'addCategoryBtnIcon');
+    const addCategoryBtn = createButton('addCategoryBtn', 'solid-buttons btn-blue', 'Add Category', 'addCategoryBtnText', 'addIcon');
     addCategoryBtn.addEventListener('click', () => {
         renderEditView(null);
     });
@@ -1221,11 +1220,7 @@ async function generateAssetsContent() {
     showEmptyPlaceholder('/assets/icons/inventory.png', assetsBodyContent, null, "Assets Content Coming Soon");
 }
 
-async function generateReportsContent() {
-    const reportsBodyContent = document.getElementById('reportsBodyContent');
-    reportsBodyContent.innerHTML = '';
-    showEmptyPlaceholder('/assets/icons/logs.png', reportsBodyContent, null, "Reports Content Coming Soon");
-}
+
 
 async function generateLogsContent(role) {
     const logsBodyContent = document.getElementById('logsBodyContent');
@@ -1510,14 +1505,20 @@ const tabContents = {
         generateGraphs: async() => '' 
     },
     'material-requests': {
-        generateContent: async(role) => await generateMaterialRequestsContent(role),
+        generateContent: async(role) => {
+            const { generateMaterialRequestsContent } = await import("./materialRequestsContent.js");
+            return await generateMaterialRequestsContent(role);
+        },
         generateGraphs: async() => '' 
     },
     project: {
         generateContent: async(tabName, role) => await generateProjectContent(tabName, role)
     },
     reports: {
-        generateContent: async(role) => await generateReportsContent(role),
+        generateContent: async(role) => {
+            const { generateReportsContent } = await import("./userReportsContent.js");
+            return await generateReportsContent(role);
+        },
         generateGraphs: async() => ''
     },
     settings: {

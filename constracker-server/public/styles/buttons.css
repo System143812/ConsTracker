@@ -1,0 +1,43 @@
+/* ==========================================================================
+   Buttons
+   ========================================================================== */
+
+/* Base button styles are in general.css */
+
+/* Solid Buttons */
+.solid-buttons.btn-blue, .wide-buttons.btn-blue {
+    background-color: var(--blue-border);
+    border-color: var(--blue-border);
+}
+
+.solid-buttons.btn-green, .wide-buttons.btn-green {
+    background-color: var(--green-border);
+    border-color: var(--green-border);
+}
+
+.solid-buttons.btn-red, .wide-buttons.btn-red, .danger-buttons {
+    background-color: var(--red-border);
+    border-color: var(--red-border);
+}
+
+/* Text color for solid buttons */
+.solid-buttons.btn-blue .btn-texts,
+.solid-buttons.btn-green .btn-texts,
+.solid-buttons.btn-red .btn-texts,
+.wide-buttons.btn-blue .btn-texts,
+.wide-buttons.btn-green .btn-texts,
+.wide-buttons.btn-red .btn-texts,
+.danger-buttons .btn-texts {
+    color: white;
+}
+
+/* For buttons that have an icon and text */
+.solid-buttons.btn-blue .btn-icons,
+.solid-buttons.btn-green .btn-icons,
+.solid-buttons.btn-red .btn-icons,
+.wide-buttons.btn-blue .btn-icons,
+.wide-buttons.btn-green .btn-icons,
+.wide-buttons.btn-red .btn-icons,
+.danger-buttons .btn-icons {
+    filter: brightness(0) invert(1);
+}

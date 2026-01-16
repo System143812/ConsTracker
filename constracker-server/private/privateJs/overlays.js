@@ -347,7 +347,7 @@ async function renderEditTask(projectId, milestoneId, milestoneName, taskId, upd
     const taskFormBody = div('taskFormBody');
     const taskFormFooter = div('taskFormFooter');
 
-    const weightsButton = createButton('weightsFormBtn', 'solid-buttons', 'Tasks Weights', 'weightsBtnText', '',
+    const weightsButton = createButton('weightsFormBtn', 'solid-buttons btn-blue', 'Tasks Weights', 'weightsBtnText', '',
         () => updateContents(overlayBody, () => renderEditWeights(taskWeightData, "tasks", { projectId, milestoneId, milestoneName, taskId, updateUiFn, overlayBody, role }))
      );
     const spanArrowIcon = span('weightsBtnIcon', 'btn-icons');

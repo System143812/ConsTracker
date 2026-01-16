@@ -23,7 +23,6 @@ async function createAssetOverlay(refreshCallback) {
     const projects = await fetchData('/api/selection/project');
     if (projects === 'error') {
         hideOverlayWithBg(overlayBackground);
-        // show error
         return;
     }
 
@@ -116,31 +115,32 @@ async function createAssetOverlay(refreshCallback) {
 
 
 export async function generateAssetsContent() {
-    const assetsBodyContent = document.getElementById('assetsBodyContainer');
+    const assetsBodyHeader = document.getElementById('assetsBodyHeader');
+    const assetsBodyContent = document.getElementById('assetsBodyContent');
     assetsBodyContent.innerHTML = '';
 
-    const bodyHeader = div('', 'body-header');
-    const headerContainer = div('', 'body-header-container');
-    const title = span('', 'body-header-title');
+    const headerContainer = assetsBodyHeader.querySelector('.body-header-container');
+    const title = headerContainer.querySelector('.body-header-title');
+    const subtitle = headerContainer.querySelector('.body-header-subtitle');
     title.innerText = 'Asset Management';
-    const subtitle = span('', 'body-header-subtitle');
     subtitle.innerText = 'Track and manage all company assets';
-    headerContainer.append(title, subtitle);
     
-    const createAssetBtn = createButton('createAssetBtn', 'solid-buttons', 'Add Asset');
+    // Clear any previous buttons and add create asset button
+    const existingBtn = assetsBodyHeader.querySelector('.solid-buttons');
+    if (existingBtn) existingBtn.remove();
+    const createAssetBtn = createButton('createAssetBtn', 'solid-buttons btn-blue', 'Add Asset', 'createAssetBtnText', 'addIconWhite');
     createAssetBtn.addEventListener('click', () => createAssetOverlay(renderAssets));
-    bodyHeader.append(headerContainer, createAssetBtn);
+    assetsBodyHeader.append(createAssetBtn);
 
     const assetsListContainer = div('assets-list-container');
-    assetsBodyContent.append(bodyHeader, assetsListContainer);
+    assetsBodyContent.append(assetsListContainer);
 
     async function renderAssets() {
-        assetsListContainer.innerHTML = '<div class="loading-spinner"></div>';
-        const data = await fetchData('/api/assets');
         assetsListContainer.innerHTML = '';
+        const data = await fetchData('/api/assets');
 
         if (data === 'error' || data.length === 0) {
-            showEmptyPlaceholder('/assets/icons/assets.png', assetsListContainer, null, "No assets found.");
+            showEmptyPlaceholder('/assets/icons/assets.png', assetsBodyContent, null, "No assets found.");
             return;
         }
 

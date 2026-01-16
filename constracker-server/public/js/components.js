@@ -845,4 +845,69 @@ export function createPaginationControls({
     return paginationContainer;
 }
 
+export function createSelect(id, labelText, apiEndpoint, initialData, editValue, options) {
+    const container = div(`${id}Container`, 'input-box-containers');
+    const label = document.createElement('label');
+    label.htmlFor = id;
+    label.classList.add('input-labels');
+    label.innerText = labelText;
+    const select = createFilterInput('select', 'dropdown', id, `material ${labelText.toLowerCase()}`, editValue, '', '', 'single', 1, options);
+    container.append(label, select);
+    return { container, select };
+};
+
+export function createTable(id, headers, data) {
+    const table = document.createElement('table');
+    table.id = id;
+    table.classList.add('inventory-table');
+    const thead = document.createElement('thead');
+    const tbody = document.createElement('tbody');
+
+    const headerRow = document.createElement('tr');
+    headers.forEach(headerText => {
+        const th = document.createElement('th');
+        th.innerText = headerText;
+        headerRow.append(th);
+    });
+    thead.append(headerRow);
+
+    data.forEach(rowData => {
+        const row = document.createElement('tr');
+        rowData.forEach(cellData => {
+            const td = document.createElement('td');
+            td.innerText = cellData;
+            row.append(td);
+        });
+        tbody.append(row);
+    });
+
+    table.append(thead, tbody);
+    return table;
+}
+
+export function createTableRow(data) {
+    const row = document.createElement('tr');
+    data.forEach(cellData => {
+        const cell = createTableCell(cellData);
+        row.append(cell);
+    });
+    return row;
+}
+
+export function createTableCell(data) {
+    const cell = document.createElement('td');
+    cell.innerText = data;
+    return cell;
+}
+
+export function createTableHeader(headers) {
+    const headerRow = document.createElement('tr');
+    headers.forEach(headerText => {
+        const th = document.createElement('th');
+        th.innerText = headerText;
+        headerRow.append(th);
+    });
+    return headerRow;
+}
+
 

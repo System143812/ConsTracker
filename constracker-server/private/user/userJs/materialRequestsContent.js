@@ -1,12 +1,12 @@
 import { fetchData } from "/js/apiURL.js";
-import { div, span, createButton, createFilterContainer, createPaginationControls } from "/js/components.js";
+import { div, span, createButton, createFilterContainer, createPaginationControls, createFilterInput } from "/js/components.js";
 import { showEmptyPlaceholder } from "/js/popups.js";
-import { createOverlayWithBg, hideOverlayWithBg } from "/mainJs/overlays.js";
+import { createOverlayWithBg, hideOverlayWithBg, showOverlayWithBg } from "/mainJs/overlays.js";
 import { dateFormatting } from "/js/string.js";
 
-async function showMaterialRequestDetails(requestId) {
+async function showMaterialRequestDetails(requestId, requestCode) {
     const { overlayBackground, overlayHeader, overlayBody } = createOverlayWithBg();
-    overlayHeader.innerText = `Material Request #${requestId}`;
+    overlayHeader.innerText = `Material Request ${requestCode}`;
 
     const data = await fetchData(`/api/material-requests/${requestId}`);
     if (data === 'error') {
@@ -64,25 +64,27 @@ async function showMaterialRequestDetails(requestId) {
 }
 
 export async function generateMaterialRequestsContent(role) {
-    const materialRequestsBodyContent = document.getElementById('material-requestsBodyContainer'); 
-    materialRequestsBodyContent.innerHTML = '';
+    const materialRequestsBodyContainer = document.getElementById('material-requestsBodyContainer'); 
+    materialRequestsBodyContainer.innerHTML = '';
 
-    const bodyHeader = div('', 'body-header');
+    // Setup header section
+    const materialRequestsBodyHeader = div('material-requestsBodyHeader', 'body-header');
     const bodyHeaderContainer = div('', 'body-header-container');
-    const title = span('', 'body-header-title');
+    const title = div('', 'body-header-title');
     title.innerText = 'Material Requests';
-    const subtitle = span('', 'body-header-subtitle');
+    const subtitle = div('', 'body-header-subtitle');
     subtitle.innerText = 'Browse and manage your material requests.';
     bodyHeaderContainer.append(title, subtitle);
-    bodyHeader.append(bodyHeaderContainer);
+    materialRequestsBodyHeader.append(bodyHeaderContainer);
 
-    const materialRequestsContainer = div('material-requests-main-container');
+    // Setup content section
+    const materialRequestsBodyContent = div('material-requestsBodyContent', 'body-content');
     const filterContainer = div('material-requests-filter-container');
     const materialRequestsListContainer = div('material-requests-list-container');
     const paginationContainer = div('material-requests-pagination-container', 'pagination-container');
     
-    materialRequestsContainer.append(filterContainer, materialRequestsListContainer, paginationContainer);
-    materialRequestsBodyContent.append(bodyHeader, materialRequestsContainer);
+    materialRequestsBodyContent.append(filterContainer, materialRequestsListContainer, paginationContainer);
+    materialRequestsBodyContainer.append(materialRequestsBodyHeader, materialRequestsBodyContent);
 
     let currentPage = 1;
     let itemsPerPage = 10;
@@ -102,38 +104,46 @@ export async function generateMaterialRequestsContent(role) {
             return;
         }
 
-        const table = document.createElement('table');
-        table.classList.add('material-requests-table');
-        const thead = document.createElement('thead');
-        const tbody = document.createElement('tbody');
-
-        const headers = ['Request ID', 'Project', 'Requester', 'Type', 'Stage', 'Item Count', 'Total Cost', 'Date'];
-        const headerRow = document.createElement('tr');
-        headers.forEach(headerText => {
-            const th = document.createElement('th');
-            th.innerText = headerText;
-            headerRow.append(th);
-        });
-        thead.append(headerRow);
-
         data.requests.forEach(request => {
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td>${request.id}</td>
-                <td>${request.project_name}</td>
-                <td>${request.requester_name}</td>
-                <td>${request.request_type}</td>
-                <td>${request.current_stage}</td>
-                <td>${request.item_count}</td>
-                <td>₱${request.total_cost ? request.total_cost.toLocaleString() : '0'}</td>
-                <td>${dateFormatting(request.created_at, 'dateTime')}</td>
-            `;
-            row.addEventListener('click', () => showMaterialRequestDetails(request.id));
-            tbody.append(row);
+            const requestCardContainer = div(`requestCardContainer`, `request-card-container`);
+            requestCardContainer.classList.add('hoverable');
+            requestCardContainer.addEventListener('click', () => showMaterialRequestDetails(request.id, request.request_code, renderMaterialRequests));
+            const requestCardLeft = div(`requestCardLeft`, `request-card-left`);
+            const requestCardHeader = div(`requestCardHeader`, `request-card-header`);
+            const requestCardTitle = div(`requestCardTitle`, `request-card-title`);
+            requestCardTitle.innerText = `${request.project_name}`;
+            const requestCardPriority = div(`requestCardPriority`, `request-card-priority`);
+            if(request.priority_level === "medium") warnType(requestCardPriority, "solid", 'yellow', '', '');
+            if(request.priority_level === "low") warnType(requestCardPriority, "solid", 'green', '', '');
+            if(request.priority_level === "high") warnType(requestCardPriority, "solid", 'red', '', '');
+            requestCardPriority.innerText = `${request.priority_level} Priority`;
+            const requestCardBody = div(`requestCardBody`, `request-card-body`);
+            const requestCardName = div(`requestCardName`, `request-card-name`);
+            requestCardName.innerText = `Requested by ${request.requester_name} • `;
+            const requestCardItemCount = div(`requestCardItemCount`, `request-card-item-count`);
+            requestCardItemCount.innerText = `${request.item_count} items • `; 
+            const requestCardCost = div(`requestCardCost`, `request-card-cost`);
+            requestCardCost.innerText = `₱${request.total_cost ? request.total_cost.toLocaleString() : '0'}`;
+            const requestCardRight = div(`requestCardRight`, `request-card-right`);
+            const requestStatusContainer = div(`requestStatusContainer`, `request-status-container`);
+            const requestStatusIcon = div(`requestStatusIcon`, `request-status-icon`);
+            requestStatusIcon.classList.add('icons');
+            const requestStatusLabel = div(`requestStatusLabel`, `request-status-label`);
+            if(request.current_stage === "pending") warnType(requestStatusContainer, "", 'yellow', requestStatusIcon, requestStatusLabel);
+            if(request.current_stage === "approved") warnType(requestStatusContainer, "", 'green', requestStatusIcon, requestStatusLabel);
+            if(request.current_stage === "rejected") warnType(requestStatusContainer, "", 'red', requestStatusIcon, requestStatusLabel);
+            requestStatusLabel.innerText = `${request.current_stage}`;
+            const requestCardDate = div(`requestCardDate`, `request-card-date`);
+            requestCardDate.innerText = `${dateFormatting(request.created_at, 'dateTime')}`; 
+            
+            requestCardContainer.append(requestCardLeft, requestCardRight);
+            requestCardLeft.append(requestCardHeader, requestCardBody, requestCardDate);
+            requestCardHeader.append(requestCardTitle, requestCardPriority);
+            requestCardBody.append(requestCardName, requestCardItemCount, requestCardCost);
+            requestCardRight.append(requestStatusContainer);
+            requestStatusContainer.append(requestStatusIcon, requestStatusLabel);
+            materialRequestsListContainer.append(requestCardContainer);
         });
-
-        table.append(thead, tbody);
-        materialRequestsListContainer.append(table);
 
         const paginationControls = createPaginationControls({
             currentPage,

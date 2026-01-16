@@ -463,6 +463,7 @@ body {
     width: 100%;
     height: fit-content;
     padding: 1.5rem;
+    gap: 1rem;
 }
 
 #projectsBodyHeader {
@@ -1011,11 +1012,19 @@ body {
 }
 
 #pendingRequestIcon {
-    background-image: url('../assets/icons/materialsRequest.png');
+    background-image: url('../assets/icons/material-requests.png');
 }
 
-#budgetUtilizationIcon {
-    background-image: url('../assets/icons/analytics.png');
+#awaitingDeliveriesIcon {
+    background-image: url('../assets/icons/delivery-truck.png');
+}
+
+#partiallyVerifiedIcon {
+    background-image: url('../assets/icons/work-in-progress.png');
+}
+
+#disputedRequestsIcon {
+    background-image: url('../assets/icons/approved.png');
 }
 
 .card-content {
@@ -1038,6 +1047,7 @@ body {
 
 #projectOverviewContainer {
     display: flex;
+    height: fit-content;
     align-items: center;
     gap: 1.5rem;
     flex-wrap: wrap;
@@ -1053,6 +1063,8 @@ body {
     border-radius: 10px;
     flex: 1;
     color: var(--grayed-text);
+    min-width: 0;
+    overflow: hidden;
 }
 
 .graph-headers {
@@ -1069,17 +1081,81 @@ body {
     color: var(--grayed-text);
 }
 
+.graph-filter-container {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    flex-wrap: wrap;
+}
+
+.graph-filter-label {
+    font-weight: 500;
+    color: var(--grayed-text);
+    white-space: nowrap;
+}
+
+.graph-filter-select {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #d0d0d0;
+    border-radius: 5px;
+    background-color: rgba(0, 0, 0, 0);
+    font-weight: 500;
+    color: var(--grayed-text);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-family: inherit;
+    min-width: 140px;
+}
+
+.graph-filter-select:hover {
+    border-color: #1A3E72;
+    box-shadow: 0 2px 4px rgba(26, 62, 114, 0.1);
+}
+
+.graph-filter-select:focus {
+    outline: none;
+    border-color: #1A3E72;
+    box-shadow: 0 0 0 3px rgba(26, 62, 114, 0.1);
+}
+
+.graph-filter-select option {
+    padding: 0.5rem;
+    background-color: #ffffff;
+    color: #333333;
+}
+
 .graphs {
     display: flex;
+    width: 100%;
+    height: auto;
+    max-height: 400px;
+    position: relative;
+}
+
+.graphs canvas {
+    width: 100% !important;
+    height: auto !important;
+    max-height: 400px;
 }
 
 #projectStatus {
     min-width: 250px;
+    flex: 1;
+}
 
+#materialUsageOverview {
+    min-width: 250px;
+    flex: 1;
 }
 
 #projectStatusGraph {
    padding: 0.5rem;
+}
+
+#materialUsageOverviewGraph {
+    padding: 0.5rem;
 }
 
 #budgetOverview {
@@ -1123,6 +1199,32 @@ body {
 #projects-main-container {
     display: flex;
     flex-direction: column;
+    gap: 1rem;
+}
+
+#material-requests-main-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+#material-requests-list-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.materials-filter-container {
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    gap: 1rem;
+}
+
+#material-requests-filter-container {
+    display: flex;
+    flex-direction: column;
+    padding: 0;
     gap: 1rem;
 }
 
@@ -1233,16 +1335,35 @@ body {
 
 .request-card-container {
     display: flex;
-    flex: 1;
+    flex-direction: column;
     padding: 1rem;
-    gap: 1rem;
+    gap: 0.75rem;
     border: solid var(--light-border) 0.5px;
     border-radius: 10px;
+    transition: all 0.15s ease;
+    cursor: pointer;
+    background-color: var(--card-background);
+}
+
+.request-card-container:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+    border-color: #1A3E72;
+}
+
+.request-card-container.hoverable {
+    cursor: pointer;
+    background-color: var(--card-background);
+}
+
+.request-card-container.hoverable:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+    border-color: #1A3E72;
 }
 
 .request-card-left {
     display: flex;
-    flex-wrap: wrap;
     flex-direction: column;
     gap: 0.5rem;
     flex: 1;
@@ -1251,12 +1372,13 @@ body {
 .request-card-header {
     display: flex;
     flex-wrap: wrap;
-    gap: 1rem;
+    gap: 0.75rem;
     align-items: center;
 }
 
 .request-card-title {
     font-weight: 600;
+    color: var(--default-black-text);
 }
 
 .request-card-priority {
@@ -1265,22 +1387,24 @@ body {
     padding: 0.25rem 0.5rem;
     background-color: var(--red-text);
     border-radius: 5px;
+    white-space: nowrap;
 }
 
 .request-card-body {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.25rem;
+    gap: 0.5rem;
     align-items: center;
 }
 
-.request-card-name, .request-card-item-count, .request-card-cost, .request-card-date {
+.request-card-name, .request-card-item-count, .request-card-cost, .request-card-date, .request-stage-text {
     color: var(--grayed-text);
 }
 
 .request-card-right {
     display: flex;
     align-items: center;
+    justify-content: flex-end;
 }
 
 .request-status-container {
@@ -1288,14 +1412,16 @@ body {
     align-items: center;
     border-radius: 5px;
     gap: 0.5rem;
-    padding: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.85rem;
+    font-weight: 500;
 }
 
 .request-status-icon {
     display: flex;
-    width: 15px;
-    height: 15px;
-    border-radius: 10px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
 }
 
 .request-status-label {
@@ -1345,105 +1471,104 @@ body {
     display: flex;
     flex-direction: column;
     width: 100%;
-    padding: 0.5rem 1rem; /* Thinner padding */
-    gap: 0.5rem; /* Thinner gap */
+    padding: 0.5rem 1rem;
+    gap: 0.5rem; 
     border-radius: 5px;
     border: solid var(--light-border) 1px;
-    margin-bottom: 0.5rem; /* Separator between cards */
+    margin-bottom: 0.5rem;
 }
 
 .log-card-headers {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: 0.5rem; /* Thinner gap */
-    font-size: 10px; /* Thinner font */
+    gap: 0.5rem; 
+    font-size: 10px;
 }
 
 .log-project-names, .log-dates {
-    font-size: 10px; /* Thinner font */
+    font-size: 10px; 
     color: var(--grayed-text);
 }
 
 .log-card-bodies {
     display: flex;
     align-items: center;
-    gap: 0.5rem; /* Thinner gap */
-    padding: 0.5rem 0.5rem; /* Thinner padding */
+    gap: 0.5rem; 
+    padding: 0.5rem 0.5rem; 
     border-top: solid var(--light-border) 1px;
     border-bottom: solid var(--light-border) 1px;
 }
 
 .log-card-icons {
-    min-width: 24px; /* Thinner icon size */
-    min-height: 24px; /* Thinner icon size */
+    min-width: 24px; 
+    min-height: 24px; 
     width: 24px;
     height: 24px;
     border-radius: 5px;
     background-color: var(--blue-border);
-    background-image: url('../assets/icons/editWhite.png'); /* Default edit icon */
+    background-image: url('../assets/icons/editWhite.png'); 
     background-position: center;
     background-repeat: no-repeat;
-    background-size: 10px 10px; /* Thinner icon size */
+    background-size: 10px 10px; 
 }
 
 .log-card-names {
-    font-size: 11px; /* Thinner font */
+    font-size: 11px; 
     font-weight: 600;
     color: #4e4e4e;
-    flex: 1; /* Allow to take space */
+    flex: 1; 
 }
 
 .log-card-footers {
     display: flex;
-    justify-content: flex-end; /* Align button to right */
+    justify-content: flex-end;
 }
 
-.log-details-btn { /* Specific class for the details button if needed */
-    padding: 0.25rem 0.5rem; /* Thinner button padding */
-    font-size: 10px; /* Thinner button font */
+.log-details-btn { 
+    padding: 0.25rem 0.5rem; 
+    font-size: 10px; 
     border-radius: 3px;
 }
 
 .log-details-btn .btn-texts {
-    font-size: 10px; /* Thinner button font */
+    font-size: 10px; 
 }
 
-/* Styles for scrolling log list */
 .scrollable-log-list-wrapper {
-    flex: 1; /* Take up remaining vertical space */
-    overflow-y: auto; /* Enable vertical scrolling */
-    padding-top: 0.5rem; /* Add some padding above the logs */
+    flex: 1;
+    overflow-y: auto;
+    padding-top: 0.5rem;
 }
 
 .log-detail-header-content {
     display: flex;
     flex-direction: column;
-    gap: 0.15rem; /* Thinner gap */
-    padding: 0.5rem 1rem; /* Thinner padding */
+    gap: 0.15rem; 
+    padding: 0.5rem 1rem;
     border-bottom: 1px solid var(--light-border);
 }
 
 .log-detail-title {
-    font-size: 16px; /* Thinner font */
+    font-size: 16px; 
     font-weight: 600;
 }
 
 .log-detail-subtitle {
     color: var(--grayed-text);
-    font-size: 12px; /* Thinner font */
+    font-size: 12px; 
 }
 
 .log-detail-by-date {
     display: flex;
     justify-content: space-between;
-    padding: 0.5rem 1rem; /* Thinner padding */
-    font-size: 11px; /* Thinner font */
+    padding: 0.5rem 1rem;
+    font-size: 11px; 
     color: var(--grayed-text);
 }
 
 .log-detail-changes-container {
-    padding: 0.5rem 1rem; /* Thinner padding */
+    padding: 0.5rem 1rem; 
     border-top: 1px solid var(--light-border);
 }
 
@@ -1451,683 +1576,178 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 0.5rem; /* Thinner margin */
+    margin-bottom: 0.5rem;
 }
 
 .log-detail-changes-title {
     font-weight: 600;
-    font-size: 12px; /* Thinner font */
+    font-size: 12px; 
 }
 
 .log-detail-show-old-toggle {
     color: var(--blue-border);
     cursor: pointer;
-    font-size: 11px; /* Thinner font */
+    font-size: 11px; 
     font-weight: 600;
 }
 
 .log-detail-changes-body {
     display: flex;
     flex-direction: column;
-    gap: 0.25rem; /* Thinner gap */
+    gap: 0.25rem; 
 }
-
-
-
-.log-change-entry {
-
-
-
-    font-size: 12px; /* Thinner font */
-
-
-
-}
-
-
-
-
-
-
 
 .projects-main-container {
-
-
-
     display: grid;
-
-
-
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-
-
-
     gap: 1rem;
-
-
-
 }
-
-
-
-
-
-
-
-/* Container */
-
-
 
 .personnel-grid {
-
-
-
     display: grid;
-
-
-
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-
-
-
     gap: 1.5rem;
-
-
-
-    padding: 1rem 0;
-
-
-
+    padding: 1rem;
 }
-
-
-
-/* Card */
-
-
 
 .personnel-card {
-
-
-
-    background: white;
-
-
-
-    border: 1px solid var(--light-border);
-
-
-
+    background-color: var(--card-background);
     border-radius: 12px;
-
-
-
-    padding: 24px;
-
-
-
+    padding: 2rem;
     display: flex;
-
-
-
     flex-direction: column;
-
-
-
     align-items: center;
-
-
-
-    transition: transform 0.2s, box-shadow 0.2s;
-
-
-
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    transition: all 0.2s ease;
 }
-
-
-
-
-
-
 
 .personnel-card:hover {
-
-
-
     transform: translateY(-4px);
-
-
-
-    box-shadow: 0 10px 20px rgba(0,0,0,0.05);
-
-
-
+    background-color: #f2f2f2;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
 }
-
-
-
-
-
-
-
-/* Avatar & Status Bubble */
-
-
 
 .avatar-wrapper {
-
-
-
     position: relative;
-
-
-
     width: 80px;
-
-
-
     height: 80px;
-
-
-
     margin-bottom: 15px;
-
-
-
 }
-
-
-
-
-
-
 
 .personnel-avatar {
-
-
-
     width: 100%;
-
-
-
     height: 100%;
-
-
-
-    background: #f0f2f5;
-
-
-
+    background: var(--light-blue-background);
     color: #4A90E2;
-
-
-
     border-radius: 50%;
-
-
-
     display: flex;
-
-
-
     align-items: center;
-
-
-
     justify-content: center;
-
-
-
     font-size: 24px;
-
-
-
     font-weight: 700;
-
-
-
 }
-
-
-
-
-
-
 
 .status-bubble {
-
-
-
     position: absolute;
-
-
-
     bottom: 5px;
-
-
-
     right: 5px;
-
-
-
     width: 18px;
-
-
-
     height: 18px;
-
-
-
     border-radius: 50%;
-
-
-
     border: 3px solid white;
-
-
-
 }
-
-
-
-
-
-
 
 .status-active { 
-
-
-
-    background-color: greenyellow; 
-
-
-
+    background-color: var(--green-border);
 }
-
-
 
 .status-inactive { 
-
-
-
-    background-color: gray
-
-
-
+    background-color: var(--light-border);
 }
-
-
-
-
-
-
-
-/* Text Content */
-
-
 
 .personnel-name { font-weight: 700; font-size: 18px; color: #333; margin-bottom: 4px; }
 
-
-
 .personnel-role-tag { font-size: 12px; color: #4A90E2; text-transform: uppercase; font-weight: 600; margin-bottom: 8px; }
-
-
 
 .personnel-email { font-size: 13px; color: #888; margin-bottom: 20px; }
 
-
-
-
-
-
-
-/* Buttons */
-
-
-
 .card-actions { display: flex; gap: 10px; width: 100%; }
 
-
-
 .btn-edit-card, .btn-terminate-card {
-
-
-
     flex: 1;
-
-
-
     padding: 10px;
-
-
-
     border-radius: 10px;
-
-
-
     border: none;
-
-
-
     font-size: 12px;
-
-
-
     font-weight: 600;
-
-
-
     cursor: pointer;
-
-
-
 }
-
-
 
 .btn-edit-card { background: #f0f7ff; color: #007bff; }
 
-
-
 .btn-terminate-card { background: #fff5f5; color: #ff4d4d; }
 
-
-
-
-
-
-
-/* Anchors the dropdown to your filter container */
-
-
-
 .filter-containers {
-
-
-
     position: relative;
-
-
-
     display: flex;
-
-
-
     align-items: center;
-
-
-
     justify-content: center;
-
-
-
 }
-
-
-
-
-
-
 
 .modern-dropdown {
-
-
-
     position: absolute;
-
-
-
     top: 50px; /* Adjust based on your header height */
-
-
-
     right: 0;
-
-
-
     background: white;
-
-
-
     box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-
-
-
     border-radius: 8px;
-
-
-
     border: 1px solid var(--light-border);
-
-
-
     width: 200px;
-
-
-
     display: none;
-
-
-
     z-index: 1000;
-
-
-
 }
-
-
-
-
-
-
 
 .modern-dropdown.show {
-
-
-
     display: block;
-
-
-
 }
-
-
-
-
-
-
-
-/* Specifically target the blue solid buttons for Personnel and Materials */
-
-
 
 .solid-buttons.blue {
-
-
-
     background-color: var(--blue-border) !important;
-
-
-
     color: #ffffff !important; /* Forces white text */
-
-
-
 }
-
-
-
-
-
-
 
 .solid-buttons.blue:hover {
-
-
-
     background-color: var(--blue-text) !important;
-
-
-
 }
-
-
-
-
-
-
-
-/* This targets the ID specifically to ensure no dark text remains */
-
-
-
-/* Force white text specifically inside the Personnel container */
-
-
 
 #personnel-main-container .solid-buttons.white,
-
-
-
 #materialsBodyContainer .solid-buttons.white,
-
-
-
 #addPersonnelBtn {
-
-
-
     color: #ffffff !important;
-
-
-
 }
-
-
-
-
-
-
-
-/* Ensure the plus sign or icon also stays white */
-
-
 
 #addPersonnelBtn {
-
-
-
     white-space: nowrap;
-
-
-
     height: fit-content;
-
-
-
     padding: 10px 20px;
-
-
-
     align-self: center;
-
-
-
 }
-
-
-
-
-
-
-
-/* Wrapper to align search bar and button */
-
-
 
 .filter-action-wrapper {
-
-
-
     display: flex;
-
-
-
     justify-content: space-between;
-
-
-
     align-items: center;
-
-
-
     gap: 1rem;
-
-
-
     width: 100%;
-
-
-
 }
-
-
-
-
-
-
-
-/* Ensure the filter area takes up the available space */
-
-
 
 #personnel-filter-container {
-
-
-
     flex: 1;
-
-
-
 }
 
-
-
-
-
-
-
-/* Make sure the button doesn't shrink or stretch weirdly */
-
-
-
-
-
-
-
-/* Responsive: Stack them on small screens */
-
-
-
 @media (max-width: 768px) {
-
-
-
     .filter-action-wrapper {
-
-
-
         flex-direction: column;
-
-
-
         align-items: stretch;
-
-
-
     }
-
-
-
 }

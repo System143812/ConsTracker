@@ -432,6 +432,17 @@ async function getProjectStatus(res) {
     }
 }
 
+async function getMaterialUsageByCategory(res) {
+    try {
+        const [result] = await pool.execute(
+            "SELECT ic.category_name, COUNT(i.item_id) as total_materials, SUM(inv.current_amount) as total_quantity FROM material_categories ic LEFT JOIN items i ON ic.category_id = i.category_id LEFT JOIN inventory inv ON i.item_id = inv.item_id GROUP BY ic.category_id, ic.category_name ORDER BY total_quantity DESC;"
+        );
+        return result;
+    } catch (error) {
+        failed(res, 500, `Database error: ${error}`);
+    }
+}
+
 async function getInprogressProjects(res) {
     try {
         const [result] = await pool.execute(
@@ -440,6 +451,73 @@ async function getInprogressProjects(res) {
         return result;
     } catch (error) {
         failed(res, 500, `Database error: ${error}`);
+    }
+}
+
+async function getAllPersonnel(res, filters) {
+    const { page = 1, limit = 10, name, sort } = filters;
+    const pageInt = parseInt(page);
+    const limitInt = parseInt(limit);
+    const offset = (pageInt - 1) * limitInt;
+
+    let baseQuery = `FROM users u`;
+    let filterParams = [];
+    let whereClauses = [];
+
+    if (name && name !== "all") {
+        whereClauses.push(`u.full_name LIKE ?`);
+        filterParams.push(`%${name}%`);
+    }
+    
+    let whereClause = '';
+    if (whereClauses.length > 0) {
+        whereClause = ` WHERE ` + whereClauses.join(' AND ');
+    }
+
+    let orderByClause = 'ORDER BY u.is_active DESC';
+    if (sort) {
+        switch (sort) {
+            case 'newest':
+                orderByClause += ', u.created_at DESC, u.user_id DESC';
+                break;
+            case 'oldest':
+                orderByClause += ', u.created_at ASC, u.user_id ASC';
+                break;
+            case 'atoz':
+                orderByClause += ', u.full_name ASC, u.user_id ASC';
+                break;
+            case 'ztoa':
+                orderByClause += ', u.full_name DESC, u.user_id DESC';
+                break;
+            default:
+                orderByClause += ', u.created_at DESC, u.user_id DESC';
+                break;
+        }
+    } else {
+        orderByClause += ', u.created_at DESC, u.user_id DESC';
+    }
+
+    const countQuery = `SELECT COUNT(u.user_id) AS total ${baseQuery} ${whereClause}`;
+    
+    const dataQuery = `
+        SELECT 
+            u.user_id, u.full_name, u.email, u.role, u.is_active, u.created_at
+        ${baseQuery}
+        ${whereClause}
+        ${orderByClause}
+        LIMIT ${limitInt}
+        OFFSET ${offset}
+    `;
+
+    try {
+        const [countResult] = await pool.execute(countQuery, filterParams);
+        const total = countResult[0].total;
+
+        const [users] = await pool.execute(dataQuery, filterParams);
+        
+        return { users, total };
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
     }
 }
 
@@ -530,7 +608,7 @@ async function getAllProjects(res, filters) {
 
 async function recentMaterialsRequest(res) {
     try {
-        const [result] = await pool.execute("SELECT mr.id AS request_id, p.project_name, mr.priority_level, u.full_name AS requested_by, COUNT(mri.id) AS item_count, SUM(mri.quantity * i.price) AS cost, mr.status, mr.created_at AS request_date FROM material_requests mr JOIN material_request_items mri ON mr.id = mri.mr_id JOIN projects p ON mr.project_id = p.project_id JOIN users u ON mr.user_id = u.user_id JOIN items i ON mri.item_id = i.item_id GROUP BY mr.id;");
+        const [result] = await pool.execute("SELECT mr.id AS request_id, p.project_name, mr.priority_level, mr.current_stage, u.full_name AS requested_by, COUNT(mri.id) AS item_count, SUM(mri.quantity * i.price) AS cost, mr.status, mr.created_at AS request_date FROM material_requests mr JOIN material_request_items mri ON mr.id = mri.mr_id JOIN projects p ON mr.project_id = p.project_id JOIN users u ON mr.user_id = u.user_id JOIN items i ON mri.item_id = i.item_id GROUP BY mr.id;");
         return result;
     } catch (error) {
         failed(res, 500, `Database Error: ${error}`);
@@ -953,6 +1031,308 @@ async function createLogs(res, req, body) {
     }
 }
 
+// Helper functions for Progress Reports
+async function createProgressReport(res, reportData, userId) {
+    const { project_id, task_id, report_date, safety_conditions, remarks } = reportData;
+    try {
+        const [result] = await pool.execute(
+            'INSERT INTO progress_reports (project_id, task_id, reported_by, report_date, safety_conditions, remarks) VALUES (?, ?, ?, ?, ?, ?)',
+            [project_id, task_id, userId, report_date, safety_conditions, remarks]
+        );
+        return result.insertId;
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+}
+
+async function addProgressReportPhoto(res, reportId, imageUrl) {
+    try {
+        await pool.execute(
+            'INSERT INTO progress_report_photos (report_id, image_url) VALUES (?, ?)',
+            [reportId, imageUrl]
+        );
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+}
+
+async function getProgressReportsByProject(res, projectId) {
+    try {
+        const [reports] = await pool.execute(
+            `SELECT
+                pr.report_id,
+                pr.report_date,
+                pr.safety_conditions,
+                pr.remarks,
+                u.full_name AS reported_by_name,
+                t.task_name,
+                GROUP_CONCAT(prp.image_url) AS image_urls
+            FROM
+                progress_reports pr
+            JOIN
+                users u ON pr.reported_by = u.user_id
+            LEFT JOIN
+                tasks t ON pr.task_id = t.id
+            LEFT JOIN
+                progress_report_photos prp ON pr.report_id = prp.report_id
+            WHERE
+                pr.project_id = ?
+            GROUP BY
+                pr.report_id, pr.report_date, pr.safety_conditions, pr.remarks, u.full_name, t.task_name
+            ORDER BY
+                pr.report_date DESC`,
+            [projectId]
+        );
+        // Process image_urls to be an array
+        reports.forEach(report => {
+            if (report.image_urls) {
+                report.image_urls = report.image_urls.split(',');
+            } else {
+                report.image_urls = [];
+            }
+        });
+        return reports;
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+}
+
+async function getProgressReportPhotos(res, reportId) {
+    try {
+        const [photos] = await pool.execute(
+            'SELECT image_url FROM progress_report_photos WHERE report_id = ?',
+            [reportId]
+        );
+        return photos.map(photo => photo.image_url);
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+}
+
+// Helper functions for Inventory Reports
+async function createInventoryReport(res, reportData, userId) {
+    const { project_id, report_date, remarks } = reportData;
+    try {
+        const [result] = await pool.execute(
+            'INSERT INTO inventory_reports (project_id, reported_by, report_date, remarks) VALUES (?, ?, ?, ?)',
+            [project_id, userId, report_date, remarks]
+        );
+        return result.insertId;
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+}
+
+async function addInventoryReportItem(res, reportId, item) {
+    const { item_id, quantity_used, task_id, milestone_id } = item;
+    try {
+        await pool.execute(
+            'INSERT INTO inventory_report_items (report_id, item_id, quantity_used, task_id, milestone_id) VALUES (?, ?, ?, ?, ?)',
+            [reportId, item_id, quantity_used, task_id, milestone_id]
+        );
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+}
+
+async function getInventoryReportsByProject(res, projectId) {
+    try {
+        const [reports] = await pool.execute(
+            `SELECT
+                ir.report_id,
+                ir.report_date,
+                ir.remarks,
+                u.full_name AS reported_by_name
+            FROM
+                inventory_reports ir
+            JOIN
+                users u ON ir.reported_by = u.user_id
+            WHERE
+                ir.project_id = ?
+            ORDER BY
+                ir.report_date DESC`,
+            [projectId]
+        );
+        return reports;
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+}
+
+async function getInventoryReportItems(res, reportId) {
+    try {
+        const [items] = await pool.execute(
+            `SELECT
+                iri.report_item_id,
+                i.item_name,
+                iri.quantity_used,
+                t.task_name,
+                pm.milestone_name
+            FROM
+                inventory_report_items iri
+            JOIN
+                items i ON iri.item_id = i.item_id
+            LEFT JOIN
+                tasks t ON iri.task_id = t.id
+            LEFT JOIN
+                project_milestones pm ON iri.milestone_id = pm.id
+            WHERE
+                iri.report_id = ?`,
+            [reportId]
+        );
+        return items;
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+}
+
+// Helper functions for Report Approval
+async function approveProgressReport(res, reportId, userId) {
+    const connection = await pool.getConnection();
+    try {
+        await connection.beginTransaction();
+
+        // Get the report details
+        const [reports] = await connection.execute(
+            'SELECT * FROM progress_reports WHERE report_id = ?',
+            [reportId]
+        );
+
+        if (reports.length === 0) {
+            return { success: false, message: 'Report not found.' };
+        }
+
+        const report = reports[0];
+
+        // Update report status to approved
+        await connection.execute(
+            'UPDATE progress_reports SET status = ? WHERE report_id = ?',
+            ['approved', reportId]
+        );
+
+        // If report has a task_id, we'll create a log but not auto-update
+        // The actual task update should be done via a separate endpoint to maintain control
+        const logData = {
+            logName: `approved progress report #${reportId}`,
+            projectId: report.project_id,
+            type: 'non-item',
+            action: 'approved',
+        };
+
+        await connection.commit();
+        return { success: true, message: 'Progress report approved successfully.' };
+
+    } catch (error) {
+        await connection.rollback();
+        failed(res, 500, `Database Error: ${error}`);
+        return { success: false, message: 'Failed to approve report.' };
+    } finally {
+        connection.release();
+    }
+}
+
+async function rejectProgressReport(res, reportId, remarks, userId) {
+    try {
+        await pool.execute(
+            'UPDATE progress_reports SET status = ?, remarks = ? WHERE report_id = ?',
+            ['rejected', remarks, reportId]
+        );
+        return { success: true, message: 'Progress report rejected.' };
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+        return { success: false, message: 'Failed to reject report.' };
+    }
+}
+
+async function approveInventoryReport(res, reportId, userId) {
+    const connection = await pool.getConnection();
+    try {
+        await connection.beginTransaction();
+
+        // Get the report details
+        const [reports] = await connection.execute(
+            'SELECT * FROM inventory_reports WHERE report_id = ?',
+            [reportId]
+        );
+
+        if (reports.length === 0) {
+            return { success: false, message: 'Report not found.' };
+        }
+
+        const report = reports[0];
+        const projectId = report.project_id;
+
+        // Get all items from this report
+        const [reportItems] = await connection.execute(
+            `SELECT iri.report_item_id, iri.item_id, iri.quantity_used, iri.task_id, iri.milestone_id
+             FROM inventory_report_items iri
+             WHERE iri.report_id = ?`,
+            [reportId]
+        );
+
+        // Process each item
+        for (const item of reportItems) {
+            // Deduct from inventory
+            await connection.execute(
+                'UPDATE inventory SET current_amount = current_amount - ? WHERE project_id = ? AND item_id = ?',
+                [item.quantity_used, projectId, item.item_id]
+            );
+
+            // Add to used materials
+            await connection.execute(
+                `INSERT INTO milestone_used_materials (milestone_id, item_id, quantity_used, inventory_report_id, task_id)
+                 VALUES (?, ?, ?, ?, ?)`,
+                [item.milestone_id, item.item_id, item.quantity_used, reportId, item.task_id]
+            );
+
+            // Update inventory movements status from pending
+            await connection.execute(
+                `UPDATE inventory_movements SET source = 'project_inventory' 
+                 WHERE reference_type = 'inventory_report' AND reference_id = ? AND item_id = ?`,
+                [reportId, item.item_id]
+            );
+        }
+
+        // Update report status to approved
+        await connection.execute(
+            'UPDATE inventory_reports SET status = ? WHERE report_id = ?',
+            ['approved', reportId]
+        );
+
+        await connection.commit();
+        return { success: true, message: 'Inventory report approved and inventory deducted.' };
+
+    } catch (error) {
+        await connection.rollback();
+        failed(res, 500, `Database Error: ${error}`);
+        return { success: false, message: 'Failed to approve report.' };
+    } finally {
+        connection.release();
+    }
+}
+
+async function rejectInventoryReport(res, reportId, remarks, userId) {
+    try {
+        // When rejecting, we should NOT deduct inventory or create used materials
+        // Just update status and add remarks
+        await pool.execute(
+            'UPDATE inventory_reports SET status = ?, remarks = ? WHERE report_id = ?',
+            ['rejected', remarks, reportId]
+        );
+
+        // Delete inventory movements created during submission if any
+        await pool.execute(
+            'DELETE FROM inventory_movements WHERE reference_type = ? AND reference_id = ?',
+            ['inventory_report', reportId]
+        );
+
+        return { success: true, message: 'Inventory report rejected.' };
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+        return { success: false, message: 'Failed to reject report.' };
+    }
+}
+
 async function getSelection(res, req, type) {
     try {
         let selectionQuery;
@@ -1348,6 +1728,34 @@ app.post('/api/tasks', authMiddleware(['admin', 'engineer', 'project manager']),
     }
 });
 
+const updateMilestoneProgress = async (res, milestoneId) => {
+    try {
+        const [tasks] = await pool.execute('SELECT * FROM tasks WHERE milestone_id = ?', [milestoneId]);
+        const totalProgress = tasks.reduce((acc, task) => acc + (task.weights / 100 * task.task_progress), 0);
+
+        const milestone = await getMilestone(res, milestoneId);
+        if (!milestone) {
+            return; // Or handle error
+        }
+
+        let newStatus = 'not started';
+        if (totalProgress == 100) {
+            newStatus = 'completed';
+        } else if (totalProgress > 0) {
+            newStatus = 'in progress';
+        }
+
+        if (new Date(milestone.duedate) < new Date() && newStatus !== 'completed') {
+            newStatus = 'overdue';
+        }
+
+        await pool.execute('UPDATE project_milestones SET status = ? WHERE id = ?', [newStatus, milestoneId]);
+    } catch (error) {
+        // In a real app, you'd want better error handling
+        console.error(`Failed to update milestone progress: ${error}`);
+    }
+};
+
 app.put('/api/tasks/:taskId', authMiddleware(['admin', 'engineer', 'project manager']), async (req, res) => {
     const { taskId } = req.params;
     const { task_name, task_progress, status, duedate, weights } = req.body;
@@ -1367,10 +1775,26 @@ app.put('/api/tasks/:taskId', authMiddleware(['admin', 'engineer', 'project mana
             weights: weights !== undefined ? weights : oldTask.weights,
         };
 
+        // Update task status based on progress
+        if (updatedFields.task_progress == 100) {
+            updatedFields.status = 'completed';
+        } else if (updatedFields.task_progress > 0) {
+            updatedFields.status = 'in progress';
+        } else {
+            updatedFields.status = 'not started';
+        }
+        
+        // Check for overdue status
+        if (new Date(updatedFields.duedate) < new Date() && updatedFields.status !== 'completed') {
+            updatedFields.status = 'overdue';
+        }
+
         await pool.execute(
             'UPDATE tasks SET task_name = ?, task_progress = ?, status = ?, duedate = ?, weights = ?, updated_by = ? WHERE id = ?',
             [updatedFields.task_name, updatedFields.task_progress, updatedFields.status, updatedFields.duedate, updatedFields.weights, userId, taskId]
         );
+
+        await updateMilestoneProgress(res, oldTask.milestone_id);
 
         const milestone = await getMilestone(res, oldTask.milestone_id);
         const logDetails = [];
@@ -1435,6 +1859,261 @@ app.delete('/api/tasks/:taskId', authMiddleware(['admin', 'engineer', 'project m
     }
 });
 
+// Reports
+const reportPhotoUpload = multer({
+    storage: multer.diskStorage({
+        destination: function (req, file, cb) {
+            const uploadPath = path.join(__dirName, 'public', 'progressReportImages');
+            // Ensure the directory exists
+            if (!fs.existsSync(uploadPath)) {
+                fs.mkdirSync(uploadPath, { recursive: true });
+            }
+            cb(null, uploadPath);
+        },
+        filename: function (req, file, cb) {
+            const hash = crypto.createHash('sha256').update(file.originalname + Date.now()).digest('hex');
+            const extension = path.extname(file.originalname);
+            cb(null, `${hash}${extension}`);
+        }
+    })
+});
+
+app.post('/api/progress-reports', authMiddleware(['admin', 'engineer', 'foreman']), reportPhotoUpload.array('photos', 5), async (req, res) => {
+    const { project_id, task_id, report_date, safety_conditions, remarks } = req.body;
+    const { id: userId } = req.user;
+    const photos = req.files;
+
+    if (!project_id || !report_date) {
+        return failed(res, 400, 'Missing required fields: project_id, report_date.');
+    }
+
+    const connection = await pool.getConnection();
+    try {
+        await connection.beginTransaction();
+
+        const reportId = await createProgressReport(res, { project_id, task_id, report_date, safety_conditions, remarks }, userId);
+
+        if (photos && photos.length > 0) {
+            for (const photo of photos) {
+                await addProgressReportPhoto(res, reportId, photo.filename);
+            }
+        }
+
+        await connection.commit();
+        res.status(201).json({ status: 'success', message: 'Progress report created successfully.', reportId });
+
+    } catch (error) {
+        await connection.rollback();
+        // Clean up uploaded files if transaction fails
+        if (photos && photos.length > 0) {
+            for (const photo of photos) {
+                fs.unlinkSync(path.join(__dirName, 'public', 'progressReportImages', photo.filename));
+            }
+        }
+        failed(res, 500, `Database Error: ${error}`);
+    } finally {
+        connection.release();
+    }
+});
+
+// Query parameter version for pagination from admin dashboard
+app.get('/api/progress-reports', authMiddleware(['all']), async (req, res) => {
+    const { page = 1, limit = 10 } = req.query;
+    try {
+        const [reports] = await pool.execute(
+            `SELECT
+                pr.report_id,
+                pr.report_date,
+                pr.safety_conditions,
+                pr.remarks,
+                pr.project_id,
+                u.full_name AS reported_by_name,
+                t.task_name,
+                GROUP_CONCAT(prp.image_url) AS image_urls
+            FROM
+                progress_reports pr
+            JOIN
+                users u ON pr.reported_by = u.user_id
+            LEFT JOIN
+                tasks t ON pr.task_id = t.id
+            LEFT JOIN
+                progress_report_photos prp ON pr.report_id = prp.report_id
+            GROUP BY
+                pr.report_id, pr.report_date, pr.safety_conditions, pr.remarks, pr.project_id, u.full_name, t.task_name
+            ORDER BY
+                pr.report_date DESC
+            LIMIT ? OFFSET ?`,
+            [parseInt(limit), (parseInt(page) - 1) * parseInt(limit)]
+        );
+        // Process image_urls to be an array
+        reports.forEach(report => {
+            if (report.image_urls) {
+                report.image_urls = report.image_urls.split(',');
+            } else {
+                report.image_urls = [];
+            }
+        });
+        res.status(200).json(reports);
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+});
+
+app.get('/api/progress-reports/:projectId', authMiddleware(['all']), async (req, res) => {
+    const { projectId } = req.params;
+    res.status(200).json(await getProgressReportsByProject(res, projectId));
+});
+
+app.get('/api/progress-reports/:reportId/photos', authMiddleware(['all']), async (req, res) => {
+    const { reportId } = req.params;
+    res.status(200).json(await getProgressReportPhotos(res, reportId));
+});
+
+app.post('/api/inventory-reports', authMiddleware(['admin', 'engineer', 'foreman']), async (req, res) => {
+    const { project_id, report_date, remarks, items_used } = req.body;
+    const { id: userId } = req.user;
+
+    if (!project_id || !report_date || !items_used || !Array.isArray(items_used) || items_used.length === 0) {
+        return failed(res, 400, 'Missing required fields: project_id, report_date, and items_used (array).');
+    }
+
+    const connection = await pool.getConnection();
+    try {
+        await connection.beginTransaction();
+
+        const reportId = await createInventoryReport(res, { project_id, report_date, remarks }, userId);
+
+        for (const item of items_used) {
+            // Also create inventory movement records for 'out'
+            await addInventoryReportItem(res, reportId, item);
+            await pool.execute(
+                'INSERT INTO inventory_movements (item_id, project_id, movement_type, quantity, source, reference_type, reference_id, performed_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                [item.item_id, project_id, 'out', item.quantity_used, 'project_inventory', 'inventory_report', reportId, userId]
+            );
+        }
+
+        await connection.commit();
+        res.status(201).json({ status: 'success', message: 'Inventory report created successfully.', reportId });
+
+    } catch (error) {
+        await connection.rollback();
+        failed(res, 500, `Database Error: ${error}`);
+    } finally {
+        connection.release();
+    }
+});
+
+// Query parameter version for pagination from admin dashboard
+app.get('/api/inventory-reports', authMiddleware(['all']), async (req, res) => {
+    const { page = 1, limit = 10 } = req.query;
+    try {
+        const [reports] = await pool.execute(
+            `SELECT
+                ir.report_id,
+                ir.report_date,
+                ir.remarks,
+                ir.project_id,
+                u.full_name AS reported_by_name
+            FROM
+                inventory_reports ir
+            JOIN
+                users u ON ir.reported_by = u.user_id
+            ORDER BY
+                ir.report_date DESC
+            LIMIT ? OFFSET ?`,
+            [parseInt(limit), (parseInt(page) - 1) * parseInt(limit)]
+        );
+        res.status(200).json(reports);
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+});
+
+app.get('/api/inventory-reports/:projectId', authMiddleware(['all']), async (req, res) => {
+    const { projectId } = req.params;
+    res.status(200).json(await getInventoryReportsByProject(res, projectId));
+});
+
+app.get('/api/inventory-reports/:reportId/items', authMiddleware(['all']), async (req, res) => {
+    const { reportId } = req.params;
+    res.status(200).json(await getInventoryReportItems(res, reportId));
+});
+
+// Approval endpoints for reports
+app.put('/api/progress-reports/:reportId/approve', authMiddleware(['admin', 'engineer']), async (req, res) => {
+    const { reportId } = req.params;
+    const { id: userId } = req.user;
+
+    try {
+        const result = await approveProgressReport(res, reportId, userId);
+        if (result.success) {
+            res.status(200).json({ status: 'success', message: result.message });
+        } else {
+            failed(res, 400, result.message);
+        }
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+});
+
+app.put('/api/progress-reports/:reportId/reject', authMiddleware(['admin', 'engineer']), async (req, res) => {
+    const { reportId } = req.params;
+    const { remarks } = req.body;
+    const { id: userId } = req.user;
+
+    if (!remarks) {
+        return failed(res, 400, 'Rejection remarks are required.');
+    }
+
+    try {
+        const result = await rejectProgressReport(res, reportId, remarks, userId);
+        if (result.success) {
+            res.status(200).json({ status: 'success', message: result.message });
+        } else {
+            failed(res, 400, result.message);
+        }
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+});
+
+app.put('/api/inventory-reports/:reportId/approve', authMiddleware(['admin', 'engineer']), async (req, res) => {
+    const { reportId } = req.params;
+    const { id: userId } = req.user;
+
+    try {
+        const result = await approveInventoryReport(res, reportId, userId);
+        if (result.success) {
+            res.status(200).json({ status: 'success', message: result.message });
+        } else {
+            failed(res, 400, result.message);
+        }
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+});
+
+app.put('/api/inventory-reports/:reportId/reject', authMiddleware(['admin', 'engineer']), async (req, res) => {
+    const { reportId } = req.params;
+    const { remarks } = req.body;
+    const { id: userId } = req.user;
+
+    if (!remarks) {
+        return failed(res, 400, 'Rejection remarks are required.');
+    }
+
+    try {
+        const result = await rejectInventoryReport(res, reportId, remarks, userId);
+        if (result.success) {
+            res.status(200).json({ status: 'success', message: result.message });
+        } else {
+            failed(res, 400, result.message);
+        }
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+});
+
 app.get('/api/getProjectCard/:projectId', authMiddleware(['all']), async(req, res) => {
     res.status(200).json(await getProjectCardData(res, req.params.projectId));
 });
@@ -1449,6 +2128,14 @@ app.get('/api/adminSummaryCards/:tabName', authMiddleware(['admin']), async(req,
 
 app.get('/api/projectStatusGraph', authMiddleware(['admin']), async(req, res) => { 
     res.status(200).json(await getProjectStatus(res));
+});
+
+app.get('/api/materialUsageGraph', authMiddleware(['admin']), async(req, res) => { 
+    res.status(200).json(await getMaterialUsageByCategory(res));
+});
+
+app.get('/api/allPersonnel', authMiddleware(['admin']), async(req, res) => { 
+    res.status(200).json(await getAllPersonnel(res, req.query));
 });
 
 app.get('/api/allProjects', authMiddleware(['admin', 'engineer']), async(req, res) => { 
@@ -1617,21 +2304,22 @@ app.get('/api/inventory', authMiddleware(['admin', 'engineer', 'project manager'
                 i.item_id,
                 i.item_name,
                 i.item_description,
+                i.image_url AS image_path,
                 mc.category_name,
                 u.unit_name,
-                SUM(CASE WHEN im.movement_type = 'in' THEN im.quantity ELSE 0 END) as total_in,
-                SUM(CASE WHEN im.movement_type = 'out' THEN im.quantity ELSE 0 END) as total_out,
-                (SUM(CASE WHEN im.movement_type = 'in' THEN im.quantity ELSE 0 END) - SUM(CASE WHEN im.movement_type = 'out' THEN im.quantity ELSE 0 END)) as stock_balance
+                inv.current_amount as total_in,
+                0 as total_out,
+                inv.current_amount as stock_balance
             FROM
-                items i
-            LEFT JOIN
-                inventory_movements im ON i.item_id = im.item_id AND im.project_id IS NULL
+                inventory inv
+            JOIN
+                items i ON inv.item_id = i.item_id
             LEFT JOIN
                 material_categories mc ON i.category_id = mc.category_id
             LEFT JOIN
                 units u ON i.unit_id = u.unit_id
-            GROUP BY
-                i.item_id, i.item_name, i.item_description, mc.category_name, u.unit_name
+            WHERE
+                inv.project_id = 0 OR inv.project_id IS NULL
             ORDER BY
                 i.item_name;
         `);
@@ -1649,23 +2337,22 @@ app.get('/api/inventory/project/:projectId', authMiddleware(['admin', 'engineer'
                 i.item_id,
                 i.item_name,
                 i.item_description,
+                i.image_url AS image_path,
                 mc.category_name,
                 u.unit_name,
-                SUM(CASE WHEN im.movement_type = 'in' THEN im.quantity ELSE 0 END) as total_in,
-                SUM(CASE WHEN im.movement_type = 'out' THEN im.quantity ELSE 0 END) as total_out,
-                (SUM(CASE WHEN im.movement_type = 'in' THEN im.quantity ELSE 0 END) - SUM(CASE WHEN im.movement_type = 'out' THEN im.quantity ELSE 0 END)) as stock_balance
+                inv.current_amount as total_in,
+                0 as total_out,
+                inv.current_amount as stock_balance
             FROM
-                items i
-            LEFT JOIN
-                inventory_movements im ON i.item_id = im.item_id
+                inventory inv
+            JOIN
+                items i ON inv.item_id = i.item_id
             LEFT JOIN
                 material_categories mc ON i.category_id = mc.category_id
             LEFT JOIN
                 units u ON i.unit_id = u.unit_id
             WHERE
-                im.project_id = ?
-            GROUP BY
-                i.item_id, i.item_name, i.item_description, mc.category_name, u.unit_name
+                inv.project_id = ?
             ORDER BY
                 i.item_name;
         `, [projectId]);
@@ -1739,10 +2426,13 @@ app.get('/api/material-requests', authMiddleware(['all']), async (req, res) => {
     const dataQuery = `
         SELECT 
             mr.id,
+            CONCAT('MR-', LPAD(mr.id, 4, '0')) AS request_code,
             p.project_name,
             u.full_name AS requester_name,
             mr.request_type,
             mr.current_stage,
+            mr.priority_level,
+            mr.status,
             mr.created_at,
             (SELECT COUNT(*) FROM material_request_items mri WHERE mri.mr_id = mr.id) as item_count,
             (SELECT SUM(mri.quantity * i.price) FROM material_request_items mri JOIN items i ON mri.item_id = i.item_id WHERE mri.mr_id = mr.id) as total_cost
