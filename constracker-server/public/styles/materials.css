@@ -282,3 +282,215 @@
 .text-buttons:hover, .text-buttons:active {
     background-color: var(--gray-low-opacity);
 }
+/* ===== Overlay Items List Styles ===== */
+.overlay-items-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    width: 100%;
+}
+
+.overlay-item-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.2rem;
+    background-color: #fafafa;
+    border: 1px solid var(--light-border);
+    border-radius: 8px;
+    transition: all 0.2s ease;
+}
+
+.overlay-item-card:hover {
+    background-color: #ffffff;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    border-color: var(--default-primary-color);
+}
+
+.overlay-item-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.overlay-item-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary-color);
+    margin: 0;
+}
+
+.overlay-item-details {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.item-detail {
+    font-size: 12px;
+    color: #7f8c8d;
+}
+
+.item-detail strong {
+    color: #5a6c7d;
+    font-weight: 600;
+}
+
+.status-badge {
+    display: inline-block;
+    padding: 0.35rem 0.75rem;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: capitalize;
+    width: fit-content;
+    margin-top: 0.5rem;
+}
+
+.status-badge.status-pending {
+    background-color: #ffeaa7;
+    color: #d63031;
+}
+
+.status-badge.status-approved {
+    background-color: #d4edda;
+    color: #155724;
+}
+
+.status-badge.status-rejected {
+    background-color: #f8d7da;
+    color: #721c24;
+}
+
+.overlay-item-actions {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    margin-left: 1rem;
+}
+
+.overlay-icon-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border: none;
+    border-radius: 6px;
+    background-color: #f0f0f0;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.overlay-icon-btn:hover {
+    background-color: #e0e0e0;
+}
+
+.overlay-icon-btn.edit-btn:hover {
+    background-color: #e3f2fd;
+}
+
+.overlay-icon-btn.delete-btn:hover {
+    background-color: #ffebee;
+}
+
+.overlay-icon-btn .edit-icon-small,
+.overlay-icon-btn .delete-icon-small {
+    width: 18px;
+    height: 18px;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    display: block;
+}
+
+.overlay-icon-btn .edit-icon-small {
+    background-image: url('/assets/icons/editBlack.png');
+}
+
+.overlay-icon-btn .delete-icon-small {
+    background-image: url('/assets/icons/deleteBlack.png');
+}
+
+/* ===== Overlay Form Styles ===== */
+.overlay-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    width: 100%;
+}
+
+.overlay-form-content {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.overlay-form-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    overflow: visible;
+    position: relative;
+    z-index: 100;
+}
+
+.overlay-form-field .select-option-dropdowns {
+    position: relative;
+    z-index: 101;
+}
+
+.overlay-form-field .selection-overlays {
+    z-index: 102;
+}
+
+.overlay-form-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary-color);
+    margin-bottom: 0.25rem;
+}
+
+.overlay-form-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+    padding-top: 1rem;
+    border-top: 1px solid var(--light-border);
+}
+
+.overlay-btn-primary,
+.overlay-btn-secondary {
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.overlay-btn-primary {
+    background-color: var(--default-primary-color);
+    color: white;
+}
+
+.overlay-btn-primary:hover {
+    background-color: var(--default-primary-color-dark);
+    box-shadow: 0 4px 12px rgba(33, 150, 243, 0.3);
+}
+
+.overlay-btn-secondary {
+    background-color: #e0e0e0;
+    color: var(--text-primary-color);
+}
+
+.overlay-btn-secondary:hover {
+    background-color: #d0d0d0;
+}

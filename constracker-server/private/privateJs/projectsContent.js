@@ -2,7 +2,7 @@ import { fetchData, fetchPostJson } from "/js/apiURL.js";
 import { formatString, dateFormatting } from "/js/string.js";
 import { alertPopup, warnType, showEmptyPlaceholder } from "/js/popups.js";
 import { div, span, createButton, createFilterContainer, createPaginationControls, createInput, validateInput } from "/js/components.js";
-import { createMilestoneOl, milestoneFullOl, createOverlayWithBg, hideOverlayWithBg, showDeleteConfirmation } from "/mainJs/overlays.js";
+import { createMilestoneOl, milestoneFullOl, createOverlayWithBg, hideOverlayWithBg, showOverlayWithBg, showDeleteConfirmation } from "/mainJs/overlays.js";
 
 function roundDecimal(number) {
     return Math.floor(number * 100) / 100;
@@ -195,11 +195,6 @@ export async function createProjectOverlay(refreshCallback) {
             alertPopup('error', 'Please enter a valid positive number for the budget.');
             return false;
         }
-        
-        if (!payload.project_name || !payload.project_location || isNaN(payload.project_budget) || !payload.duedate) {
-            alertPopup('error', 'Please fill in all required fields correctly.');
-            return false;
-        }
 
         const formData = new FormData();
         for (const key in payload) {
@@ -238,7 +233,7 @@ export async function createProjectOverlay(refreshCallback) {
     form.append(createProjectFormHeader, createProjectFormFooter);
     overlayBody.append(form);
 
-    hideOverlayWithBg(overlayBackground); // This was showOverlayWithBg originally, changed to hide to match other overlay functions
+    showOverlayWithBg(overlayBackground);
 }
 
 export async function generateProjectsContent(role) {
@@ -448,7 +443,13 @@ export function createSectionTabs(role, projectId) {
 
 async function renderAnalytics() {
     const analyticsSectionContainer = div('analyticsSectionContainer');
-    analyticsSectionContainer.innerText = 'Analytics';
+    const analyticsSectionHeader = div('analyticsSectionHeader');
+    const analyticsHeaderTitle = div('analyticsHeaderTitle');
+    analyticsHeaderTitle.innerText = 'Analytics';
+    analyticsSectionHeader.append(analyticsHeaderTitle);
+    const analyticsSectionBody = div('analyticsSectionBody');
+    analyticsSectionBody.innerText = 'Analytics'; // Placeholder
+    analyticsSectionContainer.append(analyticsSectionHeader, analyticsSectionBody);
     return analyticsSectionContainer;
 }
 
@@ -587,12 +588,14 @@ export async function renderInventory(role, projectId) {
     
     inventorySectionHeader.append(inventoryHeaderTitle);
 
+    const inventorySectionBody = div('inventorySectionBody');
     const filterContainer = div('inventory-filter-container');
     const inventoryListContainer = div('inventory-list-container');
     const paginationContainer = div('inventoryPaginationContainer', 'pagination-container');
     
-    inventorySectionContainer.append(inventorySectionHeader, filterContainer, inventoryListContainer, paginationContainer);
-
+    inventorySectionBody.append(filterContainer, inventoryListContainer, paginationContainer);
+    inventorySectionContainer.append(inventorySectionHeader, inventorySectionBody);
+    
     let currentPage = 1;
     let itemsPerPage = 10;
     let allInventory = [];
@@ -700,10 +703,10 @@ export async function renderInventory(role, projectId) {
 
 
 export async function renderWorker(role, projectId) {
-    const workerSectionContainer = div('workerSectionContainer');
-    const workerSectionHeader = div('workerSectionHeader');
-    const workerHeaderTitle = div('workerHeaderTitle');
-    workerHeaderTitle.innerText = 'Personnel'; 
+    const personnelSectionContainer = div('personnelSectionContainer');
+    const personnelSectionHeader = div('personnelSectionHeader');
+    const personnelHeaderTitle = div('personnelHeaderTitle');
+    personnelHeaderTitle.innerText = 'Personnel'; 
 
     // Conditional "Assign Personnel" button for admin
     if (role === 'admin') {
@@ -712,10 +715,10 @@ export async function renderWorker(role, projectId) {
             // Implement assign personnel overlay
             createAssignPersonnelOverlay(projectId, () => renderPersonnelForProject());
         });
-        workerSectionHeader.append(assignPersonnelBtn);
+        personnelSectionHeader.append(assignPersonnelBtn);
     }
     
-    workerSectionHeader.append(workerHeaderTitle); // Append title after potential button
+    personnelSectionHeader.append(personnelHeaderTitle); // Append title after potential button
     
     const personnelContainer = div('personnel-main-container');
     personnelContainer.id = 'personnel-main-container';
@@ -723,7 +726,7 @@ export async function renderWorker(role, projectId) {
     const paginationContainer = div('personnelPaginationContainer', 'pagination-container');
     
     personnelContainer.append(personnelGrid, paginationContainer); // Append grid and pagination to main container
-    workerSectionContainer.append(workerSectionHeader, personnelContainer); // Append header and main container to section
+    personnelSectionContainer.append(personnelSectionHeader, personnelContainer); // Append header and main container to section
 
     let currentPage = 1;
     let itemsPerPage = 10;
@@ -768,7 +771,7 @@ export async function renderWorker(role, projectId) {
 
     await renderPersonnelForProject(new URLSearchParams()); // Initial render
     
-    return workerSectionContainer;
+    return personnelSectionContainer;
 }
 
 export async function createAssignPersonnelOverlay(projectId, refreshCallback) {
@@ -803,7 +806,7 @@ export async function createAssignPersonnelOverlay(projectId, refreshCallback) {
         });
     }
 
-    const assignBtn = createButton('confirmAssignBtn', 'solid-buttons', 'Assign Selected Personnel');
+    const assignBtn = createButton('confirmAssignBtn', 'wide-buttons btn-blue', 'Assign Selected Personnel');
     assignBtn.addEventListener('click', async () => {
         const selectedUserIds = Array.from(userListContainer.querySelectorAll('input[type="checkbox"]:checked'))
                                      .map(checkbox => parseInt(checkbox.value));

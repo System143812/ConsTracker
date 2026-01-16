@@ -37,25 +37,65 @@ export function createOverlayWithBg() {
 
 export function showDeleteConfirmation(itemName, onConfirm) {
     const { overlayBackground, overlayHeader, overlayBody } = createOverlayWithBg();
-    overlayHeader.innerText = 'Confirm Deletion';
+    overlayBackground.style.backgroundColor = 'rgba(0, 0, 0, 0.3)';
     
-    const confirmationMessage = div('confirmation-message');
-    confirmationMessage.innerText = `Are you sure you want to delete "${itemName}"?`;
+    const overlayContainer = overlayBackground.querySelector('.overlay-containers');
+    overlayContainer.style.maxWidth = '400px';
+    overlayContainer.style.padding = '1rem';
     
-    const buttonContainer = div('confirmation-buttons');
-    const confirmBtn = createButton('confirm-delete-btn', 'solid-buttons', 'Confirm', 'confirm-delete-txt');
-    const cancelBtn = createButton('cancel-delete-btn', 'wide-buttons', 'Cancel', 'cancel-delete-txt');
-
-    confirmBtn.addEventListener('click', () => {
+    const overlayHeaderContainer = div('', 'overlay-header-containers');
+    overlayHeaderContainer.innerText = 'Confirm Delete';
+    overlayHeader.append(overlayHeaderContainer);
+    
+    const confirmationMessage = div('confirmation-message', 'delete-confirmation-message');
+    confirmationMessage.innerText = itemName;
+    confirmationMessage.style.marginBottom = '2rem';
+    confirmationMessage.style.color = '#333';
+    confirmationMessage.style.fontSize = '14px';
+    confirmationMessage.style.lineHeight = '1.6';
+    
+    const buttonContainer = div('confirmation-buttons', 'delete-confirmation-buttons');
+    buttonContainer.style.display = 'flex';
+    buttonContainer.style.gap = '1rem';
+    buttonContainer.style.justifyContent = 'flex-end';
+    buttonContainer.style.marginTop = '2rem';
+    
+    // Cancel button - gray text only
+    const cancelBtn = document.createElement('button');
+    cancelBtn.innerText = 'Cancel';
+    cancelBtn.style.background = 'none';
+    cancelBtn.style.border = 'none';
+    cancelBtn.style.color = '#999';
+    cancelBtn.style.cursor = 'pointer';
+    cancelBtn.style.fontSize = '14px';
+    cancelBtn.style.fontWeight = '500';
+    cancelBtn.style.padding = '0.5rem 1rem';
+    cancelBtn.style.transition = 'color 0.2s ease';
+    cancelBtn.addEventListener('mouseenter', () => cancelBtn.style.color = '#666');
+    cancelBtn.addEventListener('mouseleave', () => cancelBtn.style.color = '#999');
+    cancelBtn.addEventListener('click', () => {
+        hideOverlayWithBg(overlayBackground);
+    });
+    
+    // Delete button - red text only
+    const deleteBtn = document.createElement('button');
+    deleteBtn.innerText = 'Delete';
+    deleteBtn.style.background = 'none';
+    deleteBtn.style.border = 'none';
+    deleteBtn.style.color = '#d63031';
+    deleteBtn.style.cursor = 'pointer';
+    deleteBtn.style.fontSize = '14px';
+    deleteBtn.style.fontWeight = '600';
+    deleteBtn.style.padding = '0.5rem 1rem';
+    deleteBtn.style.transition = 'color 0.2s ease';
+    deleteBtn.addEventListener('mouseenter', () => deleteBtn.style.color = '#c23030');
+    deleteBtn.addEventListener('mouseleave', () => deleteBtn.style.color = '#d63031');
+    deleteBtn.addEventListener('click', () => {
         onConfirm();
         hideOverlayWithBg(overlayBackground);
     });
 
-    cancelBtn.addEventListener('click', () => {
-        hideOverlayWithBg(overlayBackground);
-    });
-
-    buttonContainer.append(cancelBtn, confirmBtn);
+    buttonContainer.append(cancelBtn, deleteBtn);
     overlayBody.append(confirmationMessage, buttonContainer);
     showOverlayWithBg(overlayBackground);
 }
@@ -295,16 +335,22 @@ async function renderEditMilestone(projectId, milestoneId, updateUiFn, overlayBa
         }
     }
     
-    milestoneFormFooter.append(
-        role !== "foreman" ? deleteFormButton(milestoneData.id, 'Milestone', 
-            () => {
-                fetch(`/api/milestones/${milestoneData.id}`, { method: 'DELETE' });
-                alertPopup("success", "Milestone Deleted Successfully");
-            }, 
-            updateUiFn, 
-            () => { hideOverlayWithBg(overlayBackground) }
-        ) : ""
-    );
+    if(role !== 'foreman') {
+        const deleteBtn = createButton('deleteFormBtn', 'wide-buttons', 'Delete Milestone', 'deleteBtnText', 'deleteBtnIcon');
+        deleteBtn.addEventListener('click', () => {
+            showDeleteConfirmation('Are you sure you want to delete this milestone?', async () => {
+                const response = await fetch(`/api/milestones/${milestoneData.id}`, { method: 'DELETE' });
+                if (response.ok) {
+                    alertPopup("success", "Milestone Deleted Successfully");
+                    if (updateUiFn) await updateUiFn();
+                    hideOverlayWithBg(overlayBackground);
+                } else {
+                    alertPopup("error", "Failed to delete milestone.");
+                }
+            });
+        });
+        milestoneFormFooter.append(deleteBtn);
+    }
 
     milestoneEditForm.append(milestoneFormHeader, milestoneFormBody, milestoneFormFooter);
     milestoneEditBody.append(milestoneEditForm);
@@ -382,16 +428,19 @@ async function renderEditTask(projectId, milestoneId, milestoneName, taskId, upd
     }
 
     if(role !== 'foreman') {
-        const deleteBtn = deleteFormButton(taskData.id, 'Task', () => alertPopup("success", "Task Deleted Successfully"), 
-            async () => {
-                await fetch(`/api/tasks/${taskData.id}`, { method: 'DELETE' });
-                updateContents(overlayBody, () => renderViewTask(projectId, milestoneId, milestoneName, updateUiFn, overlayBody, role));
-            }, 
-            () => {}
-        );
+        const deleteBtn = createButton('deleteFormBtn', 'wide-buttons', 'Delete Task', 'deleteBtnText', 'deleteBtnIcon');
+        deleteBtn.addEventListener('click', () => {
+            showDeleteConfirmation('Are you sure you want to delete this task?', async () => {
+                const response = await fetch(`/api/tasks/${taskData.id}`, { method: 'DELETE' });
+                if (response.ok) {
+                    alertPopup("success", "Task Deleted Successfully");
+                    await updateContents(overlayBody, () => renderViewTask(projectId, milestoneId, milestoneName, updateUiFn, overlayBody, role));
+                } else {
+                    alertPopup("error", "Failed to delete task.");
+                }
+            });
+        });
         taskFormFooter.append(deleteBtn);
-    } else {
-        taskFormFooter.append("");
     }
     taskEditForm.append(taskFormHeader, taskFormBody, taskFormFooter);
     taskEditBody.append(taskEditForm);

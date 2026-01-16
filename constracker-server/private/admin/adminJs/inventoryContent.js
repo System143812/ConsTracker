@@ -2,23 +2,43 @@ import { fetchData } from "/js/apiURL.js";
 import { div, span, createPaginationControls, createFilterContainer } from "/js/components.js";
 import { showEmptyPlaceholder } from "/js/popups.js";
 
+const defaultImageBackgroundColors = [
+    '#B388EB', '#FFD180', '#80CBC4', '#E1BEE7', '#C5E1A5',
+    '#F48FB1', '#81D4FA', '#FFF59D', '#FFAB91'
+];
+
 function createInventoryCard(item) {
     const card = div(null, 'inventory-item-card');
 
     const imageContainer = div(null, 'item-image-container');
-    const itemImage = document.createElement('img');
     
+    let imageUrl;
     if (item.image_path) {
-        itemImage.src = `/itemImages/${item.image_path}`;
-        itemImage.alt = item.item_name;
-        itemImage.classList.add('item-image');
+        imageUrl = `/itemImages/${item.image_path}`;
     } else {
-        itemImage.src = '/assets/icons/weightsBlue.png';
-        itemImage.alt = 'Default Item Image';
-        itemImage.classList.add('item-image-placeholder');
+        imageUrl = '/assets/pictures/constrackerWhite.svg';
     }
-    imageContainer.append(itemImage);
 
+    const colorIndex = item.item_id % defaultImageBackgroundColors.length;
+    const backgroundColor = defaultImageBackgroundColors[colorIndex];
+
+    imageContainer.style.backgroundImage = `url(${imageUrl})`;
+    if (!item.image_path || item.image_path === 'constrackerWhite.svg') {
+        imageContainer.style.backgroundColor = backgroundColor;
+        imageContainer.classList.add('default-image-bg');
+    }
+
+    const viewIcon = div('viewInventoryIcon', 'view-inventory-icon');
+    imageContainer.append(viewIcon);
+    
+    card.addEventListener('mouseenter', () => {
+        viewIcon.style.opacity = '1';
+    });
+
+    card.addEventListener('mouseleave', () => {
+        viewIcon.style.opacity = '0';
+    });
+    
     const infoContainer = div(null, 'item-info-container');
     const itemName = div(null, 'item-name');
     itemName.textContent = item.item_name;
@@ -37,12 +57,14 @@ function createInventoryCard(item) {
     infoContainer.append(itemName, itemDescription, detailsGrid);
 
     const stockContainer = div(null, 'item-stock-container');
-    const stockLabel = span('Stock Balance', 'stock-label');
-    const stockBalance = span(item.stock_balance, 'stock-balance');
+    const stockLabel = span(null, 'stock-label');
+    stockLabel.textContent = 'Stock Balance';
+    const stockBalance = span(null, 'stock-balance');
+    stockBalance.textContent = item.stock_balance;
 
     if (item.stock_balance <= 0) {
         stockBalance.classList.add('out-of-stock');
-    } else if (item.stock_balance <= 10) { 
+    } else if (item.stock_balance <= item.min_amount) { 
         stockBalance.classList.add('low-stock');
     }
 

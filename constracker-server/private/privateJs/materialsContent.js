@@ -96,14 +96,16 @@ export function createMaterialCard(material, role, currentUserId, refreshMateria
         // Decline Button
         const declineSpan = span('declineMaterialAction', 'material-action-btn red-text');
         declineSpan.innerText = 'Decline';
-        declineSpan.addEventListener('click', async () => {
-            const response = await fetch(`/api/materials/${material.item_id}/decline`, { method: 'PUT' });
-            if (response.ok) {
-                alertPopup('success', `${material.item_name} declined.`);
-                refreshMaterialsContentFn();
-            } else {
-                alertPopup('error', `Failed to decline ${material.item_name}.`);
-            }
+        declineSpan.addEventListener('click', () => {
+            showDeleteConfirmation(`Are you sure you want to decline ${material.item_name}? This action cannot be undone.`, async () => {
+                const response = await fetch(`/api/materials/${material.item_id}/decline`, { method: 'PUT' });
+                if (response.ok) {
+                    alertPopup('success', `${material.item_name} declined.`);
+                    refreshMaterialsContentFn();
+                } else {
+                    alertPopup('error', `Failed to decline ${material.item_name}.`);
+                }
+            });
         });
         actionsContainer.append(approveSpan, declineSpan);
     }
@@ -170,7 +172,31 @@ export async function createMaterialOverlay(material = null, refreshMaterialsCon
         { id: 'non-consumable', name: 'Non-Consumable' },
         { id: 'asset', name: 'Asset' }
     ];
-    const { container: itemTypeSelectContainer, select: itemTypeSelect } = createSelect('materialItemTypeSelect', 'Item Type', null, material, material?.item_type, itemTypeOptions);
+    
+    // Create item type select (literal select element)
+    const itemTypeSelectContainer = div('itemTypeSelectContainer', 'input-box-containers');
+    const itemTypeLabel = document.createElement('label');
+    itemTypeLabel.className = 'input-labels';
+    itemTypeLabel.innerText = 'Item Type';
+    const itemTypeSelect = document.createElement('select');
+    itemTypeSelect.id = 'materialItemTypeSelect';
+    itemTypeSelect.name = 'item_type';
+    const itemTypeDefaultOption = document.createElement('option');
+    itemTypeDefaultOption.value = '';
+    itemTypeDefaultOption.innerText = 'Select Item Type';
+    itemTypeSelect.appendChild(itemTypeDefaultOption);
+    itemTypeOptions.forEach(opt => {
+        const option = document.createElement('option');
+        option.value = opt.id;
+        option.innerText = opt.name;
+        if (material?.item_type === opt.id) option.selected = true;
+        itemTypeSelect.appendChild(option);
+    });
+    const itemTypeErrorSpan = span(``, 'error-messages');
+    itemTypeErrorSpan.dataset.errMsg = `Item Type Required`;
+    itemTypeErrorSpan.dataset.defaultMsg = " ";
+    itemTypeErrorSpan.innerText = itemTypeErrorSpan.dataset.defaultMsg;
+    itemTypeSelectContainer.append(itemTypeLabel, itemTypeSelect, itemTypeErrorSpan);
 
     const trackConditionContainer = div('trackConditionContainer', 'input-box-containers-checkbox');
     const trackConditionLabel = document.createElement('label');
@@ -260,12 +286,133 @@ export async function createMaterialOverlay(material = null, refreshMaterialsCon
         });
     });
 
-    // --- Selects (Category, Supplier, Unit) ---
+    // --- Selects (Category, Supplier, Unit) - Literal select elements ---
     
-    const { container: categorySelectContainer, select: categorySelect } = createSelect('materialCategorySelect', 'Category', null, material, material?.category_id, categories);
-    const { container: supplierSelectContainer, select: supplierSelect } = createSelect('materialSupplierSelect', 'Supplier', null, material, material?.supplier_id, suppliers);
-    const { container: unitSelectContainer, select: unitSelect } = createSelect('materialUnitSelect', 'Unit', null, material, material?.unit_id, units);
+    // Category Select
+    const categorySelectContainer = div('materialCategorySelectContainer', 'input-box-containers');
+    const categoryLabel = document.createElement('label');
+    categoryLabel.className = 'input-labels';
+    categoryLabel.innerText = 'Category';
+    const categorySelect = document.createElement('select');
+    categorySelect.id = 'materialCategorySelect';
+    categorySelect.name = 'category_id';
+    categorySelect.dataset.value = material?.category_id || 'all';
+    const categoryDefaultOption = document.createElement('option');
+    categoryDefaultOption.value = 'all';
+    categoryDefaultOption.innerText = 'Select Category';
+    categorySelect.appendChild(categoryDefaultOption);
+    categories.forEach(cat => {
+        const option = document.createElement('option');
+        option.value = cat.id;
+        option.innerText = cat.name;
+        if (material?.category_id === cat.id) option.selected = true;
+        categorySelect.appendChild(option);
+    });
+    const categoryErrorSpan = span(``, 'error-messages');
+    categoryErrorSpan.dataset.errMsg = `Category Required`;
+    categoryErrorSpan.dataset.defaultMsg = " ";
+    categoryErrorSpan.innerText = categoryErrorSpan.dataset.defaultMsg;
+    categorySelectContainer.append(categoryLabel, categorySelect, categoryErrorSpan);
 
+    // Supplier Select
+    const supplierSelectContainer = div('materialSupplierSelectContainer', 'input-box-containers');
+    const supplierLabel = document.createElement('label');
+    supplierLabel.className = 'input-labels';
+    supplierLabel.innerText = 'Supplier';
+    const supplierSelect = document.createElement('select');
+    supplierSelect.id = 'materialSupplierSelect';
+    supplierSelect.name = 'supplier_id';
+    supplierSelect.dataset.value = material?.supplier_id || 'all';
+    const supplierDefaultOption = document.createElement('option');
+    supplierDefaultOption.value = 'all';
+    supplierDefaultOption.innerText = 'Select Supplier';
+    supplierSelect.appendChild(supplierDefaultOption);
+    suppliers.forEach(sup => {
+        const option = document.createElement('option');
+        option.value = sup.id;
+        option.innerText = sup.name;
+        if (material?.supplier_id === sup.id) option.selected = true;
+        supplierSelect.appendChild(option);
+    });
+    const supplierErrorSpan = span(``, 'error-messages');
+    supplierErrorSpan.dataset.errMsg = `Supplier Required`;
+    supplierErrorSpan.dataset.defaultMsg = " ";
+    supplierErrorSpan.innerText = supplierErrorSpan.dataset.defaultMsg;
+    supplierSelectContainer.append(supplierLabel, supplierSelect, supplierErrorSpan);
+
+    // Unit Select
+    const unitSelectContainer = div('materialUnitSelectContainer', 'input-box-containers');
+    const unitLabel = document.createElement('label');
+    unitLabel.className = 'input-labels';
+    unitLabel.innerText = 'Unit';
+    const unitSelect = document.createElement('select');
+    unitSelect.id = 'materialUnitSelect';
+    unitSelect.name = 'unit_id';
+    unitSelect.dataset.value = material?.unit_id || 'all';
+    const unitDefaultOption = document.createElement('option');
+    unitDefaultOption.value = 'all';
+    unitDefaultOption.innerText = 'Select Unit';
+    unitSelect.appendChild(unitDefaultOption);
+    units.forEach(u => {
+        const option = document.createElement('option');
+        option.value = u.id;
+        option.innerText = u.name;
+        if (material?.unit_id === u.id) option.selected = true;
+        unitSelect.appendChild(option);
+    });
+    const unitErrorSpan = span(``, 'error-messages');
+    unitErrorSpan.dataset.errMsg = `Unit Required`;
+    unitErrorSpan.dataset.defaultMsg = " ";
+    unitErrorSpan.innerText = unitErrorSpan.dataset.defaultMsg;
+    unitSelectContainer.append(unitLabel, unitSelect, unitErrorSpan);
+
+    // Initially hide unit select if no category is selected
+    if (!material?.category_id) {
+        unitSelectContainer.style.display = 'none';
+    }
+
+    // Add category change listener for dynamic unit visibility and population
+    categorySelect.addEventListener('change', async (e) => {
+        const selectedCategoryId = categorySelect.value;
+        categorySelect.dataset.value = selectedCategoryId;
+        
+        if (!selectedCategoryId || selectedCategoryId === 'all') {
+            // Hide unit select and reset it completely
+            unitSelectContainer.style.display = 'none';
+            unitSelect.innerHTML = '<option value="all">Select Unit</option>';
+            unitSelect.value = 'all';
+            unitSelect.dataset.value = 'all';
+        } else {
+            // Fetch units for the selected category
+            const categoryUnits = await fetchData(`/api/materials/categories/${selectedCategoryId}/units`);
+            
+            if (categoryUnits !== 'error' && Array.isArray(categoryUnits) && categoryUnits.length > 0) {
+                // Clear existing options
+                unitSelect.innerHTML = '<option value="all">Select Unit</option>';
+                
+                // Populate with category-specific units
+                categoryUnits.forEach(unit => {
+                    const option = document.createElement('option');
+                    option.value = unit.id;
+                    option.innerText = unit.name;
+                    unitSelect.appendChild(option);
+                });
+                
+                // Reset to first option (blank/select)
+                unitSelect.value = 'all';
+                unitSelect.dataset.value = 'all';
+                
+                // Show unit select only if units exist
+                unitSelectContainer.style.display = 'block';
+            } else {
+                // Hide unit select if category has no units
+                unitSelectContainer.style.display = 'none';
+                unitSelect.innerHTML = '<option value="all">Select Unit</option>';
+                unitSelect.value = 'all';
+                unitSelect.dataset.value = 'all';
+            }
+        }
+    });
 
     createMaterialFormHeader.append(
         materialNameInput,
@@ -290,36 +437,20 @@ export async function createMaterialOverlay(material = null, refreshMaterialsCon
         let isValid = true;
         if (!validateInput(itemNameEl)) isValid = false;
         if (!validateInput(priceEl)) isValid = false;
-
-        // Validation for select dropdowns
-        if (!categorySelect.dataset.value || categorySelect.dataset.value === 'all') {
-            categorySelect.classList.add('error');
-            isValid = false;
-        } else {
-            categorySelect.classList.remove('error');
-        }
-        if (!supplierSelect.dataset.value || supplierSelect.dataset.value === 'all') {
-            supplierSelect.classList.add('error');
-            isValid = false;
-        } else {
-            supplierSelect.classList.remove('error');
-        }
-        if (!unitSelect.dataset.value || unitSelect.dataset.value === 'all') {
-            unitSelect.classList.add('error');
-            isValid = false;
-        } else {
-            unitSelect.classList.remove('error');
-        }
+        if (!validateInput(itemTypeSelect)) isValid = false;
+        if (!validateInput(categorySelect)) isValid = false;
+        if (!validateInput(supplierSelect)) isValid = false;
+        if (!validateInput(unitSelect)) isValid = false;
 
         const payload = {
             item_name: itemNameEl.value,
             item_description: materialDescriptionInput.querySelector('textarea').value,
             price: parseFloat(priceEl.value),
             size: materialSizeInput.querySelector('input').value,
-            category_id: parseInt(categorySelect.dataset.value),
-            supplier_id: parseInt(supplierSelect.dataset.value),
-            unit_id: parseInt(unitSelect.dataset.value),
-            item_type: itemTypeSelect.dataset.value,
+            category_id: parseInt(categorySelect.value),
+            supplier_id: parseInt(supplierSelect.value),
+            unit_id: parseInt(unitSelect.value),
+            item_type: itemTypeSelect.value,
             track_condition: trackConditionCheckbox.checked ? 1 : 0
         };
         
@@ -382,19 +513,14 @@ export async function createMaterialOverlay(material = null, refreshMaterialsCon
     showOverlayWithBg(overlayBackground);
 }
 
-export async function createSupplierOverlay(supplier = null, refreshCallback) {
-    const isEditMode = supplier !== null;
-    const overlayTitle = 'Manage Suppliers';
-
+export async function createSupplierOverlay(supplier = null, refreshCallback, role = null, currentUserId = null) {
     const { overlayBackground, overlayHeader, overlayBody } = createOverlayWithBg();
+    
     const overlayHeaderContainer = div('', 'overlay-header-containers');
-    overlayHeaderContainer.innerText = overlayTitle;
+    overlayHeaderContainer.innerText = 'Manage Suppliers';
     
     const addSupplierBtn = createButton('addSupplierBtn', 'solid-buttons btn-blue', 'Add Supplier', 'addSupplierBtnText', 'addIconWhite');
-    addSupplierBtn.addEventListener('click', () => {
-        renderEditView(null); // Switch to the add/edit view
-    });
-
+    
     overlayHeader.append(overlayHeaderContainer, addSupplierBtn);
 
     let suppliers = await fetchData('/api/materials/suppliers');
@@ -405,41 +531,137 @@ export async function createSupplierOverlay(supplier = null, refreshCallback) {
 
     const renderListView = () => {
         overlayBody.innerHTML = '';
-        addSupplierBtn.style.display = 'block'; // Show add button in list view
+        addSupplierBtn.style.display = 'block';
         overlayHeaderContainer.innerText = 'Manage Suppliers';
 
         if (suppliers.length === 0) {
-            showEmptyPlaceholder('/assets/icons/person.png', overlayBody, () => renderEditView(null), "No suppliers found.", "Add a Supplier");
+            showEmptyPlaceholder('/assets/icons/person.png', overlayBody, () => renderEditView(null), "No suppliers found.", "Add Supplier");
             return;
         }
 
-        const listContainer = div('supplier-list-container', 'list-container');
+        const listContainer = div('supplier-list-container', 'overlay-items-list');
+        
         suppliers.forEach(sup => {
-            const listItem = div(`supplier-item-${sup.id}`, 'list-item');
-            const supplierName = span('', 'item-name');
-            supplierName.innerText = sup.name;
-
-            const actionsContainer = div('', 'item-actions');
-            const editBtn = createButton('editSupplier', 'icon-buttons', '', 'edit-icon', 'editBlack.png');
-            editBtn.addEventListener('click', () => renderEditView(sup));
+            const listItem = div(`supplier-item-${sup.id}`, 'overlay-item-card');
             
-            const deleteBtn = createButton('deleteSupplier', 'icon-buttons', '', 'delete-icon', 'deleteBlack.png');
-            deleteBtn.addEventListener('click', () => {
-                showDeleteConfirmation(`Are you sure you want to delete supplier "${sup.name}"?`, async () => {
-                    const response = await fetchData(`/api/materials/suppliers/${sup.id}`, { method: 'DELETE' });
-                    if (response.status === 'success') {
-                        alertPopup('success', 'Supplier deleted successfully!');
-                        // Re-fetch suppliers and re-render the list to reflect changes
-                        suppliers = await fetchData('/api/materials/suppliers');
-                        renderListView(); // Re-render the list
-                    } else {
-                        alertPopup('error', response.message || 'Failed to delete supplier.');
-                    }
-                });
-            });
+            const itemInfo = div('', 'overlay-item-info');
+            const itemName = div('', 'overlay-item-title');
+            itemName.innerText = sup.name;
+            
+            const itemDetails = div('', 'overlay-item-details');
+            if (sup.email) {
+                const emailSpan = span('', 'item-detail');
+                emailSpan.innerHTML = `<strong>Email:</strong> ${sup.email}`;
+                itemDetails.append(emailSpan);
+            }
+            if (sup.contact_number) {
+                const contactSpan = span('', 'item-detail');
+                contactSpan.innerHTML = `<strong>Contact:</strong> ${sup.contact_number}`;
+                itemDetails.append(contactSpan);
+            }
+            
+            const statusBadge = span('', 'status-badge');
+            statusBadge.innerText = sup.status || 'pending';
+            statusBadge.className = `status-badge status-${(sup.status || 'pending').toLowerCase()}`;
+            
+            itemInfo.append(itemName, itemDetails, statusBadge);
+            
+            const actionsContainer = div('', 'overlay-item-actions');
+            
+            // Check if user can edit (creator and pending, or admin/engineer)
+            const isCreator = sup.created_by === currentUserId;
+            const isPending = sup.status === 'pending';
+            const isAdmin = role === 'admin';
+            const isEngineer = role === 'engineer';
+            const canEdit = (isCreator && isPending) || isAdmin || isEngineer;
+            const canDelete = (isCreator && isPending) || isAdmin || isEngineer;
+            const canApprove = (isAdmin || isEngineer) && isPending;
 
-            actionsContainer.append(editBtn, deleteBtn);
-            listItem.append(supplierName, actionsContainer);
+            // Show approve/decline buttons for admin/engineer on pending suppliers
+            if (canApprove) {
+                const approveBtn = createButton('', 'overlay-icon-btn', 'Approve', '', null);
+                approveBtn.style.backgroundColor = '#d4edda';
+                approveBtn.style.color = '#155724';
+                approveBtn.style.fontSize = '12px';
+                approveBtn.style.fontWeight = '600';
+                approveBtn.style.width = 'auto';
+                approveBtn.style.padding = '0.4rem 0.8rem';
+                approveBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const updatePayload = { status: 'approved' };
+                    fetchPostJson(`/api/materials/suppliers/${sup.id}`, 'PUT', updatePayload).then(response => {
+                        if (response.status === 'success') {
+                            alertPopup('success', 'Supplier approved!');
+                            fetchData('/api/materials/suppliers').then(data => {
+                                suppliers = data;
+                                renderListView();
+                            });
+                        } else {
+                            alertPopup('error', response.message || 'Failed to approve supplier.');
+                        }
+                    });
+                });
+                actionsContainer.append(approveBtn);
+
+                const declineBtn = createButton('', 'overlay-icon-btn', 'Decline', '', null);
+                declineBtn.style.backgroundColor = '#f8d7da';
+                declineBtn.style.color = '#721c24';
+                declineBtn.style.fontSize = '12px';
+                declineBtn.style.fontWeight = '600';
+                declineBtn.style.width = 'auto';
+                declineBtn.style.padding = '0.4rem 0.8rem';
+                declineBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    showDeleteConfirmation(`Decline supplier "${sup.name}"?`, async () => {
+                        const updatePayload = { status: 'rejected' };
+                        const response = await fetchPostJson(`/api/materials/suppliers/${sup.id}`, 'PUT', updatePayload);
+                        if (response.status === 'success') {
+                            alertPopup('success', 'Supplier declined!');
+                            suppliers = await fetchData('/api/materials/suppliers');
+                            renderListView();
+                        } else {
+                            alertPopup('error', response.message || 'Failed to decline supplier.');
+                        }
+                    });
+                });
+                actionsContainer.append(declineBtn);
+            } else if (canEdit && !isPending) {
+                // Show edit button only if not pending
+                const editBtn = createButton('', 'overlay-icon-btn edit-btn', '', 'edit-icon-small', 'editBlack.png');
+                editBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    renderEditView(sup);
+                });
+                actionsContainer.append(editBtn);
+            } else if (canEdit && isPending) {
+                // Show edit button for creators of pending suppliers
+                const editBtn = createButton('', 'overlay-icon-btn edit-btn', '', 'edit-icon-small', 'editBlack.png');
+                editBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    renderEditView(sup);
+                });
+                actionsContainer.append(editBtn);
+            }
+            
+            if (canDelete) {
+                const deleteBtn = createButton('', 'overlay-icon-btn delete-btn', '', 'delete-icon-small', 'deleteBlack.png');
+                deleteBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    showDeleteConfirmation(`Are you sure you want to delete supplier "${sup.name}"?`, async () => {
+                        const response = await fetchData(`/api/materials/suppliers/${sup.id}`, { method: 'DELETE' });
+                        if (response.status === 'success') {
+                            alertPopup('success', 'Supplier deleted successfully!');
+                            suppliers = await fetchData('/api/materials/suppliers');
+                            renderListView();
+                        } else {
+                            alertPopup('error', response.message || 'Failed to delete supplier.');
+                        }
+                    });
+                });
+                actionsContainer.append(deleteBtn);
+            }
+
+            listItem.append(itemInfo, actionsContainer);
             listContainer.append(listItem);
         });
         overlayBody.append(listContainer);
@@ -453,21 +675,21 @@ export async function createSupplierOverlay(supplier = null, refreshCallback) {
 
         const form = document.createElement('form');
         form.id = 'supplierForm';
-        form.classList.add('form-edit-forms');
+        form.classList.add('overlay-form');
 
-        const formHeader = div('createFormHeader', 'create-form-headers');
+        const formContent = div('', 'overlay-form-content');
         const nameInput = createInput('text', 'edit', 'Supplier Name', 'supplierName', 'name', sup?.name || '', 'Enter supplier name', null, 255);
         const addressInput = createInput('text', 'edit', 'Address', 'supplierAddress', 'address', sup?.address || '', 'Enter address', null, 255);
         const contactInput = createInput('text', 'edit', 'Contact', 'supplierContact', 'contact', sup?.contact_number || '', 'Enter contact number', null, 50);
         const emailInput = createInput('email', 'edit', 'Email', 'supplierEmail', 'email', sup?.email || '', 'Enter email address', null, 255);
         
-        formHeader.append(nameInput, addressInput, contactInput, emailInput);
+        formContent.append(nameInput, addressInput, contactInput, emailInput);
 
-        const formFooter = div('createFormFooter', 'create-form-footers');
-        const cancelBtn = createButton('cancelBtn', 'wide-buttons', 'Cancel', 'cancelText');
+        const formActions = div('', 'overlay-form-actions');
+        const cancelBtn = createButton('', 'overlay-btn-secondary', 'Cancel', 'cancelText');
         cancelBtn.addEventListener('click', renderListView);
 
-        const saveBtn = createButton('saveBtn', 'wide-buttons', isEdit ? 'Save Changes' : 'Create Supplier', 'saveText');
+        const saveBtn = createButton('', 'overlay-btn-primary', isEdit ? 'Save Changes' : 'Create Supplier', 'saveText');
         saveBtn.addEventListener('click', async () => {
             const nameEl = nameInput.querySelector('input');
             if (!validateInput(nameEl)) {
@@ -495,31 +717,32 @@ export async function createSupplierOverlay(supplier = null, refreshCallback) {
             }
         });
 
-        formFooter.append(cancelBtn, saveBtn);
-        form.append(formHeader, formFooter);
+        formActions.append(cancelBtn, saveBtn);
+        form.append(formContent, formActions);
         overlayBody.append(form);
     };
+
+    addSupplierBtn.addEventListener('click', () => renderEditView(null));
 
     renderListView();
     showOverlayWithBg(overlayBackground);
 }
 
-export async function createCategoryOverlay(category = null, refreshCallback) {
-    const isEditMode = category !== null;
-    const overlayTitle = 'Manage Categories';
-
-    const { overlayBackground, overlayHeader, overlayBody } = createOverlayWithBg();
+export async function createCategoryOverlay(category = null, refreshCallback, role = null, currentUserId = null) {
+    const { overlayBackground, overlayContainer, overlayHeader, overlayBody } = createOverlayWithBg();
+    
     const overlayHeaderContainer = div('', 'overlay-header-containers');
-    overlayHeaderContainer.innerText = overlayTitle;
+    overlayHeaderContainer.innerText = 'Manage Categories';
+    // overlayBody.style.overflow = 'auto';
+    // overlayContainer.style.overflow = 'auto';
+    // overlayBody.style.maxHeight = '50%';
+    // overlayContainer.style.maxHeight = '50%';
     
     const addCategoryBtn = createButton('addCategoryBtn', 'solid-buttons btn-blue', 'Add Category', 'addCategoryBtnText', 'addIconWhite');
-    addCategoryBtn.addEventListener('click', () => {
-        renderEditView(null);
-    });
-
+    
     overlayHeader.append(overlayHeaderContainer, addCategoryBtn);
 
-    let categories = await fetchData('/api/materials/categories'); // Changed to let
+    let categories = await fetchData('/api/materials/categories');
     if (categories === 'error') {
         hideOverlayWithBg(overlayBackground);
         return alertPopup('error', 'Failed to load categories.');
@@ -531,44 +754,59 @@ export async function createCategoryOverlay(category = null, refreshCallback) {
         overlayHeaderContainer.innerText = 'Manage Categories';
 
         if (categories.length === 0) {
-            showEmptyPlaceholder('/assets/icons/person.png', overlayBody, () => renderEditView(null), "No categories found.", "Add a Category");
+            showEmptyPlaceholder('/assets/icons/folder.png', overlayBody, () => renderEditView(null), "No categories found.", "Add Category");
             return;
         }
 
-        const listContainer = div('category-list-container', 'list-container');
+        const listContainer = div('category-list-container', 'overlay-items-list');
+        
         categories.forEach(cat => {
-            const listItem = div(`category-item-${cat.id}`, 'list-item');
-            const categoryName = span('', 'item-name');
-            categoryName.innerText = cat.name;
-
-            const actionsContainer = div('', 'item-actions');
-            const editBtn = createButton('editCategory', 'icon-buttons', '', 'edit-icon', 'editBlack.png');
-            editBtn.addEventListener('click', () => renderEditView(cat));
+            const listItem = div(`category-item-${cat.id}`, 'overlay-item-card');
             
-            const deleteBtn = createButton('deleteCategory', 'icon-buttons', '', 'delete-icon', 'deleteBlack.png');
-            deleteBtn.addEventListener('click', () => {
-                showDeleteConfirmation(`Are you sure you want to delete category "${cat.name}"?`, async () => {
-                    const response = await fetchData(`/api/materials/categories/${cat.id}`, { method: 'DELETE' });
-                    if (response.status === 'success') {
-                        alertPopup('success', 'Category deleted successfully!');
-                        // Update the local categories array
-                        categories = categories.filter(c => c.id !== cat.id);
-                        renderListView(); // Re-render the list
-                        refreshCallback(); // Refresh the main materials content
-                    } else {
-                        alertPopup('error', response.message || 'Failed to delete category.');
-                    }
-                });
-            });
+            const itemInfo = div('', 'overlay-item-info');
+            const itemName = div('', 'overlay-item-title');
+            itemName.innerText = cat.name;
+            
+            itemInfo.append(itemName);
+            
+            const actionsContainer = div('', 'overlay-item-actions');
 
-            actionsContainer.append(editBtn, deleteBtn);
-            listItem.append(categoryName, actionsContainer);
+            // Foreman cannot edit/delete categories
+            const isForemanOnly = role === 'foreman';
+            
+            if (!isForemanOnly) {
+                const editBtn = createButton('', 'overlay-icon-btn edit-btn', '', 'edit-icon-small', 'editBlack.png');
+                editBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    renderEditView(cat);
+                });
+                actionsContainer.append(editBtn);
+                
+                const deleteBtn = createButton('', 'overlay-icon-btn delete-btn', '', 'delete-icon-small', 'deleteBlack.png');
+                deleteBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    showDeleteConfirmation(`Are you sure you want to delete category "${cat.name}"?`, async () => {
+                        const response = await fetchData(`/api/materials/categories/${cat.id}`, { method: 'DELETE' });
+                        if (response.status === 'success') {
+                            alertPopup('success', 'Category deleted successfully!');
+                            categories = categories.filter(c => c.id !== cat.id);
+                            renderListView();
+                            refreshCallback();
+                        } else {
+                            alertPopup('error', response.message || 'Failed to delete category.');
+                        }
+                    });
+                });
+                actionsContainer.append(deleteBtn);
+            }
+
+            listItem.append(itemInfo, actionsContainer);
             listContainer.append(listItem);
         });
         overlayBody.append(listContainer);
     };
 
-    const renderEditView = (cat = null) => {
+    const renderEditView = async (cat = null) => {
         const isEdit = cat !== null;
         overlayBody.innerHTML = '';
         addCategoryBtn.style.display = 'none';
@@ -576,25 +814,71 @@ export async function createCategoryOverlay(category = null, refreshCallback) {
 
         const form = document.createElement('form');
         form.id = 'categoryForm';
-        form.classList.add('form-edit-forms');
+        form.classList.add('overlay-form');
 
-        const formHeader = div('createFormHeader', 'create-form-headers');
-        const nameInput = createInput('text', 'edit', 'Category Name', 'categoryName', 'name', cat?.name || '', 'Enter category name', null, 255);
+        const formContent = div('', 'overlay-form-content');
+        const nameInput = createInput('text', 'edit', 'Category Name', '', 'name', cat?.name || '', 'Enter category name', null, 255);
         
-        formHeader.append(nameInput);
+        const units = await fetchData('/api/materials/units');
+        if (units === 'error') {
+            alertPopup('error', 'Failed to load units for form.');
+            renderListView();
+            return;
+        }
 
-        const formFooter = div('createFormFooter', 'create-form-footers');
-        const cancelBtn = createButton('cancelBtn', 'wide-buttons', 'Cancel', 'cancelText');
+        let defaultUnitIds = 'all';
+        if (isEdit) {
+            const associatedUnits = await fetchData(`/api/materials/categories/${cat.id}/units`);
+            if (associatedUnits !== 'error' && associatedUnits.length > 0) {
+                defaultUnitIds = associatedUnits.map(unit => unit.id).join(',');
+            }
+        }
+
+        const unitsContainer = div('unitsSelectContainer', 'input-box-containers');
+        const unitsLabel = document.createElement('label');
+        unitsLabel.className = 'input-labels';
+        unitsLabel.innerText = 'Associated Units';
+
+        const unitsSelect = document.createElement('select');
+        unitsSelect.id = 'categoryUnitsSelect';
+        unitsSelect.multiple = true;
+        
+        units.forEach(unit => {
+            const option = document.createElement('option');
+            option.value = unit.id;
+            option.innerText = unit.name;
+            unitsSelect.appendChild(option);
+        });
+
+        if (isEdit) {
+            const defaultUnitIdsArray = defaultUnitIds === 'all' ? [] : defaultUnitIds.split(',');
+            Array.from(unitsSelect.options).forEach(option => {
+                if (defaultUnitIdsArray.includes(option.value)) {
+                    option.selected = true;
+                }
+            });
+        }
+        
+        unitsContainer.append(unitsLabel, unitsSelect);
+
+        formContent.append(nameInput, unitsContainer);
+
+        const formActions = div('', 'overlay-form-actions');
+        const cancelBtn = createButton('', 'overlay-btn-secondary', 'Cancel', 'cancelText');
         cancelBtn.addEventListener('click', renderListView);
 
-        const saveBtn = createButton('saveBtn', 'wide-buttons', isEdit ? 'Save Changes' : 'Create Category', 'saveText');
+        const saveBtn = createButton('', 'overlay-btn-primary', isEdit ? 'Save Changes' : 'Create Category', 'saveText');
         saveBtn.addEventListener('click', async () => {
             const nameEl = nameInput.querySelector('input');
             if (!validateInput(nameEl)) {
                 return alertPopup('error', 'Category name is required.');
             }
+            
+            const selectedUnits = Array.from(unitsSelect.selectedOptions).map(opt => parseInt(opt.value));
+
             const payload = {
                 name: nameEl.value,
+                unit_ids: selectedUnits
             };
 
             const url = isEdit ? `/api/materials/categories/${cat.id}` : '/api/materials/categories';
@@ -611,31 +895,26 @@ export async function createCategoryOverlay(category = null, refreshCallback) {
             }
         });
 
-        formFooter.append(cancelBtn, saveBtn);
-        form.append(formHeader, formFooter);
+        formActions.append(cancelBtn, saveBtn);
+        form.append(formContent, formActions);
         overlayBody.append(form);
     };
+
+    addCategoryBtn.addEventListener('click', () => renderEditView(null));
 
     renderListView();
     showOverlayWithBg(overlayBackground);
 }
 
 export async function createUnitOverlay(unit = null, refreshCallback) {
-    const isEditMode = unit !== null;
-    const overlayTitle = 'Manage Units';
-
     const { overlayBackground, overlayHeader, overlayBody } = createOverlayWithBg();
-    const overlayHeaderContainer = div('', 'overlay-header-containers');
-    overlayHeaderContainer.innerText = overlayTitle;
     
-    const addUnitBtn = createButton('addUnitBtn', 'solid-buttons btn-blue', 'Add Unit', 'addUnitBtnText', 'addWhiteIcon');
-    addUnitBtn.addEventListener('click', () => {
-        renderEditView(null);
-    });
+    const overlayHeaderContainer = div('', 'overlay-header-containers');
+    overlayHeaderContainer.innerText = 'Units';
+    
+    overlayHeader.append(overlayHeaderContainer);
 
-    overlayHeader.append(overlayHeaderContainer, addUnitBtn);
-
-    let units = await fetchData('/api/materials/units'); // Changed to let
+    let units = await fetchData('/api/materials/units');
     if (units === 'error') {
         hideOverlayWithBg(overlayBackground);
         return alertPopup('error', 'Failed to load units.');
@@ -643,93 +922,27 @@ export async function createUnitOverlay(unit = null, refreshCallback) {
 
     const renderListView = () => {
         overlayBody.innerHTML = '';
-        addUnitBtn.style.display = 'block';
-        overlayHeaderContainer.innerText = 'Manage Units';
+        overlayHeaderContainer.innerText = 'Units';
 
         if (units.length === 0) {
-            showEmptyPlaceholder('/assets/icons/person.png', overlayBody, () => renderEditView(null), "No units found.", "Add a Unit");
+            showEmptyPlaceholder('/assets/icons/measurement.png', overlayBody, null, "No units available.");
             return;
         }
 
-        const listContainer = div('unit-list-container', 'list-container');
+        const listContainer = div('unit-list-container', 'overlay-items-list');
+        
         units.forEach(un => {
-            const listItem = div(`unit-item-${un.id}`, 'list-item');
-            const unitName = span('', 'item-name');
-            unitName.innerText = un.name;
-
-            const actionsContainer = div('', 'item-actions');
-            const editBtn = createButton('editUnit', 'icon-buttons', '', 'edit-icon', 'editBlack.png');
-            editBtn.addEventListener('click', () => renderEditView(un));
+            const listItem = div(`unit-item-${un.id}`, 'overlay-item-card');
             
-            const deleteBtn = createButton('deleteUnit', 'icon-buttons', '', 'delete-icon', 'deleteBlack.png');
-            deleteBtn.addEventListener('click', () => {
-                showDeleteConfirmation(`Are you sure you want to delete unit "${un.name}"?`, async () => {
-                    const response = await fetchData(`/api/materials/units/${un.id}`, { method: 'DELETE' });
-                    if (response.status === 'success') {
-                        alertPopup('success', 'Unit deleted successfully!');
-                        // Update the local units array
-                        units = units.filter(u => u.id !== un.id);
-                        renderListView(); // Re-render the list
-                        refreshCallback(); // Refresh the main materials content
-                    } else {
-                        alertPopup('error', response.message || 'Failed to delete unit.');
-                    }
-                });
-            });
-
-            actionsContainer.append(editBtn, deleteBtn);
-            listItem.append(unitName, actionsContainer);
+            const itemInfo = div('', 'overlay-item-info');
+            const itemName = div('', 'overlay-item-title');
+            itemName.innerText = un.name;
+            
+            itemInfo.append(itemName);
+            listItem.append(itemInfo);
             listContainer.append(listItem);
         });
         overlayBody.append(listContainer);
-    };
-
-    const renderEditView = (un = null) => {
-        const isEdit = un !== null;
-        overlayBody.innerHTML = '';
-        addUnitBtn.style.display = 'none';
-        overlayHeaderContainer.innerText = isEdit ? `Edit Unit: ${un.name}` : 'Add New Unit';
-
-        const form = document.createElement('form');
-        form.id = 'unitForm';
-        form.classList.add('form-edit-forms');
-
-        const formHeader = div('createFormHeader', 'create-form-headers');
-        const nameInput = createInput('text', 'edit', 'Unit Name', 'unitName', 'name', un?.name || '', 'Enter unit name', null, 255);
-        
-        formHeader.append(nameInput);
-
-        const formFooter = div('createFormFooter', 'create-form-footers');
-        const cancelBtn = createButton('cancelBtn', 'wide-buttons', 'Cancel', 'cancelText');
-        cancelBtn.addEventListener('click', renderListView);
-
-        const saveBtn = createButton('saveBtn', 'wide-buttons', isEdit ? 'Save Changes' : 'Create Unit', 'saveText');
-        saveBtn.addEventListener('click', async () => {
-            const nameEl = nameInput.querySelector('input');
-            if (!validateInput(nameEl)) {
-                return alertPopup('error', 'Unit name is required.');
-            }
-            const payload = {
-                name: nameEl.value,
-            };
-
-            const url = isEdit ? `/api/materials/units/${un.id}` : '/api/materials/units';
-            const method = isEdit ? 'PUT' : 'POST';
-
-            const response = await fetchPostJson(url, method, payload);
-
-            if (response.status === 'success') {
-                alertPopup('success', isEdit ? 'Unit updated!' : 'Unit created!');
-                hideOverlayWithBg(overlayBackground);
-                refreshCallback();
-            } else {
-                alertPopup('error', response.message || 'Failed to save unit.');
-            }
-        });
-
-        formFooter.append(cancelBtn, saveBtn);
-        form.append(formHeader, formFooter);
-        overlayBody.append(form);
     };
 
     renderListView();
@@ -776,10 +989,10 @@ export async function generateMaterialsContent(role) {
     unitsButton.innerText = 'Units';
     materialsSubHeader.append(suppliersButton, categoriesButton, unitsButton);
     suppliersButton.addEventListener('click', () => {
-        createSupplierOverlay(null, () => renderMaterials(new URLSearchParams(), role, currentUserId));
+        createSupplierOverlay(null, () => renderMaterials(new URLSearchParams(), role, currentUserId), role, currentUserId);
     });
     categoriesButton.addEventListener('click', () => {
-        createCategoryOverlay(null, () => renderMaterials(new URLSearchParams(), role, currentUserId));
+        createCategoryOverlay(null, () => renderMaterials(new URLSearchParams(), role, currentUserId), role, currentUserId);
     });
     unitsButton.addEventListener('click', () => {
         createUnitOverlay(null, () => renderMaterials(new URLSearchParams(), role, currentUserId));

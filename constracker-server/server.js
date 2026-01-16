@@ -404,7 +404,7 @@ async function getSummaryCards(res, tabName) {
                         (SELECT COUNT(id) FROM material_requests WHERE status = 'pending') AS pending_requests,
                         (SELECT COUNT(id) FROM material_requests WHERE current_stage IN ('ordered', 'awaiting_delivery')) AS awaiting_deliveries,
                         (SELECT COUNT(id) FROM material_requests WHERE current_stage = 'partially_verified') AS partially_verified,
-                        (SELECT COUNT(id) FROM material_requests WHERE current_stage = 'disputed') AS disputed_requests
+                        (SELECT COUNT(DISTINCT i.project_id) FROM inventory i WHERE i.current_amount < (SELECT AVG(current_amount) FROM inventory JOIN items it ON inventory.item_id = it.item_id WHERE it.category_id = (SELECT category_id FROM items WHERE item_id = i.item_id)) OR i.current_amount < 5) AS low_inventory_projects
                 `;
             }
         },
@@ -660,7 +660,7 @@ async function getAllMaterialCategories(res) {
 
 async function getAllSuppliers(res) {
     try {
-        const [result] = await pool.execute('SELECT supplier_id AS id, supplier_name AS name FROM suppliers ORDER BY supplier_name ASC');
+        const [result] = await pool.execute('SELECT supplier_id AS id, supplier_name AS name, supplier_address AS address, contact_number AS contact_number, supplier_email AS email, created_by, status FROM suppliers ORDER BY supplier_name ASC');
         return result;
     } catch (error) {
         failed(res, 500, `Database Error: ${error}`);
@@ -676,12 +676,12 @@ async function getAllUnits(res) {
     }
 }
 
-async function createSupplier(res, supplierData) {
+async function createSupplier(res, supplierData, userId) {
     const { name, address, contact_number, email } = supplierData;
     try {
         const [result] = await pool.execute(
-            'INSERT INTO suppliers (supplier_name, supplier_address, supplier_contact, supplier_email) VALUES (?, ?, ?, ?)',
-            [name, address, contact_number, email]
+            'INSERT INTO suppliers (supplier_name, supplier_address, contact_number, supplier_email, created_by, status) VALUES (?, ?, ?, ?, ?, ?)',
+            [name, address, contact_number, email, userId, 'pending']
         );
         return result.insertId;
     } catch (error) {
@@ -689,25 +689,125 @@ async function createSupplier(res, supplierData) {
     }
 }
 
-async function updateSupplier(res, supplierId, supplierData) {
+async function updateSupplier(res, supplierId, supplierData, userId, userRole) {
     const { name, address, contact_number, email } = supplierData;
     try {
+        // Get current supplier to check permissions
+        const [currentSupplier] = await pool.execute('SELECT created_by, status FROM suppliers WHERE supplier_id = ?', [supplierId]);
+        
+        if (currentSupplier.length === 0) {
+            return { success: false, message: 'Supplier not found.' };
+        }
+
+        const supplier = currentSupplier[0];
+        const isCreator = supplier.created_by === userId;
+        const isPending = supplier.status === 'pending';
+        const isAdmin = userRole === 'admin';
+        const isEngineer = userRole === 'engineer';
+
+        // Allow update only if: creator and pending, or admin/engineer
+        if (!((isCreator && isPending) || isAdmin || isEngineer)) {
+            return { success: false, message: 'You do not have permission to edit this supplier.' };
+        }
+
         const [result] = await pool.execute(
             'UPDATE suppliers SET supplier_name = ?, supplier_address = ?, supplier_contact = ?, supplier_email = ? WHERE supplier_id = ?',
             [name, address, contact_number, email, supplierId]
         );
-        return result.affectedRows > 0;
+        return { success: result.affectedRows > 0, message: result.affectedRows > 0 ? 'Success' : 'Failed to update supplier.' };
     } catch (error) {
         failed(res, 500, `Database Error: ${error}`);
+        return { success: false, message: 'Database error' };
     }
 }
 
-async function deleteSupplier(res, supplierId) {
+async function deleteSupplier(res, supplierId, userId, userRole) {
     try {
+        // Get current supplier to check permissions
+        const [currentSupplier] = await pool.execute('SELECT created_by, status FROM suppliers WHERE supplier_id = ?', [supplierId]);
+        
+        if (currentSupplier.length === 0) {
+            return { success: false, message: 'Supplier not found.' };
+        }
+
+        const supplier = currentSupplier[0];
+        const isCreator = supplier.created_by === userId;
+        const isPending = supplier.status === 'pending';
+        const isAdmin = userRole === 'admin';
+        const isEngineer = userRole === 'engineer';
+
+        // Allow delete only if: creator and pending, or admin/engineer
+        if (!((isCreator && isPending) || isAdmin || isEngineer)) {
+            return { success: false, message: 'You do not have permission to delete this supplier.' };
+        }
+
         const [result] = await pool.execute('DELETE FROM suppliers WHERE supplier_id = ?', [supplierId]);
-        return result.affectedRows > 0;
+        return { success: result.affectedRows > 0, message: result.affectedRows > 0 ? 'Success' : 'Failed to delete supplier.' };
     } catch (error) {
         failed(res, 500, `Database Error: ${error}`);
+        return { success: false, message: 'Database error' };
+    }
+}
+
+async function getCategoryUnits(res, categoryId) {
+    try {
+        const [result] = await pool.execute(
+            'SELECT u.unit_id AS id, u.unit_name AS name FROM units u JOIN category_units cu ON u.unit_id = cu.unit_id WHERE cu.category_id = ?',
+            [categoryId]
+        );
+        return result;
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+        return 'error';
+    }
+}
+
+async function createCategoryWithUnits(res, categoryData) {
+    const { name, unit_ids } = categoryData;
+    const connection = await pool.getConnection();
+    try {
+        await connection.beginTransaction();
+
+        const [catResult] = await connection.execute('INSERT INTO material_categories (category_name) VALUES (?)', [name]);
+        const categoryId = catResult.insertId;
+
+        if (unit_ids && unit_ids.length > 0) {
+            const unitValues = unit_ids.map(unitId => [categoryId, unitId]);
+            await connection.query('INSERT INTO category_units (category_id, unit_id) VALUES ?', [unitValues]);
+        }
+
+        await connection.commit();
+        return categoryId;
+    } catch (error) {
+        await connection.rollback();
+        failed(res, 500, `Database Error: ${error}`);
+    } finally {
+        connection.release();
+    }
+}
+
+async function updateCategoryWithUnits(res, categoryId, categoryData) {
+    const { name, unit_ids } = categoryData;
+    const connection = await pool.getConnection();
+    try {
+        await connection.beginTransaction();
+
+        await connection.execute('UPDATE material_categories SET category_name = ? WHERE category_id = ?', [name, categoryId]);
+        await connection.execute('DELETE FROM category_units WHERE category_id = ?', [categoryId]);
+
+        if (unit_ids && unit_ids.length > 0) {
+            const unitValues = unit_ids.map(unitId => [categoryId, unitId]);
+            await connection.query('INSERT INTO category_units (category_id, unit_id) VALUES ?', [unitValues]);
+        }
+
+        await connection.commit();
+        return true;
+    } catch (error) {
+        await connection.rollback();
+        failed(res, 500, `Database Error: ${error}`);
+        return false;
+    } finally {
+        connection.release();
     }
 }
 
@@ -732,11 +832,19 @@ async function updateCategory(res, categoryId, categoryData) {
 }
 
 async function deleteCategory(res, categoryId) {
+    const connection = await pool.getConnection();
     try {
-        const [result] = await pool.execute('DELETE FROM material_categories WHERE category_id = ?', [categoryId]);
+        await connection.beginTransaction();
+        await connection.execute('DELETE FROM category_units WHERE category_id = ?', [categoryId]);
+        const [result] = await connection.execute('DELETE FROM material_categories WHERE category_id = ?', [categoryId]);
+        await connection.commit();
         return result.affectedRows > 0;
     } catch (error) {
+        await connection.rollback();
         failed(res, 500, `Database Error: ${error}`);
+        return false;
+    } finally {
+        connection.release();
     }
 }
 
@@ -924,7 +1032,7 @@ async function createLogDetails(res, type, action, logId, logDetailsObj, itemId)
         let logDetailQuery;
         let logDetailParams = [];
         if(type === 'non-item') {
-            if(action === 'edit') {
+            if(action === 'edit' && logDetailsObj) {
                 for (const logDetailObj of logDetailsObj) {
                     logDetailQuery = "INSERT INTO log_edit_details (log_id, var_name, old_value, new_value, label) VALUES (?, ?, ?, ?, ?)"
                     logDetailParams = [logId, logDetailObj.varName, logDetailObj.oldVal, logDetailObj.newVal, logDetailObj.label];
@@ -2223,11 +2331,10 @@ app.post('/api/projects/:projectId/assign-personnel', authMiddleware(['admin']),
                 const projectName = projectResult[0]?.project_name || `Project ${projectId}`;
 
                 const logData = {
-                    logName: `assigned ${userName} to project ${projectName}`,
-                    projectId: projectId,
-                    type: 'non-item',
-                    action: 'assign_personnel',
-                };
+                                    logName: `Assigned ${userName} to project ${projectName}`,
+                                    projectId: projectId,
+                                    type: 'non-item',
+                                    action: 'create',                };
                 await createLogs(res, req, logData);
             }
         }
@@ -2275,7 +2382,7 @@ app.post('/api/projects/:projectId/remove-personnel', authMiddleware(['admin']),
             logName: `removed ${userName} from project ${projectName}`,
             projectId: projectId,
             type: 'non-item',
-            action: 'remove_personnel',
+            action: 'delete',
         };
         await createLogs(res, req, logData);
 
@@ -2301,61 +2408,49 @@ app.get('/api/recentMatReqs', authMiddleware(['all']), async(req, res) => {
     res.status(200).json(await recentMaterialsRequest(res));
 });
 
-app.get('/api/materials/categories', authMiddleware(['all']), async(req, res) => {
-    res.status(200).json(await getAllMaterialCategories(res));
-});
-
-app.post('/api/materials/categories', authMiddleware(['admin', 'engineer', 'project manager']), async(req, res) => {
-    const { name } = req.body;
-    if (!name) {
-        return failed(res, 400, 'Category name is required.');
-    }
-    try {
-        const categoryId = await createCategory(res, { name });
-        res.status(201).json({ status: 'success', message: 'Category created successfully.', categoryId });
-    } catch (error) {
-        failed(res, 500, `Database Error: ${error}`);
+app.get('/api/materials/categories', authMiddleware(['all']), async (req, res) => {
+    const categories = await getAllMaterialCategories(res);
+    if (categories !== 'error') {
+        res.status(200).json(categories);
     }
 });
 
-app.put('/api/materials/categories/:categoryId', authMiddleware(['admin', 'engineer', 'project manager']), async(req, res) => {
-    const { categoryId } = req.params;
-    const { name } = req.body;
-    if (!name) {
-        return failed(res, 400, 'Category name is required.');
-    }
-    try {
-        const success = await updateCategory(res, categoryId, { name });
-        if (success) {
-            res.status(200).json({ status: 'success', message: 'Category updated successfully.' });
-        } else {
-            failed(res, 400, 'Failed to update category.');
-        }
-    } catch (error) {
-        failed(res, 500, `Database Error: ${error}`);
+app.get('/api/materials/categories/:id/units', authMiddleware(['all']), async (req, res) => {
+    const { id } = req.params;
+    const units = await getCategoryUnits(res, id);
+    if (units !== 'error') {
+        res.status(200).json(units);
     }
 });
 
-app.delete('/api/materials/categories/:categoryId', authMiddleware(['admin', 'engineer', 'project manager']), async(req, res) => {
-    const { categoryId } = req.params;
-    try {
-        const success = await deleteCategory(res, categoryId);
-        if (success) {
-            res.status(200).json({ status: 'success', message: 'Category deleted successfully.' });
-        } else {
-            failed(res, 400, 'Failed to delete category.');
-        }
-    } catch (error) {
-        failed(res, 500, `Database Error: ${error}`);
+app.post('/api/materials/categories', authMiddleware(['admin', 'engineer', 'project manager']), async (req, res) => {
+    const categoryId = await createCategoryWithUnits(res, req.body);
+    if (categoryId) {
+        success(res, 'Category created successfully.');
     }
 });
 
-app.get('/api/materials/suppliers', authMiddleware(['all']), async(req, res) => {
-    res.status(200).json(await getAllSuppliers(res));
+app.put('/api/materials/categories/:id', authMiddleware(['admin', 'engineer', 'project manager']), async (req, res) => {
+    const { id } = req.params;
+    const successStatus = await updateCategoryWithUnits(res, id, req.body);
+    if (successStatus) {
+        success(res, 'Category updated successfully.');
+    }
 });
 
-app.get('/api/materials/units', authMiddleware(['all']), async(req, res) => {
-    res.status(200).json(await getAllUnits(res));
+app.delete('/api/materials/categories/:id', authMiddleware(['admin', 'engineer', 'project manager']), async (req, res) => {
+    const { id } = req.params;
+    if (await deleteCategory(res, id)) {
+        success(res, 'Category deleted successfully.');
+    }
+});
+
+// Units
+app.get('/api/materials/units', authMiddleware(['all']), async (req, res) => {
+    const units = await getAllUnits(res);
+    if (units !== 'error') {
+        res.status(200).json(units);
+    }
 });
 
 app.post('/api/materials/units', authMiddleware(['admin', 'engineer', 'project manager']), async(req, res) => {
@@ -2403,13 +2498,23 @@ app.delete('/api/materials/units/:unitId', authMiddleware(['admin', 'engineer', 
     }
 });
 
+app.get('/api/materials/suppliers', authMiddleware(['all']), async (req, res) => {
+    try {
+        const suppliers = await getAllSuppliers(res);
+        res.status(200).json(suppliers);
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
+});
+
 app.post('/api/materials/suppliers', authMiddleware(['admin', 'engineer', 'project manager']), async(req, res) => {
     const { name, address, contact_number, email } = req.body;
+    const userId = req.user.user_id;
     if (!name) {
         return failed(res, 400, 'Supplier name is required.');
     }
     try {
-        const supplierId = await createSupplier(res, { name, address, contact_number, email });
+        const supplierId = await createSupplier(res, { name, address, contact_number, email }, userId);
         res.status(201).json({ status: 'success', message: 'Supplier created successfully.', supplierId });
     }  catch (error) {
         failed(res, 500, `Database Error: ${error}`);
@@ -2419,15 +2524,17 @@ app.post('/api/materials/suppliers', authMiddleware(['admin', 'engineer', 'proje
 app.put('/api/materials/suppliers/:supplierId', authMiddleware(['admin', 'engineer', 'project manager']), async(req, res) => {
     const { supplierId } = req.params;
     const { name, address, contact_number, email } = req.body;
+    const userId = req.user.user_id;
+    const userRole = req.user.role;
     if (!name) {
         return failed(res, 400, 'Supplier name is required.');
     }
     try {
-        const success = await updateSupplier(res, supplierId, { name, address, contact_number, email });
-        if (success) {
+        const result = await updateSupplier(res, supplierId, { name, address, contact_number, email }, userId, userRole);
+        if (result.success) {
             res.status(200).json({ status: 'success', message: 'Supplier updated successfully.' });
         } else {
-            failed(res, 400, 'Failed to update supplier.');
+            failed(res, 403, result.message);
         }
     } catch (error) {
         failed(res, 500, `Database Error: ${error}`);
@@ -2436,12 +2543,14 @@ app.put('/api/materials/suppliers/:supplierId', authMiddleware(['admin', 'engine
 
 app.delete('/api/materials/suppliers/:supplierId', authMiddleware(['admin', 'engineer', 'project manager']), async(req, res) => {
     const { supplierId } = req.params;
+    const userId = req.user.user_id;
+    const userRole = req.user.role;
     try {
-        const success = await deleteSupplier(res, supplierId);
-        if (success) {
+        const result = await deleteSupplier(res, supplierId, userId, userRole);
+        if (result.success) {
             res.status(200).json({ status: 'success', message: 'Supplier deleted successfully.' });
         } else {
-            failed(res, 400, 'Failed to delete supplier.');
+            failed(res, 403, result.message);
         }
     } catch (error) {
         failed(res, 500, `Database Error: ${error}`);

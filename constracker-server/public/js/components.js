@@ -46,7 +46,17 @@ function showInputErr(inputField) {
 }
 
 export function validateInput(inputEl) {
-    if (inputEl.value.trim() === '') {
+    const isSelect = inputEl.tagName.toLowerCase() === 'select';
+    const value = inputEl.value;
+
+    let isEmpty;
+    if (isSelect) {
+        isEmpty = !value || value === 'all' || value === '';
+    } else {
+        isEmpty = value.trim() === '';
+    }
+
+    if (isEmpty) {
         showInputErr(inputEl);
         return false;
     } else {

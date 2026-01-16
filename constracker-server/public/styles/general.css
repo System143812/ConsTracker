@@ -541,7 +541,7 @@ textarea {
     word-wrap: break-word;
 }
 
-.input-fields {
+.input-fields, select {
     display: flex;
     width: 100%;
     min-width: fit-content;

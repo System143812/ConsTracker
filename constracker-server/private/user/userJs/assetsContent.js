@@ -10,9 +10,14 @@ async function createAssetOverlay(refreshCallback) {
 
     const form = document.createElement('form');
     form.id = 'assetForm';
-    
+    form.classList.add('form-edit-forms');
+
     const assetItems = await fetchData('/api/assets/items');
-    if (assetItems === 'error' || assetItems.length === 0) {
+    if (assetItems === 'error') {
+        hideOverlayWithBg(overlayBackground);
+        return alertPopup('error', 'Failed to load asset types.');
+    }
+    if (assetItems.length === 0) {
         overlayBody.innerHTML = '<p>No items marked as "asset" found. Please create an asset-type item first in the Materials section.</p>';
         const closeButton = createButton('closeOverlayBtn', 'wide-buttons', 'Close');
         closeButton.addEventListener('click', () => hideOverlayWithBg(overlayBackground));
@@ -23,10 +28,13 @@ async function createAssetOverlay(refreshCallback) {
     const projects = await fetchData('/api/selection/project');
     if (projects === 'error') {
         hideOverlayWithBg(overlayBackground);
-        return;
+        return alertPopup('error', 'Failed to load projects.');
     }
 
+    // Asset Type Select
+    const itemSelectContainer = div('assetItemContainer', 'input-box-containers');
     const itemLabel = document.createElement('label');
+    itemLabel.className = 'input-labels';
     itemLabel.textContent = 'Asset Type';
     const itemSelect = document.createElement('select');
     itemSelect.id = 'assetItem';
@@ -36,10 +44,16 @@ async function createAssetOverlay(refreshCallback) {
         option.textContent = item.item_name;
         itemSelect.append(option);
     });
+    const itemErrorSpan = span(null, 'error-messages');
+    itemErrorSpan.dataset.errMsg = 'Asset Type Required';
+    itemSelectContainer.append(itemLabel, itemSelect, itemErrorSpan);
 
-    const serialInput = createInput('text', 'serial_number', 'serialNumber', '', 'Serial Number');
+    const serialInput = createInput('text', 'edit', 'Serial Number', 'serialNumber', 'serial_number', '', 'Enter serial number');
 
+    // Condition Select
+    const conditionSelectContainer = div('conditionContainer', 'input-box-containers');
     const conditionLabel = document.createElement('label');
+    conditionLabel.className = 'input-labels';
     conditionLabel.textContent = 'Condition';
     const conditionSelect = document.createElement('select');
     conditionSelect.id = 'conditionStatus';
@@ -49,8 +63,14 @@ async function createAssetOverlay(refreshCallback) {
         o.textContent = s.charAt(0).toUpperCase() + s.slice(1);
         conditionSelect.append(o);
     });
+    const conditionErrorSpan = span(null, 'error-messages');
+    conditionErrorSpan.dataset.errMsg = 'Condition Required';
+    conditionSelectContainer.append(conditionLabel, conditionSelect, conditionErrorSpan);
 
+    // Usage Status Select
+    const usageSelectContainer = div('usageContainer', 'input-box-containers');
     const usageLabel = document.createElement('label');
+    usageLabel.className = 'input-labels';
     usageLabel.textContent = 'Usage Status';
     const usageSelect = document.createElement('select');
     usageSelect.id = 'usageStatus';
@@ -60,8 +80,14 @@ async function createAssetOverlay(refreshCallback) {
         o.textContent = s.charAt(0).toUpperCase() + s.slice(1);
         usageSelect.append(o);
     });
+    const usageErrorSpan = span(null, 'error-messages');
+    usageErrorSpan.dataset.errMsg = 'Usage Status Required';
+    usageSelectContainer.append(usageLabel, usageSelect, usageErrorSpan);
 
+    // Project Select
+    const projectSelectContainer = div('projectContainer', 'input-box-containers');
     const projectLabel = document.createElement('label');
+    projectLabel.className = 'input-labels';
     projectLabel.textContent = 'Assign to Project';
     const projectSelect = document.createElement('select');
     projectSelect.id = 'project';
@@ -75,42 +101,60 @@ async function createAssetOverlay(refreshCallback) {
         o.textContent = p.name;
         projectSelect.append(o);
     });
+    const projectErrorSpan = span(null, 'error-messages'); // Not strictly required, but good for consistency
+    projectSelectContainer.append(projectLabel, projectSelect, projectErrorSpan);
 
-    const inspectedInput = createInput('date', 'last_inspected_at', 'lastInspectedAt', '', 'Last Inspected');
+    const inspectedInput = createInput('date', 'edit', 'Last Inspected', 'lastInspectedAt', 'last_inspected_at', '');
 
-    const submitButton = createButton('submitAsset', 'solid-buttons', 'Add Asset');
-    submitButton.type = 'submit';
+    const footer = div(null, 'create-form-footers');
+    const submitButton = createButton('submitAsset', 'wide-buttons', 'Add Asset');
+    const cancelButton = createButton('closeOverlayBtn', 'wide-buttons', 'Cancel');
+    cancelButton.addEventListener('click', () => hideOverlayWithBg(overlayBackground));
+    footer.append(cancelButton, submitButton);
 
-    form.addEventListener('submit', async (e) => {
+    submitButton.addEventListener('click', async (e) => {
         e.preventDefault();
+        
+        let isValid = true;
+        if (!validateInput(itemSelect)) isValid = false;
+        if (!validateInput(serialInput.querySelector('input'))) isValid = false;
+        if (!validateInput(conditionSelect)) isValid = false;
+        if (!validateInput(usageSelect)) isValid = false;
+        // Project and inspected date are optional
+
+        if (!isValid) {
+            alertPopup('error', 'Please fill in all required fields.');
+            return;
+        }
+
         const assetData = {
-            item_id: document.getElementById('assetItem').value,
-            serial_number: document.getElementById('serialNumber').value,
-            condition_status: document.getElementById('conditionStatus').value,
-            usage_status: document.getElementById('usageStatus').value,
-            project_id: document.getElementById('project').value || null,
-            last_inspected_at: document.getElementById('lastInspectedAt').value || null,
+            item_id: itemSelect.value,
+            serial_number: serialInput.querySelector('input').value,
+            condition_status: conditionSelect.value,
+            usage_status: usageSelect.value,
+            project_id: projectSelect.value || null,
+            last_inspected_at: inspectedInput.querySelector('input').value || null,
         };
 
-        const result = await fetchData('/api/assets', {
+        const result = await fetch('/api/assets', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(assetData)
         });
+        
+        const responseData = await result.json();
 
-        if (result.status === 'success') {
+        if (result.ok) {
+            alertPopup('success', responseData.message);
             hideOverlayWithBg(overlayBackground);
             if (refreshCallback) refreshCallback();
         } else {
-            console.error('Failed to create asset:', result);
+            alertPopup('error', responseData.message || 'Failed to create asset.');
         }
     });
 
-    form.append(itemLabel, itemSelect, serialInput, conditionLabel, conditionSelect, usageLabel, usageSelect, projectLabel, projectSelect, inspectedInput, submitButton);
+    form.append(itemSelectContainer, serialInput, conditionSelectContainer, usageSelectContainer, projectSelectContainer, inspectedInput, footer);
     overlayBody.append(form);
-    const closeButton = createButton('closeOverlayBtn', 'wide-buttons', 'Cancel');
-    closeButton.addEventListener('click', () => hideOverlayWithBg(overlayBackground));
-    overlayBody.append(closeButton);
 }
 
 

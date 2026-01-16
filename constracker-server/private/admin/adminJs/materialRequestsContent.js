@@ -1,8 +1,19 @@
 import { fetchData } from "/js/apiURL.js";
-import { div, span, createButton, createFilterContainer, createPaginationControls, createInput, createItemSearch, createFilterInput } from "/js/components.js";
+import { div, span, createButton, createFilterContainer, createPaginationControls, createInput, createItemSearch, createFilterInput, createSelect } from "/js/components.js";
 import { showEmptyPlaceholder, warnType } from "/js/popups.js";
 import { createOverlayWithBg, hideOverlayWithBg, showOverlayWithBg } from "/mainJs/overlays.js";
 import { dateFormatting, formatString } from "/js/string.js";
+
+function validateFilterInput(filterInput) {
+    const value = filterInput.dataset.value;
+    if (!value || value === 'all' || value === '') {
+        filterInput.classList.add('error');
+        return false;
+    } else {
+        filterInput.classList.remove('error');
+        return true;
+    }
+}
 
 async function createMaterialRequestOverlay(refreshCallback) {
     const { overlayBackground, overlayHeader, overlayBody } = createOverlayWithBg();
@@ -31,11 +42,68 @@ async function createMaterialRequestOverlay(refreshCallback) {
     const supplierSelect = createFilterInput('select', 'dropdown', 'requestSupplier', 'supplier_id', 'all', 'Select a supplier', null, 'single', 1, suppliers);
     supplierSelect.style.display = 'none'; // Initially hidden
 
-    requestTypeSelect.querySelector('.dropdown-input').addEventListener('change', () => {
+    requestTypeSelect.addEventListener("click", () => {
         if (requestTypeSelect.dataset.value === 'supplier') {
             supplierSelect.style.display = 'block';
         } else {
             supplierSelect.style.display = 'none';
+        }
+    });
+
+    // --- Category and Unit Selection for Material Request ---
+    const categories = await fetchData('/api/materials/categories');
+    const units = await fetchData('/api/materials/units');
+    
+    if (categories === 'error' || units === 'error') {
+        hideOverlayWithBg(overlayBackground);
+        return alertPopup('error', 'Failed to load material data.');
+    }
+
+    const { container: categorySelectContainer, select: categorySelect } = createSelect('requestCategorySelect', 'Category (Filter)', null, null, 'all', categories);
+    const { container: unitSelectContainer, select: unitSelect } = createSelect('requestUnitSelect', 'Unit (Filter)', null, null, 'all', units);
+    
+    // Initially hide unit select
+    unitSelectContainer.style.display = 'none';
+
+    // Add category change listener for dynamic unit visibility and population
+    categorySelect.addEventListener('change', async (e) => {
+        const selectedCategoryId = categorySelect.dataset.value;
+        
+        if (!selectedCategoryId || selectedCategoryId === 'all') {
+            // Hide unit select and reset it completely
+            unitSelectContainer.style.display = 'none';
+            unitSelect.innerHTML = '<option value="all">Select Unit</option>';
+            unitSelect.value = 'all';
+            unitSelect.dataset.value = 'all';
+        } else {
+            // Fetch units for the selected category
+            const categoryUnits = await fetchData(`/api/materials/categories/${selectedCategoryId}/units`);
+            
+            if (categoryUnits !== 'error' && Array.isArray(categoryUnits) && categoryUnits.length > 0) {
+                // Clear existing options
+                unitSelect.innerHTML = '<option value="all">Select Unit</option>';
+                
+                // Populate with category-specific units
+                categoryUnits.forEach(unit => {
+                    const option = document.createElement('option');
+                    option.value = unit.id;
+                    option.innerText = unit.name;
+                    unitSelect.appendChild(option);
+                });
+                
+                // Reset to first option (blank/select)
+                unitSelect.value = 'all';
+                unitSelect.dataset.value = 'all';
+                
+                // Show unit select only if units exist
+                unitSelectContainer.style.display = 'block';
+            } else {
+                // Hide unit select if category has no units
+                unitSelectContainer.style.display = 'none';
+                unitSelect.innerHTML = '<option value="all">Select Unit</option>';
+                unitSelect.value = 'all';
+                unitSelect.dataset.value = 'all';
+            }
         }
     });
     
@@ -82,6 +150,23 @@ async function createMaterialRequestOverlay(refreshCallback) {
     const submitBtn = createButton('submitRequestBtn', 'wide-buttons solid-buttons', 'Submit Request');
     
     const handleSubmit = async (status) => {
+        let isValid = true;
+        if (!validateFilterInput(projectSelect)) isValid = false;
+        if (!validateFilterInput(requestTypeSelect)) isValid = false;
+        
+        if (requestTypeSelect.dataset.value === 'supplier') {
+            if (!validateFilterInput(supplierSelect)) isValid = false;
+        }
+
+        if (requestedItems.length === 0) {
+            isValid = false;
+        }
+
+        if (!isValid) {
+            alertPopup('error', 'Please fill all required fields and add at least one item.');
+            return;
+        }
+        
         const payload = {
             project_id: projectSelect.dataset.value,
             request_type: requestTypeSelect.dataset.value,
@@ -90,24 +175,20 @@ async function createMaterialRequestOverlay(refreshCallback) {
             status: status
         };
 
-        if (!payload.project_id || !payload.request_type || (payload.request_type === 'supplier' && !payload.supplier_id) || payload.items.length === 0) {
-            alert('Please fill all required fields and add at least one item.');
-            return;
-        }
-
-        const result = await fetchData('/api/material-requests', {
+        const result = await fetch('/api/material-requests', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
 
-        if (result.status === 'success') {
+        if (result.ok) {
+            const responseData = await result.json();
+            alertPopup('success', responseData.message || 'Request successfully created!');
             hideOverlayWithBg(overlayBackground);
             if (refreshCallback) refreshCallback();
-            alert('Request successfully created!');
         } else {
-            console.error('Failed to create request:', result);
-            alert('Failed to create request.');
+            const errorData = await result.json();
+            alertPopup('error', errorData.message || 'Failed to create request.');
         }
     };
 
@@ -115,7 +196,7 @@ async function createMaterialRequestOverlay(refreshCallback) {
     submitBtn.addEventListener('click', () => handleSubmit('requested'));
 
     footer.append(saveDraftBtn, submitBtn);
-    form.append(projectSelect, requestTypeSelect, supplierSelect, itemsHeader, itemsContainer, addItemBtn, footer);
+    form.append(projectSelect, requestTypeSelect, supplierSelect, categorySelectContainer, unitSelectContainer, itemsHeader, itemsContainer, addItemBtn, footer);
     overlayBody.append(form);
 
     renderRequestedItems(); // Initial render
@@ -248,20 +329,23 @@ async function showMaterialRequestDetails(requestId, requestCode, refreshCallbac
         });
 
         const declineButton = createButton('declineRequestBtn', 'danger-buttons', 'Decline');
-        declineButton.addEventListener('click', async () => {
+        declineButton.addEventListener('click', () => {
             const remarks = document.getElementById('remarks').value;
-            const result = await fetchData(`/api/material-requests/${requestId}/decline`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ remarks })
-            });
+            showDeleteConfirmation('Are you sure you want to decline this request?', async () => {
+                const result = await fetchData(`/api/material-requests/${requestId}/decline`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ remarks })
+                });
 
-            if (result.status === 'success') {
-                hideOverlayWithBg(overlayBackground);
-                if (refreshCallback) refreshCallback();
-            } else {
-                console.error('Failed to decline request:', result);
-            }
+                if (result.status === 'success') {
+                    hideOverlayWithBg(overlayBackground);
+                    if (refreshCallback) refreshCallback();
+                    alertPopup('success', 'Request declined successfully.');
+                } else {
+                    alertPopup('error', 'Failed to decline request.');
+                }
+            });
         });
 
         actionsContainer.append(remarksInput, approveButton, declineButton);
@@ -430,12 +514,16 @@ function createDeliveryOverlay(requestId, requestCode, refreshCallback) {
     overlayHeader.innerText = `Record Delivery for Request ${requestCode}`;
 
     const form = document.createElement('form');
+    form.id = 'deliveryForm';
+    form.classList.add('form-edit-forms');
 
-    const deliveredByInput = createInput('text', 'delivered_by', 'deliveredBy', '', 'Delivered By');
-    const deliveryDateInput = createInput('date', 'delivery_date', 'deliveryDate', '', 'Delivery Date');
-    
+    const deliveredByInput = createInput('text', 'edit', 'Delivered By', 'deliveredBy', 'delivered_by', '', 'Enter name of delivery person');
+    const deliveryDateInput = createInput('date', 'edit', 'Delivery Date', 'deliveryDate', 'delivery_date', '');
+
+    const statusContainer = div(null, 'input-box-containers');
     const statusLabel = document.createElement('label');
     statusLabel.textContent = 'Delivery Status';
+    statusLabel.className = 'input-labels';
     const deliveryStatusSelect = document.createElement('select');
     deliveryStatusSelect.id = 'deliveryStatus';
     const statuses = ['partial', 'complete'];
@@ -445,42 +533,54 @@ function createDeliveryOverlay(requestId, requestCode, refreshCallback) {
         option.textContent = status.charAt(0).toUpperCase() + status.slice(1);
         deliveryStatusSelect.append(option);
     });
-    
-    const submitButton = createButton('submitDelivery', 'solid-buttons', 'Submit');
+    const statusErrorSpan = span(null, 'error-messages');
+    statusErrorSpan.dataset.errMsg = 'Status Required';
+    statusContainer.append(statusLabel, deliveryStatusSelect, statusErrorSpan);
+
+    const footer = div(null, 'create-form-footers');
+    const submitButton = createButton('submitDelivery', 'wide-buttons', 'Submit');
+    const cancelButton = createButton('cancelDelivery', 'wide-buttons', 'Cancel');
+    cancelButton.addEventListener('click', () => hideOverlayWithBg(overlayBackground));
+    footer.append(cancelButton, submitButton);
+
     submitButton.addEventListener('click', async (e) => {
         e.preventDefault();
-        const deliveryData = {
-            delivered_by: document.getElementById('deliveredBy').value,
-            delivery_date: document.getElementById('deliveryDate').value,
-            delivery_status: document.getElementById('deliveryStatus').value
-        };
+        
+        let isValid = true;
+        if (!validateInput(deliveredByInput.querySelector('input'))) isValid = false;
+        if (!validateInput(deliveryDateInput.querySelector('input'))) isValid = false;
+        if (!validateInput(deliveryStatusSelect)) isValid = false;
 
-        if (!deliveryData.delivered_by || !deliveryData.delivery_date) {
-            // handle error - maybe replace with a popup
-            console.error("Delivery person and date are required.");
+        if (!isValid) {
+            alertPopup('error', 'Please fill in all required fields.');
             return;
         }
 
-        const result = await fetchData(`/api/material-requests/${requestId}/deliveries`, {
+        const deliveryData = {
+            delivered_by: deliveredByInput.querySelector('input').value,
+            delivery_date: deliveryDateInput.querySelector('input').value,
+            delivery_status: deliveryStatusSelect.value
+        };
+
+        const result = await fetch(`/api/material-requests/${requestId}/deliveries`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(deliveryData)
         });
 
-        if (result.status === 'success') {
+        if (result.ok) {
+            const responseData = await result.json();
+            alertPopup('success', responseData.message || 'Delivery recorded successfully!');
             hideOverlayWithBg(overlayBackground);
             if (refreshCallback) refreshCallback();
         } else {
-            console.error('Failed to record delivery:', result);
+            const errorData = await result.json();
+            alertPopup('error', errorData.message || 'Failed to record delivery.');
         }
     });
 
-    form.append(deliveredByInput, deliveryDateInput, statusLabel, deliveryStatusSelect, submitButton);
+    form.append(deliveredByInput, deliveryDateInput, statusContainer, footer);
     overlayBody.append(form);
-
-    const closeButton = createButton('closeOverlayBtn', 'wide-buttons', 'Cancel');
-    closeButton.addEventListener('click', () => hideOverlayWithBg(overlayBackground));
-    overlayBody.append(closeButton);
 }
 
 export async function generateMaterialRequestsContent(role) {

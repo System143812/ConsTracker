@@ -1023,9 +1023,8 @@ body {
 #partiallyVerifiedIcon {
     background-image: url('../assets/icons/work-in-progress.png');
 }
-
-#disputedRequestsIcon {
-    background-image: url('../assets/icons/approved.png');
+#lowInventoryStocksIcon {
+    background-image: url('../assets/icons/warningBlack.png');
 }
 
 .card-content {
@@ -1234,7 +1233,7 @@ body {
     display: flex;
     flex-direction: column;
     flex: 1;
-    max-height: fit-content;
+    min-width: 200px; 
     text-align: center;
     padding: 1rem;
     gap: 0.5rem;

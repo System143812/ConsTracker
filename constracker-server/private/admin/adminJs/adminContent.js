@@ -552,11 +552,11 @@ async function dashboardSummaryCards() {
             info: "No partially verified requests",
             color: "#2196F3" // blue
         },
-        disputedRequests: {
-            title: "disputedRequests",
+        lowInventoryStocks: {
+            title: "lowInventoryStocks",
             data: "-",
-            info: "No disputed requests",
-            color: "#F44336" // red
+            info: "No projects with low inventory",
+            color: "#E91E63" // pink
         }
     };
 
@@ -572,7 +572,7 @@ async function dashboardSummaryCards() {
         if(cardData.pending_requests > 0) modifyCardData(dashboardCardData['pendingRequest'], cardData.pending_requests, `Material request awaiting for approval`); 
         if(cardData.awaiting_deliveries > 0) modifyCardData(dashboardCardData['awaitingDeliveries'], cardData.awaiting_deliveries, `Requests awaiting delivery`);
         if(cardData.partially_verified > 0) modifyCardData(dashboardCardData['partiallyVerified'], cardData.partially_verified, `Partially verified requests`);
-        if(cardData.disputed_requests > 0) modifyCardData(dashboardCardData['disputedRequests'], cardData.disputed_requests, `Disputed requests`);
+        if(cardData.low_inventory_projects > 0) modifyCardData(dashboardCardData['lowInventoryStocks'], cardData.low_inventory_projects, `Projects with low stock`);
     }
 
     dashboardSummaryCards.append(
@@ -580,7 +580,7 @@ async function dashboardSummaryCards() {
         createSummaryCards(dashboardCardData['pendingRequest']),
         createSummaryCards(dashboardCardData['awaitingDeliveries']),
         createSummaryCards(dashboardCardData['partiallyVerified']),
-        createSummaryCards(dashboardCardData['disputedRequests'])
+        createSummaryCards(dashboardCardData['lowInventoryStocks'])
     );
     return dashboardSummaryCards;
 }
