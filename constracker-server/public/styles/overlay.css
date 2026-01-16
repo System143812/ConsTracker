@@ -23,7 +23,7 @@
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    background-color: #f0f0f0;
+    background-color: var(--white-background);
     border-radius: 5px;
     max-width: 70%;
     max-height: 80%;
@@ -74,7 +74,7 @@
     padding: 1.5rem;
     gap: 1rem;
     border-radius: 10px;
-    background-color: #f0f0f0;
+    background-color: var(--white-background);
     box-shadow: var(--btn-shadow);
     z-index: 1;
     transition: all 0.15s ease;
@@ -517,3 +517,71 @@
 }
 
 
+
+
+/* Overlay sizing & header utilities */
+.overlay-containers.modal-lg {
+    width: min(720px, 92vw);
+    min-width: 520px;
+    border-radius: 12px;
+    box-shadow: var(--btn-shadow);
+}
+@media (max-width: 640px) {
+    .overlay-containers.modal-lg {
+        min-width: 92vw;
+    }
+}
+
+.overlay-header-flex {
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+}
+
+.overlay-title-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.overlay-title {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--default-black-color);
+}
+
+.overlay-subtitle {
+    font-size: 11px;
+    color: var(--grayed-text);
+}
+
+.overlay-close-btn {
+    border: none;
+    background: transparent;
+    font-size: 26px;
+    line-height: 1;
+    cursor: pointer;
+    color: var(--grayed-text);
+    padding: 0 0.25rem;
+}
+.overlay-close-btn:hover {
+    color: var(--default-black-color);
+}
+
+.overlay-action-row {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    padding-top: 0.9rem;
+    margin-top: 0.25rem;
+    border-top: solid var(--light-border) 1px;
+}
+
+.personnel-add-form .input-fields {
+    padding: 0.75rem 0.85rem;
+}
+.personnel-add-form .solid-buttons,
+.personnel-add-form .glass-buttons {
+    padding: 0.65rem 1rem;
+    border-radius: 14px;
+}

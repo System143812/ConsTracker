@@ -186,6 +186,15 @@
     white-space: nowrap;
 }
 
+/* Utility: force white text (used by some buttons that pass a 'white' class) */
+.white {
+    color: #ffffff !important;
+}
+
+.white .btn-texts {
+    color: #ffffff !important;
+}
+
 .empty-containers {
     display: flex;
     flex: 1;
@@ -930,3 +939,47 @@ input[type='date'] {
     }
 }
 
+
+
+/* Theme overrides (user settings) */
+body.theme-dark {
+    --default-black-text: rgba(226, 232, 240, 0.92);
+    --default-black-color: rgba(248, 250, 252, 0.96);
+    --grayed-text: rgba(148, 163, 184, 0.95);
+    --white-ishy-text: rgba(248, 250, 252, 0.96);
+    --white-background: rgba(15, 23, 42, 1);
+    --white-transparent: rgba(15, 23, 42, 0.35);
+    --light-blue-background: rgba(30, 41, 59, 0.9);
+    --light-border: rgba(148, 163, 184, 0.22);
+    --content-border: rgba(148, 163, 184, 0.22);
+    --gray-low-opacity: rgba(148, 163, 184, 0.12);
+    --flexible-color: rgba(0, 0, 0, 0.45);
+    --overlay-background: rgba(2, 6, 23, 0.78);
+}
+
+/* In dark mode, invert monochrome icon assets (sidebar/buttons) */
+body.theme-dark .icons,
+body.theme-dark .icons-with-bg,
+body.theme-dark .tab-icons,
+body.theme-dark .btn-icons,
+body.theme-dark .sidebar-big-icon,
+body.theme-dark .empty-placeholders {
+    filter: invert(1) hue-rotate(180deg) brightness(1.1);
+}
+
+/* Filter button label should remain readable in light mode */
+#filterBtnText {
+    color: var(--default-black-text);
+}
+
+body.theme-dark #filterBtnText {
+    color: var(--white-ishy-text);
+}
+
+/* Avatar rendering */
+#profileIcon.has-avatar {
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    color: transparent;
+}

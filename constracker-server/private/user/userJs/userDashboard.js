@@ -6,7 +6,7 @@ import { createTab, sidebarInitEvents, createProjectsTab, noProjectTabPlaceholde
 import { alertPopup } from "/js/popups.js";
 import { formatString } from "/js/string.js";
 import { displayUserContents } from "/user/userContent.js";
-
+import { initAndApplyUserPreferences, applyAvatarToElement } from "/mainJs/settings.js";
 const dateTime = new Date();
 const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -32,6 +32,7 @@ const sidebarOverlay = document.getElementById('sidebarOverlay');
 const brandLogo = document.getElementById('brandLogo');
 const logoutBtn = document.getElementById('logoutTab');
 let currentTab = 'dashboard';
+let userSettings = null;
 
 function noProjectBodyPlaceholder() {
     const noProjectBodyContainer = document.createElement('div');
@@ -81,7 +82,8 @@ async function getProfileData() {
     const data = await fetchData('/profile');
     if(data === 'error') return;
     const profileIconAcronym = ((data.full_name.match(/\b\w/g).slice(0, 2)).join(""));
-    profileIcon.innerText = profileIconAcronym;
+    const userSettings = await initAndApplyUserPreferences();
+    applyAvatarToElement(profileIcon, userSettings, profileIconAcronym);
     profileName.innerText = data.full_name;
     if(data.role === 'engineer') roleIcon.classList.add('engineer');
     if(data.role === 'project manager') roleIcon.classList.add('manager');
@@ -125,6 +127,7 @@ async function getAccessLevel(role) {
 window.onload = async() => {
     try {
         await initListeners();
+    userSettings = await initAndApplyUserPreferences();
         await getProfileData();
     } catch (error) {
         console.error(`Error Occured: ${error}`);

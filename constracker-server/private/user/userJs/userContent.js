@@ -1,3 +1,4 @@
+import { renderSettingsPage } from "/mainJs/settings.js";
 import { fetchData, fetchPostJson } from "/js/apiURL.js";
 import { formatString, dateFormatting } from "/js/string.js";
 import { alertPopup, warnType, showEmptyPlaceholder } from "/js/popups.js";
@@ -1374,10 +1375,18 @@ const tabContents = {
         generateGraphs: async() => ''
     },
     settings: {
-        generateContent: async(role) => '',
+        generateContent: async(role) => await generateSettingsContent(role),
         generateGraphs: async() => ''
     }
 }
+
+async function generateSettingsContent() {
+    const settingsBodyContent = document.getElementById('settingsBodyContent');
+    if (!settingsBodyContent) return;
+    settingsBodyContent.innerHTML = '';
+    await renderSettingsPage(settingsBodyContent);
+}
+
 
 export async function displayUserContents(tabName, tabType, role) {
     let bodyContainer;

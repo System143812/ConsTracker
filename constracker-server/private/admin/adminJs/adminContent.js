@@ -2,7 +2,12 @@ import { fetchData, fetchPostJson } from "/js/apiURL.js";
 import { formatString, dateFormatting } from "/js/string.js";
 import { alertPopup, warnType, showEmptyPlaceholder } from "/js/popups.js";
 import { div, span, button, createButton, createFilterContainer, createPaginationControls, createInput, createFilterInput, editFormButton, validateInput } from "/js/components.js";
-import { createMilestoneOl, milestoneFullOl, showLogDetailsOverlay, createOverlayWithBg, hideOverlayWithBg, showDeleteConfirmation, showOverlayWithBg } from "/mainJs/overlays.js";
+import { renderSettingsPage } from "/mainJs/settings.js";
+// Fix: Combine these into one line and ensure the path is correct
+import { createMilestoneOl, milestoneFullOl, showLogDetailsOverlay, createOverlayWithBg, hideOverlayWithBg, showDeleteConfirmation, showOverlayWithBg as overlayShow } from "/mainJs/overlays.js";
+// Update this line at the top of adminContent.js
+let allPersonnel = [];
+
 
 const defaultImageBackgroundColors = [
     '#B388EB', '#FFD180', '#80CBC4', '#E1BEE7', '#C5E1A5',
@@ -1055,11 +1060,7 @@ const tabContents = {
         generateGraphs: async() => await initDashboardGraphs()
     },
     inventory: {
-        generateContent: async function renderInventory(projectId, role, refreshActiveTabContentFn) {
-            const inventorySectionContainer = div('inventorySectionContainer');
-            inventorySectionContainer.innerText = 'Inventory Content for Project: ' + projectId + ' (Role: ' + role + ')'; // Example with parameters
-            return inventorySectionContainer;
-        },
+        generateContent: async(role) => await generateInventoryContent(role),
         generateGraphs: async() => ''
     },
     logs: {
@@ -1083,7 +1084,7 @@ const tabContents = {
         generateGraphs: async() => ''
     },
     settings: {
-        generateContent: async() => '',
+        generateContent: async() => await generateSettingsContent(),
         generateGraphs: async() => ''
     }
 }
@@ -1135,6 +1136,14 @@ async function generatePersonnelContent() {
     personnelBodyContent.innerHTML = '';
     showEmptyPlaceholder('/assets/icons/personnel.png', personnelBodyContent, null, "Personnel Content Coming Soon");
 }
+
+async function generateSettingsContent() {
+    const settingsBodyContent = document.getElementById('settingsBodyContent');
+    if (!settingsBodyContent) return;
+    settingsBodyContent.innerHTML = '';
+    await renderSettingsPage(settingsBodyContent);
+}
+
 
 export async function renderPersonnel(params) {
     const workerSectionContainer = div('workerSectionContainer', 'worker-section');
@@ -1265,14 +1274,38 @@ export async function displayPersonnel(container, parentId, role) {
     // --- 4. THE FILTER BAR ---
     const filterBar = await createFilterContainer(
         (urlParams) => {
-            const keyword = urlParams.get('itemName') || ''; 
+            // createFilterContainer's name search writes to the `name` param.
+            const rawKeyword = urlParams.get('name') || 'all';
+            const keyword = rawKeyword === 'all' ? '' : rawKeyword;
+
+            // Sort is optional for this screen; default to A-Z.
             const sort = urlParams.get('sort') || 'asc';
+
+            // Status should be single-select: all | active | inactive.
             const status = urlParams.get('status') || 'all';
+
             renderPersonnelCards(keyword, sort, status);
         },
-        'Search personnel by name...', 
-        { name: true, sort: true, status: true },
-        'itemName', 
+        'Search personnel by name...',
+        {
+            name: true,
+            sort: {
+                default: 'asc',
+                options: [
+                    { id: 'asc', label: 'Alphabetical (A-Z)' },
+                    { id: 'desc', label: 'Alphabetical (Z-A)' }
+                ]
+            },
+            status: {
+                mode: 'single',
+                options: [
+                    { id: 'all', label: 'All' },
+                    { id: 'active', label: 'Active' },
+                    { id: 'inactive', label: 'Inactive' }
+                ]
+            }
+        },
+        'name',
         'asc'
     );
 
@@ -1289,6 +1322,8 @@ export async function displayPersonnel(container, parentId, role) {
 // Helper to create the Dribbble-like card
 function createPersonnelCard(user) {
     const card = div(null, 'personnel-card');
+    // Used by edit/terminate overlays to update the selected card in-place
+    card.dataset.userId = user.user_id;
     const nameParts = user.full_name ? user.full_name.trim().split(' ') : ["?"];
     const initials = nameParts.length > 1 
         ? (nameParts[0][0] + nameParts[nameParts.length - 1][0]).toUpperCase()
@@ -1315,11 +1350,13 @@ function createPersonnelCard(user) {
 }
 
 async function fetchAndRenderUsers(container) {
-    container.innerHTML = ""; // Clear current list
-    
+    // NOTE: This function is used to refresh the admin Personnel grid after add/edit/terminate.
+    // It must NOT wrap the existing grid inside another `.personnel-grid`, otherwise the layout
+    // can collapse into a single-column (vertical) list on desktop.
+
     try {
         const users = await fetchData('/api/users');
-        
+
         // Safety check: ensure users is an array
         if (!Array.isArray(users)) {
             console.error("Expected array from /api/users but got:", users);
@@ -1327,64 +1364,728 @@ async function fetchAndRenderUsers(container) {
             return;
         }
 
-        // Create the Dribbble-style Grid
-        const grid = div(null, 'personnel-grid');
-        
+        // Decide the render target: if the caller passes the grid container itself, render into it.
+        // Otherwise, create a grid child (for legacy callers).
+        let renderTarget = container;
+        const isGridContainer = container?.id === 'userListContainer' || container?.classList?.contains('personnel-grid');
+        if (!isGridContainer) {
+            container.innerHTML = '';
+            renderTarget = div(null, 'personnel-grid');
+            container.append(renderTarget);
+        } else {
+            container.classList.add('personnel-grid');
+            container.innerHTML = '';
+        }
+
         users.forEach(user => {
-            const card = div(null, 'personnel-card');
-
-            // 1. Generate Initials (First letter of first and last name)
-            // e.g. "Juan Dela Cruz" -> "JC"
-            const nameParts = user.full_name ? user.full_name.trim().split(' ') : ["?"];
-            const initials = nameParts.length > 1 
-                ? (nameParts[0][0] + nameParts[nameParts.length - 1][0]).toUpperCase()
-                : nameParts[0][0].toUpperCase();
-
-            // 2. Status Color (is_active is 1 or 0 in your DB)
-            const statusClass = user.is_active == 1 ? 'status-active' : 'status-inactive';
-
-            card.innerHTML = `
-                <div class="avatar-wrapper">
-                    <div class="personnel-avatar">${initials}</div>
-                    <div class="status-bubble ${statusClass}"></div>
-                </div>
-                <div class="personnel-info">
-                    <div class="personnel-name">${user.full_name || 'Unnamed User'}</div>
-                    <div class="personnel-role-tag">${formatString(user.role)}</div>
-                    <div class="personnel-email">${user.email}</div>
-                </div>
-                <div class="card-actions">
-                    <button class="btn-edit-card" onclick="editCredentials('${user.user_id}')">Edit Credentials</button>
-                    <button class="btn-terminate-card" onclick="terminatePersonnel('${user.user_id}')">Terminate</button>
-                </div>
-            `;
-            
-            grid.append(card);
+            // Reuse the same card builder used by the main Personnel renderer.
+            renderTarget.append(createPersonnelCard(user));
         });
-        
-        container.append(grid);
     } catch (error) {
         console.error("Error rendering users:", error);
         container.innerHTML = `<p style="color: red; padding: 20px;">Failed to load personnel.</p>`;
     }
 }
 
+// -----------------------------
+// Inventory / Assets / Reports / Analytics (Admin)
+// -----------------------------
+
+function createSectionActionsRow() {
+    const row = div('', 'filter-header');
+    row.style.display = 'flex';
+    row.style.flexWrap = 'wrap';
+    row.style.gap = '12px';
+    row.style.alignItems = 'center';
+    row.style.justifyContent = 'space-between';
+    row.style.marginBottom = '16px';
+    return row;
+}
+
+function createInlineControlContainer() {
+    const left = div('', 'filter-controls');
+    left.style.display = 'flex';
+    left.style.flexWrap = 'wrap';
+    left.style.gap = '10px';
+    left.style.alignItems = 'center';
+    return left;
+}
+
+function createSelectInput(id, labelText, options, selectedValue = '') {
+    const container = div(`${id}Container`, 'input-box-containers');
+    container.style.margin = '0';
+    container.style.minWidth = '220px';
+    const label = document.createElement('label');
+    label.className = 'input-labels';
+    label.htmlFor = id;
+    label.innerText = labelText;
+    const select = document.createElement('select');
+    select.id = id;
+    select.className = 'input-fields edit';
+    select.innerHTML = options.map(o => `<option value="${o.value}">${o.label}</option>`).join('');
+    select.value = selectedValue;
+    container.append(label, select);
+    return { container, select };
+}
+
+function createGridContainer() {
+    const grid = div('', 'materials-grid');
+    // Reuse the same responsive grid the Materials section uses.
+    return grid;
+}
+
+function pill(text, type = 'good') {
+    const el = span('', 'material-status');
+    el.innerText = text;
+    if (type === 'low') warnType(el, 'solid', 'yellow');
+    if (type === 'good') warnType(el, 'solid', 'green');
+    if (type === 'danger') warnType(el, 'solid', 'red');
+    return el;
+}
+
+function createSimpleCardHeader(titleText, rightEl = null) {
+    const header = div('', 'material-title-status');
+    const title = span('', 'material-name');
+    title.innerText = titleText;
+    header.append(title);
+    if (rightEl) header.append(rightEl);
+    return header;
+}
+
+function createKeyValue(label, value) {
+    const item = div('', 'material-detail-item');
+    const k = span('', 'label');
+    k.innerText = label;
+    const v = span('', 'value');
+    v.innerText = value;
+    item.append(k, v);
+    return item;
+}
+
+async function generateInventoryContent() {
+    const inventoryBodyContent = document.getElementById('inventoryBodyContent');
+    inventoryBodyContent.innerHTML = '';
+
+    const actionsRow = createSectionActionsRow();
+    const leftControls = createInlineControlContainer();
+    const rightControls = createInlineControlContainer();
+    rightControls.style.justifyContent = 'flex-end';
+
+    // Project filter
+    const projects = await fetchData('/api/selection/project');
+    const projectOptions = [{ value: '', label: 'All Projects' }].concat(
+        Array.isArray(projects) ? projects.map(p => ({ value: String(p.id), label: p.name })) : []
+    );
+    const { container: projectSelectBox, select: projectSelect } = createSelectInput('inventoryProjectSelect', 'Project', projectOptions);
+
+    const searchBox = document.createElement('input');
+    searchBox.type = 'text';
+    searchBox.className = 'input-fields edit';
+    searchBox.placeholder = 'Search material name...';
+    searchBox.style.minWidth = '260px';
+
+    const addBtn = createButton('inventoryAddBtn', 'solid-buttons white', 'Add Inventory Item', 'inventoryAddTxt');
+    addBtn.type = 'button';
+
+    leftControls.append(projectSelectBox);
+    leftControls.append(searchBox);
+    rightControls.append(addBtn);
+    actionsRow.append(leftControls, rightControls);
+
+    const grid = createGridContainer();
+    inventoryBodyContent.append(actionsRow, grid);
+
+    async function loadAndRender() {
+        const projectId = projectSelect.value || '';
+        const q = (searchBox.value || '').trim().toLowerCase();
+        const url = projectId ? `/api/inventory?project_id=${encodeURIComponent(projectId)}` : '/api/inventory';
+        const rows = await fetchData(url);
+        grid.innerHTML = '';
+
+        const data = Array.isArray(rows) ? rows : [];
+        const filtered = q ? data.filter(r => String(r.item_name || '').toLowerCase().includes(q)) : data;
+
+        if (filtered.length === 0) {
+            showEmptyPlaceholder('/assets/icons/inventory.png', grid, null, 'No inventory items found');
+            return;
+        }
+
+        filtered.forEach(r => {
+            const card = div('', 'material-card');
+            const imageContainer = div('', 'material-image-container');
+            imageContainer.classList.add('default-image-bg');
+
+            // Item image (if present)
+            if (r.image_url) {
+                let img;
+                if (r.image_url.length > 60 && !r.image_url.includes('-')) img = `/itemImages/${r.image_url}`;
+                else if (r.image_url !== 'constrackerWhite.svg') img = `/image/${r.image_url}`;
+                else img = `/assets/pictures/constrackerWhite.svg`;
+                imageContainer.style.backgroundImage = `url(${img})`;
+            }
+
+            const info = div('', 'material-info-container');
+            const statusPill = pill(r.status === 'low' ? 'LOW' : 'GOOD', r.status === 'low' ? 'low' : 'good');
+            const header = createSimpleCardHeader(r.item_name || 'Item', statusPill);
+
+            const details = div('', 'material-details');
+            details.append(
+                createKeyValue('Project:', r.project_name || 'N/A'),
+                createKeyValue('Current:', `${r.current_amount ?? 0}`),
+                createKeyValue('Max:', `${r.max_capacity ?? 0}`),
+                createKeyValue('Min:', `${r.min_amount ?? 0}`)
+            );
+
+            const footer = div('', 'material-status-actions');
+            const actions = div('', 'material-actions-container');
+
+            const editBtn = span('', 'material-action-btn green-text');
+            editBtn.innerText = 'Edit';
+            editBtn.addEventListener('click', () => openInventoryOverlay('edit', r, loadAndRender));
+
+            const deleteBtn = span('', 'material-action-btn red-text');
+            deleteBtn.innerText = 'Remove';
+            deleteBtn.addEventListener('click', async () => {
+                const ok = confirm(`Remove ${r.item_name} from ${r.project_name}?`);
+                if (!ok) return;
+                const resp = await fetch(`/api/inventory/${r.inventory_id}`, { method: 'DELETE' });
+                const data = await resp.json().catch(() => ({}));
+                if (!resp.ok) return alertPopup('error', data?.message || 'Failed to remove inventory item');
+                alertPopup('success', 'Removed successfully');
+                loadAndRender();
+            });
+
+            actions.append(editBtn, deleteBtn);
+            footer.append(actions);
+
+            info.append(header, details, footer);
+            card.append(imageContainer, info);
+            grid.append(card);
+        });
+    }
+
+    async function openInventoryOverlay(mode, row, refreshFn) {
+        const isEdit = mode === 'edit';
+        const { overlayBackground, overlayContainer, overlayHeader, overlayBody } = createOverlayWithBg();
+        overlayContainer.classList.add('modal-lg');
+        overlayHeader.innerHTML = '';
+
+        const headerWrap = div('', 'overlay-header-containers overlay-header-flex');
+        const titleWrap = div('', 'overlay-title-wrap');
+        const title = span('', 'overlay-title');
+        const subtitle = span('', 'overlay-subtitle');
+        title.innerText = isEdit ? 'Edit Inventory Item' : 'Add Inventory Item';
+        subtitle.innerText = isEdit ? 'Update current stock and thresholds.' : 'Start tracking a material per project.';
+        titleWrap.append(title, subtitle);
+        const closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.className = 'overlay-close-btn';
+        closeBtn.setAttribute('aria-label', 'Close');
+        closeBtn.innerHTML = '&times;';
+        closeBtn.addEventListener('click', () => hideOverlayWithBg(overlayBackground));
+        headerWrap.append(titleWrap, closeBtn);
+        overlayHeader.append(headerWrap);
+
+        overlayBody.innerHTML = '';
+        const form = document.createElement('form');
+        form.className = 'form-edit-forms personnel-add-form';
+
+        // Project + Item selectors (Add only)
+        let projectSel;
+        let itemSel;
+
+        if (!isEdit) {
+            const projOptions = [{ value: '', label: 'Select a project...' }].concat(projectOptions.filter(o => o.value));
+            const projSelect = createSelectInput('invProjectId', 'Project', projOptions);
+            projectSel = projSelect.select;
+
+            const items = await fetchData('/api/selection/item');
+            const itemOptions = [{ value: '', label: 'Select a material...' }].concat(
+                Array.isArray(items) ? items.map(i => ({ value: String(i.id), label: i.name })) : []
+            );
+            const itemSelect = createSelectInput('invItemId', 'Material', itemOptions);
+            itemSel = itemSelect.select;
+            form.append(projSelect.container, itemSelect.container);
+        } else {
+            // In edit mode show the fixed identity as read-only fields
+            const proj = createInput('text', 'edit', 'Project', 'invProjectName', 'project_name', row.project_name || '', '', null, 255);
+            const item = createInput('text', 'edit', 'Material', 'invItemName', 'item_name', row.item_name || '', '', null, 255);
+            const projEl = proj.querySelector('input');
+            const itemEl = item.querySelector('input');
+            if (projEl) projEl.readOnly = true;
+            if (itemEl) itemEl.readOnly = true;
+            form.append(proj, item);
+        }
+
+        const currentInput = createInput('number', 'edit', 'Current Amount', 'invCurrent', 'current_amount', String(row?.current_amount ?? 0), '0', 0, 9999999);
+        const maxInput = createInput('number', 'edit', 'Max Capacity', 'invMax', 'max_capacity', String(row?.max_capacity ?? ''), 'e.g. 500', 1, 9999999);
+        const minInput = createInput('number', 'edit', 'Low Threshold (Min Amount)', 'invMin', 'min_amount', String(row?.min_amount ?? 0), 'e.g. 30', 0, 9999999);
+
+        const actions = div('', 'overlay-action-row');
+        const cancelBtn = createButton('invCancel', 'glass-buttons', 'Cancel', 'invCancelTxt');
+        const saveBtn = createButton('invSave', 'solid-buttons white', isEdit ? 'Save Changes' : 'Add Item', 'invSaveTxt');
+        cancelBtn.type = 'button';
+        saveBtn.type = 'button';
+        cancelBtn.addEventListener('click', () => hideOverlayWithBg(overlayBackground));
+        actions.append(cancelBtn, saveBtn);
+
+        form.append(currentInput, maxInput, minInput, actions);
+        overlayBody.append(form);
+        overlayShow(overlayBackground);
+
+        async function submit() {
+            const cur = Number(document.getElementById('invCurrent')?.value);
+            const max = Number(document.getElementById('invMax')?.value);
+            const min = Number(document.getElementById('invMin')?.value);
+            if (!Number.isFinite(cur) || cur < 0) return alertPopup('warn', 'Current amount must be 0 or greater');
+            if (!Number.isFinite(max) || max <= 0) return alertPopup('warn', 'Max capacity must be greater than 0');
+            if (!Number.isFinite(min) || min < 0) return alertPopup('warn', 'Min amount must be 0 or greater');
+
+            saveBtn.disabled = true;
+            try {
+                const endpoint = isEdit ? `/api/inventory/${row.inventory_id}` : '/api/inventory';
+                const payload = isEdit
+                    ? { current_amount: cur, max_capacity: max, min_amount: min }
+                    : { project_id: Number(projectSel?.value), item_id: Number(itemSel?.value), current_amount: cur, max_capacity: max, min_amount: min };
+
+                if (!isEdit) {
+                    if (!payload.project_id) return alertPopup('warn', 'Please select a project');
+                    if (!payload.item_id) return alertPopup('warn', 'Please select a material');
+                }
+
+                const resp = await fetch(endpoint, {
+                    method: isEdit ? 'PUT' : 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await resp.json().catch(() => ({}));
+                if (!resp.ok) throw new Error(data?.message || 'Request failed');
+                alertPopup('success', isEdit ? 'Inventory updated' : 'Inventory item added');
+                hideOverlayWithBg(overlayBackground);
+                refreshFn();
+            } catch (e) {
+                saveBtn.disabled = false;
+                alertPopup('error', e?.message || 'Failed');
+            }
+        }
+        saveBtn.addEventListener('click', submit);
+        form.addEventListener('submit', (e) => { e.preventDefault(); submit(); });
+    }
+
+    projectSelect.addEventListener('change', loadAndRender);
+    searchBox.addEventListener('input', () => loadAndRender());
+    addBtn.addEventListener('click', () => openInventoryOverlay('add', {}, loadAndRender));
+
+    await loadAndRender();
+}
+
 async function generateAssetsContent() {
     const assetsBodyContent = document.getElementById('assetsBodyContent');
     assetsBodyContent.innerHTML = '';
-    showEmptyPlaceholder('/assets/icons/inventory.png', assetsBodyContent, null, "Assets Content Coming Soon");
+
+    const actionsRow = createSectionActionsRow();
+    const leftControls = createInlineControlContainer();
+    const rightControls = createInlineControlContainer();
+    rightControls.style.justifyContent = 'flex-end';
+
+    const projects = await fetchData('/api/selection/project');
+    const projectOptions = [{ value: '', label: 'All Projects' }].concat(
+        Array.isArray(projects) ? projects.map(p => ({ value: String(p.id), label: p.name })) : []
+    );
+    const { container: projectSelectBox, select: projectSelect } = createSelectInput('assetsProjectSelect', 'Project', projectOptions);
+
+    const searchBox = document.createElement('input');
+    searchBox.type = 'text';
+    searchBox.className = 'input-fields edit';
+    searchBox.placeholder = 'Search asset name/tag...';
+    searchBox.style.minWidth = '260px';
+
+    const addBtn = createButton('assetsAddBtn', 'solid-buttons white', 'Add Asset', 'assetsAddTxt');
+    addBtn.type = 'button';
+
+    leftControls.append(projectSelectBox, searchBox);
+    rightControls.append(addBtn);
+    actionsRow.append(leftControls, rightControls);
+
+    const grid = createGridContainer();
+    assetsBodyContent.append(actionsRow, grid);
+
+    async function loadAndRender() {
+        const projectId = projectSelect.value || '';
+        const q = (searchBox.value || '').trim().toLowerCase();
+        const url = projectId ? `/api/assets?project_id=${encodeURIComponent(projectId)}` : '/api/assets';
+        const rows = await fetchData(url);
+        grid.innerHTML = '';
+        const data = Array.isArray(rows) ? rows : [];
+        const filtered = q
+            ? data.filter(r => (`${r.asset_name || ''} ${r.asset_tag || ''}`.toLowerCase().includes(q)))
+            : data;
+
+        if (filtered.length === 0) {
+            showEmptyPlaceholder('/assets/icons/inventory.png', grid, null, 'No assets found');
+            return;
+        }
+
+        filtered.forEach(r => {
+            const card = div('', 'material-card');
+            const imageContainer = div('', 'material-image-container');
+            imageContainer.classList.add('default-image-bg');
+            imageContainer.style.backgroundImage = `url(/assets/icons/assets.png)`;
+
+            const info = div('', 'material-info-container');
+            const statusText = String(r.status || 'available').toUpperCase().replace('_', ' ');
+            const statusPill = pill(statusText, r.status === 'maintenance' ? 'low' : (r.status === 'retired' ? 'danger' : 'good'));
+            const header = createSimpleCardHeader(r.asset_name || 'Asset', statusPill);
+
+            const details = div('', 'material-details');
+            details.append(
+                createKeyValue('Type:', r.asset_type || 'N/A'),
+                createKeyValue('Tag:', r.asset_tag || 'N/A'),
+                createKeyValue('Project:', r.project_name || 'Unassigned'),
+                createKeyValue('Value:', r.asset_value != null ? `₱${Number(r.asset_value).toLocaleString()}` : 'N/A')
+            );
+
+            const footer = div('', 'material-status-actions');
+            const actions = div('', 'material-actions-container');
+            const editBtn = span('', 'material-action-btn green-text');
+            editBtn.innerText = 'Edit';
+            editBtn.addEventListener('click', () => openAssetsOverlay('edit', r, loadAndRender));
+            const deleteBtn = span('', 'material-action-btn red-text');
+            deleteBtn.innerText = 'Delete';
+            deleteBtn.addEventListener('click', async () => {
+                const ok = confirm(`Delete asset: ${r.asset_name}?`);
+                if (!ok) return;
+                const resp = await fetch(`/api/assets/${r.asset_id}`, { method: 'DELETE' });
+                const data = await resp.json().catch(() => ({}));
+                if (!resp.ok) return alertPopup('error', data?.message || 'Failed to delete asset');
+                alertPopup('success', 'Asset deleted');
+                loadAndRender();
+            });
+            actions.append(editBtn, deleteBtn);
+            footer.append(actions);
+
+            info.append(header, details, footer);
+            card.append(imageContainer, info);
+            grid.append(card);
+        });
+    }
+
+    async function openAssetsOverlay(mode, row, refreshFn) {
+        const isEdit = mode === 'edit';
+        const { overlayBackground, overlayContainer, overlayHeader, overlayBody } = createOverlayWithBg();
+        overlayContainer.classList.add('modal-lg');
+        overlayHeader.innerHTML = '';
+
+        const headerWrap = div('', 'overlay-header-containers overlay-header-flex');
+        const titleWrap = div('', 'overlay-title-wrap');
+        const title = span('', 'overlay-title');
+        const subtitle = span('', 'overlay-subtitle');
+        title.innerText = isEdit ? 'Edit Asset' : 'Add Asset';
+        subtitle.innerText = 'Track and manage company assets across projects.';
+        titleWrap.append(title, subtitle);
+        const closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.className = 'overlay-close-btn';
+        closeBtn.setAttribute('aria-label', 'Close');
+        closeBtn.innerHTML = '&times;';
+        closeBtn.addEventListener('click', () => hideOverlayWithBg(overlayBackground));
+        headerWrap.append(titleWrap, closeBtn);
+        overlayHeader.append(headerWrap);
+
+        overlayBody.innerHTML = '';
+        const form = document.createElement('form');
+        form.className = 'form-edit-forms personnel-add-form';
+
+        const nameInput = createInput('text', 'edit', 'Asset Name', 'assetName', 'asset_name', row?.asset_name || '', 'e.g. Concrete Mixer', null, 255);
+        const typeInput = createInput('text', 'edit', 'Asset Type', 'assetType', 'asset_type', row?.asset_type || '', 'e.g. Equipment', null, 120);
+        const tagInput = createInput('text', 'edit', 'Asset Tag (optional)', 'assetTag', 'asset_tag', row?.asset_tag || '', 'e.g. EQ-0001', null, 120);
+
+        const statusOptions = [
+            { value: 'available', label: 'Available' },
+            { value: 'in_use', label: 'In Use' },
+            { value: 'maintenance', label: 'Maintenance' },
+            { value: 'retired', label: 'Retired' }
+        ];
+        const { container: statusBox, select: statusSelect } = createSelectInput('assetStatus', 'Status', statusOptions, row?.status || 'available');
+
+        const { container: projectBox, select: projectSelect2 } = createSelectInput(
+            'assetProject',
+            'Assigned Project',
+            [{ value: '', label: 'Unassigned' }].concat(projectOptions.filter(o => o.value)),
+            row?.project_id ? String(row.project_id) : ''
+        );
+
+        const purchaseInput = createInput('date', 'edit', 'Purchase Date', 'assetPurchaseDate', 'purchase_date', row?.purchase_date || '', '');
+        const valueInput = createInput('text', 'edit', 'Asset Value (₱)', 'assetValue', 'asset_value', row?.asset_value ?? '', '0.00', 0, 999999999.99, 'decimal', 'Minimum 0');
+        const notesInput = createInput('textarea', 'edit', 'Notes (optional)', 'assetNotes', 'notes', row?.notes || '', 'Add any notes...', null, 500);
+
+        const actions = div('', 'overlay-action-row');
+        const cancelBtn = createButton('assetCancel', 'glass-buttons', 'Cancel', 'assetCancelTxt');
+        const saveBtn = createButton('assetSave', 'solid-buttons white', isEdit ? 'Save Changes' : 'Add Asset', 'assetSaveTxt');
+        cancelBtn.type = 'button';
+        saveBtn.type = 'button';
+        cancelBtn.addEventListener('click', () => hideOverlayWithBg(overlayBackground));
+        actions.append(cancelBtn, saveBtn);
+
+        form.append(nameInput, typeInput, tagInput, statusBox, projectBox, purchaseInput, valueInput, notesInput, actions);
+        overlayBody.append(form);
+        overlayShow(overlayBackground);
+
+        async function submit() {
+            const payload = {
+                asset_name: String(document.getElementById('assetName')?.value || '').trim(),
+                asset_type: String(document.getElementById('assetType')?.value || '').trim(),
+                asset_tag: String(document.getElementById('assetTag')?.value || '').trim(),
+                status: statusSelect.value,
+                project_id: projectSelect2.value ? Number(projectSelect2.value) : null,
+                purchase_date: document.getElementById('assetPurchaseDate')?.value || null,
+                asset_value: String(document.getElementById('assetValue')?.value || '').trim(),
+                notes: String(document.getElementById('assetNotes')?.value || '').trim()
+            };
+            if (!payload.asset_name) return alertPopup('warn', 'Asset name is required');
+
+            saveBtn.disabled = true;
+            try {
+                const endpoint = isEdit ? `/api/assets/${row.asset_id}` : '/api/assets';
+                const resp = await fetch(endpoint, {
+                    method: isEdit ? 'PUT' : 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await resp.json().catch(() => ({}));
+                if (!resp.ok) throw new Error(data?.message || 'Request failed');
+                alertPopup('success', isEdit ? 'Asset updated' : 'Asset added');
+                hideOverlayWithBg(overlayBackground);
+                refreshFn();
+            } catch (e) {
+                saveBtn.disabled = false;
+                alertPopup('error', e?.message || 'Failed');
+            }
+        }
+        saveBtn.addEventListener('click', submit);
+        form.addEventListener('submit', (e) => { e.preventDefault(); submit(); });
+    }
+
+    projectSelect.addEventListener('change', loadAndRender);
+    searchBox.addEventListener('input', () => loadAndRender());
+    addBtn.addEventListener('click', () => openAssetsOverlay('add', {}, loadAndRender));
+
+    await loadAndRender();
 }
 
 async function generateReportsContent() {
     const reportsBodyContent = document.getElementById('reportsBodyContent');
     reportsBodyContent.innerHTML = '';
-    showEmptyPlaceholder('/assets/icons/logs.png', reportsBodyContent, null, "Reports Content Coming Soon");
+
+    const actionsRow = createSectionActionsRow();
+    const leftControls = createInlineControlContainer();
+    const rightControls = createInlineControlContainer();
+    rightControls.style.justifyContent = 'flex-end';
+
+    const projects = await fetchData('/api/selection/project');
+    const projectOptions = [{ value: '', label: 'All Projects' }].concat(
+        Array.isArray(projects) ? projects.map(p => ({ value: String(p.id), label: p.name })) : []
+    );
+    const { container: projectSelectBox, select: projectSelect } = createSelectInput('reportsProjectSelect', 'Project', projectOptions);
+
+    const users = await fetchData('/api/selection/user');
+    const userOptions = [{ value: '', label: 'All Users' }].concat(
+        Array.isArray(users) ? users.map(u => ({ value: String(u.id), label: u.name })) : []
+    );
+    const { container: userSelectBox, select: userSelect } = createSelectInput('reportsUserSelect', 'User', userOptions);
+
+    const searchBox = document.createElement('input');
+    searchBox.type = 'text';
+    searchBox.className = 'input-fields edit';
+    searchBox.placeholder = 'Search report title...';
+    searchBox.style.minWidth = '260px';
+
+    const refreshBtn = createButton('reportsRefreshBtn', 'glass-buttons', 'Refresh', 'reportsRefreshTxt');
+    refreshBtn.type = 'button';
+
+    leftControls.append(projectSelectBox, userSelectBox, searchBox);
+    rightControls.append(refreshBtn);
+    actionsRow.append(leftControls, rightControls);
+
+    const list = div('', 'logs-container');
+    reportsBodyContent.append(actionsRow, list);
+
+    async function loadAndRender() {
+        const qs = new URLSearchParams();
+        if (projectSelect.value) qs.set('project_id', projectSelect.value);
+        if (userSelect.value) qs.set('user_id', userSelect.value);
+        const url = `/api/reports${qs.toString() ? `?${qs.toString()}` : ''}`;
+        const rows = await fetchData(url);
+        const q = (searchBox.value || '').trim().toLowerCase();
+        list.innerHTML = '';
+        const data = Array.isArray(rows) ? rows : [];
+        const filtered = q ? data.filter(r => String(r.report_title || '').toLowerCase().includes(q)) : data;
+
+        if (filtered.length === 0) {
+            showEmptyPlaceholder('/assets/icons/logs.png', list, null, 'No reports found');
+            return;
+        }
+
+        filtered.forEach(r => {
+            const card = div('', 'log-card');
+            card.style.cursor = 'pointer';
+
+            const top = div('', 'log-card-top');
+            const name = div('', 'log-name');
+            name.innerText = r.report_title || 'Report';
+            const meta = div('', 'log-meta');
+            meta.innerText = `${r.created_by_name || 'User'} • ${r.project_name || 'No Project'} • ${dateFormatting(r.created_at, 'date')}`;
+            top.append(name, meta);
+
+            const snippet = div('', 'log-snippet');
+            const text = String(r.report_body || '');
+            snippet.innerText = text.length > 140 ? text.slice(0, 140) + '…' : text;
+
+            card.append(top, snippet);
+            card.addEventListener('click', () => openReportOverlay(r));
+            list.append(card);
+        });
+    }
+
+    function openReportOverlay(r) {
+        const { overlayBackground, overlayContainer, overlayHeader, overlayBody } = createOverlayWithBg();
+        overlayContainer.classList.add('modal-lg');
+        overlayHeader.innerHTML = '';
+
+        const headerWrap = div('', 'overlay-header-containers overlay-header-flex');
+        const titleWrap = div('', 'overlay-title-wrap');
+        const title = span('', 'overlay-title');
+        const subtitle = span('', 'overlay-subtitle');
+        title.innerText = r.report_title || 'Report';
+        subtitle.innerText = `${r.created_by_name || 'User'} • ${r.project_name || 'No Project'} • ${dateFormatting(r.created_at, 'date')}`;
+        titleWrap.append(title, subtitle);
+        const closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.className = 'overlay-close-btn';
+        closeBtn.setAttribute('aria-label', 'Close');
+        closeBtn.innerHTML = '&times;';
+        closeBtn.addEventListener('click', () => hideOverlayWithBg(overlayBackground));
+        headerWrap.append(titleWrap, closeBtn);
+        overlayHeader.append(headerWrap);
+
+        overlayBody.innerHTML = '';
+        const body = div('', 'form-edit-containers');
+        body.style.padding = '12px';
+        const content = document.createElement('div');
+        content.style.whiteSpace = 'pre-wrap';
+        content.style.lineHeight = '1.5';
+        content.style.color = 'var(--default-text)';
+        content.innerText = r.report_body || '';
+        body.append(content);
+        overlayBody.append(body);
+        overlayShow(overlayBackground);
+    }
+
+    projectSelect.addEventListener('change', loadAndRender);
+    userSelect.addEventListener('change', loadAndRender);
+    searchBox.addEventListener('input', () => loadAndRender());
+    refreshBtn.addEventListener('click', loadAndRender);
+
+    await loadAndRender();
 }
 
 async function generateAnalyticsContent() {
     const analyticsBodyContent = document.getElementById('analyticsBodyContent');
     analyticsBodyContent.innerHTML = '';
-    showEmptyPlaceholder('/assets/icons/analytics.png', analyticsBodyContent, null, "Analytics Content Coming Soon");
+
+    const data = await fetchData('/api/analytics/summary');
+    if (!data || data === 'error') {
+        showEmptyPlaceholder('/assets/icons/analytics.png', analyticsBodyContent, null, 'Failed to load analytics');
+        return;
+    }
+
+    const summary = data.summary || {};
+    const charts = data.charts || {};
+
+    // Summary cards (reuse dashboard card container styles)
+    const cards = div('', 'dashboard-summary-cards');
+    cards.style.display = 'grid';
+    cards.style.gridTemplateColumns = 'repeat(auto-fit, minmax(220px, 1fr))';
+    cards.style.gap = '12px';
+    cards.style.marginBottom = '16px';
+
+    function metricCard(label, value) {
+        const c = div('', 'dashboard-summary-card');
+        c.style.padding = '14px';
+        c.style.borderRadius = '14px';
+        c.style.background = 'var(--inner-container)';
+        c.style.boxShadow = 'var(--shadow)';
+        const l = div('', 'summary-label');
+        l.style.color = 'var(--grayed-text)';
+        l.style.fontSize = '12px';
+        l.innerText = label;
+        const v = div('', 'summary-value');
+        v.style.fontSize = '22px';
+        v.style.fontWeight = '700';
+        v.style.color = 'var(--default-text)';
+        v.innerText = value;
+        c.append(l, v);
+        return c;
+    }
+
+    cards.append(
+        metricCard('Total Projects', summary.total_projects ?? 0),
+        metricCard('In Progress', summary.in_progress_projects ?? 0),
+        metricCard('Completed', summary.completed_projects ?? 0),
+        metricCard('Low Inventory Items', summary.low_items ?? 0),
+        metricCard('Total Assets', summary.total_assets ?? 0)
+    );
+
+    const graphsRow = div('', 'dashboard-graph-container');
+    graphsRow.style.display = 'grid';
+    graphsRow.style.gridTemplateColumns = 'repeat(auto-fit, minmax(320px, 1fr))';
+    graphsRow.style.gap = '14px';
+
+    function chartCard(titleText, canvasId) {
+        const card = div('', 'graph-card');
+        card.style.background = 'var(--inner-container)';
+        card.style.borderRadius = '14px';
+        card.style.boxShadow = 'var(--shadow)';
+        card.style.padding = '14px';
+        const t = div('', 'graph-title');
+        t.style.fontWeight = '700';
+        t.style.marginBottom = '10px';
+        t.innerText = titleText;
+        const canvas = document.createElement('canvas');
+        canvas.id = canvasId;
+        canvas.style.maxHeight = '280px';
+        card.append(t, canvas);
+        return card;
+    }
+
+    const projectsChartCard = chartCard('Projects by Status', 'adminProjectsByStatusChart');
+    const inventoryChartCard = chartCard('Low Inventory by Project', 'adminLowInventoryByProjectChart');
+    graphsRow.append(projectsChartCard, inventoryChartCard);
+
+    analyticsBodyContent.append(cards, graphsRow);
+
+    // Render charts (Chart.js is already loaded in adminDashboard.html)
+    try {
+        const byStatus = Array.isArray(charts.projectsByStatus) ? charts.projectsByStatus : [];
+        const statusLabels = byStatus.map(r => formatString(r.status));
+        const statusData = byStatus.map(r => Number(r.count) || 0);
+        new Chart(document.getElementById('adminProjectsByStatusChart'), {
+            type: 'doughnut',
+            data: { labels: statusLabels, datasets: [{ data: statusData }] },
+            options: { responsive: true, maintainAspectRatio: false }
+        });
+
+        const lowByProject = Array.isArray(charts.lowInventoryByProject) ? charts.lowInventoryByProject : [];
+        const projLabels = lowByProject.map(r => r.project_name);
+        const projData = lowByProject.map(r => Number(r.count) || 0);
+        new Chart(document.getElementById('adminLowInventoryByProjectChart'), {
+            type: 'bar',
+            data: { labels: projLabels, datasets: [{ data: projData }] },
+            options: { responsive: true, maintainAspectRatio: false }
+        });
+    } catch (e) {
+        console.warn('Analytics chart render failed:', e?.message || e);
+    }
 }
 
 async function generateDashboardContent() {
@@ -1565,7 +2266,7 @@ async function createProjectOverlay(refreshCallback) {
     form.append(createProjectFormHeader, createProjectFormFooter);
     overlayBody.append(form);
 
-    showOverlayWithBg(overlayBackground);
+    overlayShow(overlayBackground);
 }
 
 async function generateProjectsContent(role) {
@@ -2345,3 +3046,509 @@ async function refreshAdminProjectContent(currentProjectId, role) {
     selectionTabContent.innerHTML = '';
     selectionTabContent.append(await currentRenderFunction(role, currentProjectId));
 }
+
+
+async function showAddUserOverlay() {
+    const { overlayBackground, overlayContainer, overlayHeader, overlayBody } = createOverlayWithBg();
+    overlayContainer.classList.add('modal-lg', 'personnel-add-modal');
+
+    // Header (title + close)
+    overlayHeader.innerHTML = '';
+    const headerWrap = div('', 'overlay-header-containers overlay-header-flex');
+    const titleWrap = div('', 'overlay-title-wrap');
+    const title = span('', 'overlay-title');
+    const subtitle = span('', 'overlay-subtitle');
+    title.innerText = 'Register New Personnel';
+    subtitle.innerText = 'Create an account and send credentials to the new team member.';
+    titleWrap.append(title, subtitle);
+
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'overlay-close-btn';
+    closeBtn.setAttribute('aria-label', 'Close');
+    closeBtn.innerHTML = '&times;';
+    closeBtn.addEventListener('click', () => hideOverlayWithBg(overlayBackground));
+
+    headerWrap.append(titleWrap, closeBtn);
+    overlayHeader.append(headerWrap);
+
+    overlayBody.innerHTML = '';
+
+    // Form
+    const form = document.createElement('form');
+    form.id = 'regPersonnelForm';
+    form.className = 'form-edit-forms personnel-add-form';
+
+    const nameInputBox = createInput('text', 'edit', 'Full Name', 'regFullName', 'full_name', '', 'e.g. Juan Dela Cruz', null, 150);
+    const emailInputBox = createInput('email', 'edit', 'Email Address', 'regEmailInput', 'email', '', 'e.g. juan@company.com', null, 150);
+
+    // Role select (styled like inputs)
+    const roleBox = div('regRoleBox', 'input-box-containers');
+    const roleLabel = document.createElement('label');
+    roleLabel.className = 'input-labels';
+    roleLabel.htmlFor = 'regRoleInput';
+    roleLabel.innerText = 'Role';
+
+    const roleSelect = document.createElement('select');
+    roleSelect.id = 'regRoleInput';
+    roleSelect.name = 'role';
+    roleSelect.className = 'input-fields edit';
+    roleSelect.innerHTML = '<option value="">Loading roles...</option>';
+
+    const roleErr = span('', 'error-messages');
+    roleErr.dataset.errMsg = 'Role Required';
+    roleErr.dataset.defaultMsg = ' ';
+    roleErr.innerText = roleErr.dataset.defaultMsg;
+
+    roleSelect.addEventListener('change', () => validateInput(roleSelect));
+
+    roleBox.append(roleLabel, roleSelect, roleErr);
+
+    // Success (masked password) - only for confirmation
+    const successBox = div('regSuccessContainer', 'input-box-containers');
+    successBox.style.display = 'none';
+    const passLabel = document.createElement('label');
+    passLabel.className = 'input-labels';
+    passLabel.innerText = 'Temporary Password Generated';
+
+    const maskInput = document.createElement('input');
+    maskInput.id = 'regMaskInput';
+    maskInput.readOnly = true;
+    maskInput.className = 'input-fields read';
+    maskInput.style.textAlign = 'center';
+    maskInput.style.letterSpacing = '6px';
+
+    const passNote = span('', 'error-messages');
+    passNote.dataset.defaultMsg = 'Credentials were sent via email.';
+    passNote.innerText = passNote.dataset.defaultMsg;
+
+    successBox.append(passLabel, maskInput, passNote);
+
+    // Actions
+    const actions = div('regActions', 'overlay-action-row');
+    const cancelBtn = createButton('regCancelBtn', 'glass-buttons', 'Cancel', 'regCancelTxt');
+    // Primary action button should have white text on the blue background
+    const submitBtn = createButton('regSubmitBtn', 'solid-buttons white', 'Generate & Send Credentials', 'regSubmitTxt');
+
+    cancelBtn.type = 'button';
+    submitBtn.type = 'button';
+
+    cancelBtn.addEventListener('click', () => hideOverlayWithBg(overlayBackground));
+
+    actions.append(cancelBtn, submitBtn);
+
+    form.append(nameInputBox, emailInputBox, roleBox, successBox, actions);
+    overlayBody.append(form);
+
+    overlayShow(overlayBackground);
+
+    // Populate roles
+    try {
+        const roles = await fetchData('/api/roles');
+        if (roles && roles.length > 0) {
+            roleSelect.innerHTML = '<option value="">Select a role...</option>' + roles.map(r => `<option value="${r}">${formatString(r)}</option>`).join('');
+        } else {
+            roleSelect.innerHTML = `
+                <option value="">Select a role...</option>
+                <option value="admin">Admin</option>
+                <option value="engineer">Engineer</option>
+                <option value="foreman">Foreman</option>
+                <option value="project manager">Project Manager</option>`;
+        }
+    } catch (e) {
+        roleSelect.innerHTML = `
+            <option value="">Select a role...</option>
+            <option value="engineer">Engineer</option>
+            <option value="foreman">Foreman</option>
+            <option value="project manager">Project Manager</option>`;
+    }
+
+    async function submit() {
+        const nameVal = document.getElementById('regFullName')?.value.trim();
+        const emailVal = document.getElementById('regEmailInput')?.value.trim();
+        const roleVal = document.getElementById('regRoleInput')?.value;
+
+        // Basic validation
+        validateInput(document.getElementById('regFullName'));
+        validateInput(document.getElementById('regEmailInput'));
+        validateInput(document.getElementById('regRoleInput'));
+
+        if (!nameVal || !emailVal || !roleVal) {
+            return alertPopup('warn', 'Please complete all required fields');
+        }
+
+        submitBtn.disabled = true;
+        submitBtn.classList.add('loading');
+        const originalTxt = submitBtn.querySelector('.btn-texts')?.innerText || submitBtn.innerText;
+        if (submitBtn.querySelector('.btn-texts')) submitBtn.querySelector('.btn-texts').innerText = 'Sending...';
+        else submitBtn.innerText = 'Sending...';
+
+        try {
+            const response = await fetch('/api/register/generate-password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fullName: nameVal, email: emailVal, role: roleVal })
+            });
+
+            const data = await response.json();
+            if (!data.success) throw new Error(data.message || 'Failed to create account');
+
+            successBox.style.display = 'block';
+            maskInput.value = '****************';
+
+            if (submitBtn.querySelector('.btn-texts')) submitBtn.querySelector('.btn-texts').innerText = 'Credentials Sent';
+            else submitBtn.innerText = 'Credentials Sent';
+
+            submitBtn.disabled = true;
+            alertPopup('success', `Account created for ${nameVal}`);
+
+            // Refresh personnel list
+            const userListContainer = document.getElementById('userListContainer');
+            if (userListContainer) fetchAndRenderUsers(userListContainer);
+
+        } catch (err) {
+            submitBtn.disabled = false;
+            if (submitBtn.querySelector('.btn-texts')) submitBtn.querySelector('.btn-texts').innerText = originalTxt;
+            else submitBtn.innerText = originalTxt;
+            alertPopup('error', err.message);
+        } finally {
+            submitBtn.classList.remove('loading');
+        }
+    }
+
+    submitBtn.addEventListener('click', submit);
+    form.addEventListener('submit', (e) => { e.preventDefault(); submit(); });
+}
+
+// -----------------------------
+// Personnel: Edit & Terminate overlays
+// -----------------------------
+
+function computeInitials(fullName) {
+    const parts = (fullName || '').trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return '?';
+    if (parts.length === 1) return (parts[0][0] || '?').toUpperCase();
+    return ((parts[0][0] || '?') + (parts[parts.length - 1][0] || '?')).toUpperCase();
+}
+
+function updatePersonnelCardInPlace(userId, patch) {
+    const card = document.querySelector(`.personnel-card[data-user-id="${userId}"]`);
+    if (!card) return;
+
+    if (patch.full_name) {
+        const nameEl = card.querySelector('.personnel-name');
+        const avatarEl = card.querySelector('.personnel-avatar');
+        if (nameEl) nameEl.textContent = patch.full_name;
+        if (avatarEl) avatarEl.textContent = computeInitials(patch.full_name);
+    }
+
+    if (patch.email) {
+        const emailEl = card.querySelector('.personnel-email');
+        if (emailEl) emailEl.textContent = patch.email;
+    }
+
+    if (patch.role) {
+        const roleEl = card.querySelector('.personnel-role-tag');
+        if (roleEl) roleEl.textContent = formatString(patch.role);
+    }
+
+    if (typeof patch.is_active !== 'undefined') {
+        const bubble = card.querySelector('.status-bubble');
+        if (bubble) {
+            bubble.classList.remove('status-active', 'status-inactive');
+            bubble.classList.add(patch.is_active == 1 ? 'status-active' : 'status-inactive');
+        }
+    }
+}
+
+async function editCredentials(userId) {
+    const user = await fetchData(`/api/users/${userId}`);
+    if (!user || user === 'error') {
+        return alertPopup('error', 'Unable to load personnel details');
+    }
+
+    const { overlayBackground, overlayContainer, overlayHeader, overlayBody } = createOverlayWithBg();
+    overlayContainer.classList.add('modal-lg', 'personnel-add-modal');
+
+    // Header (title + close) - reuse Add Personnel overlay design
+    overlayHeader.innerHTML = '';
+    const headerWrap = div('', 'overlay-header-containers overlay-header-flex');
+    const titleWrap = div('', 'overlay-title-wrap');
+    const title = span('', 'overlay-title');
+    const subtitle = span('', 'overlay-subtitle');
+    title.innerText = 'Edit Personnel';
+    subtitle.innerText = 'Update personnel information and system access.';
+    titleWrap.append(title, subtitle);
+
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'overlay-close-btn';
+    closeBtn.setAttribute('aria-label', 'Close');
+    closeBtn.innerHTML = '&times;';
+    closeBtn.addEventListener('click', () => hideOverlayWithBg(overlayBackground));
+
+    headerWrap.append(titleWrap, closeBtn);
+    overlayHeader.append(headerWrap);
+
+    overlayBody.innerHTML = '';
+
+    // Form
+    const form = document.createElement('form');
+    form.id = 'editPersonnelForm';
+    form.className = 'form-edit-forms personnel-add-form';
+
+    const nameInputBox = createInput('text', 'edit', 'Full Name', 'editFullName', 'full_name', user.full_name || '', 'e.g. Juan Dela Cruz', null, 150);
+    const emailInputBox = createInput('email', 'edit', 'Email Address', 'editEmailInput', 'email', user.email || '', 'e.g. juan@company.com', null, 150);
+
+    // Role select (styled like inputs)
+    const roleBox = div('editRoleBox', 'input-box-containers');
+    const roleLabel = document.createElement('label');
+    roleLabel.className = 'input-labels';
+    roleLabel.htmlFor = 'editRoleInput';
+    roleLabel.innerText = 'Role';
+
+    const roleSelect = document.createElement('select');
+    roleSelect.id = 'editRoleInput';
+    roleSelect.name = 'role';
+    roleSelect.className = 'input-fields edit';
+    roleSelect.innerHTML = '<option value="">Loading roles...</option>';
+
+    const roleErr = span('', 'error-messages');
+    roleErr.dataset.errMsg = 'Role Required';
+    roleErr.dataset.defaultMsg = ' ';
+    roleErr.innerText = roleErr.dataset.defaultMsg;
+
+    roleSelect.addEventListener('change', () => validateInput(roleSelect));
+    roleBox.append(roleLabel, roleSelect, roleErr);
+
+    // Optional password update (leave blank to keep current password)
+    const passwordInputBox = createInput(
+        'password',
+        'edit',
+        'New Password (optional)',
+        'editPassword',
+        'password',
+        '',
+        'Leave blank to keep current password',
+        null,
+        100
+    );
+    const confirmPasswordInputBox = createInput(
+        'password',
+        'edit',
+        'Confirm New Password',
+        'editPasswordConfirm',
+        'password_confirm',
+        '',
+        'Re-enter the new password',
+        null,
+        100
+    );
+
+    // Actions
+    const actions = div('editActions', 'overlay-action-row');
+    const cancelBtn = createButton('editCancelBtn', 'glass-buttons', 'Cancel', 'editCancelTxt');
+    // Primary action button should have white text on the blue background
+    const saveBtn = createButton('editSaveBtn', 'solid-buttons white', 'Save Changes', 'editSaveTxt');
+
+    cancelBtn.type = 'button';
+    saveBtn.type = 'button';
+    cancelBtn.addEventListener('click', () => hideOverlayWithBg(overlayBackground));
+
+    actions.append(cancelBtn, saveBtn);
+    form.append(nameInputBox, emailInputBox, roleBox, passwordInputBox, confirmPasswordInputBox, actions);
+    overlayBody.append(form);
+
+    overlayShow(overlayBackground);
+
+    // Populate roles
+    try {
+        const roles = await fetchData('/api/roles');
+        if (roles && roles.length > 0) {
+            roleSelect.innerHTML = '<option value="">Select a role...</option>' + roles.map(r => `<option value="${r}">${formatString(r)}</option>`).join('');
+        } else {
+            roleSelect.innerHTML = `
+                <option value="">Select a role...</option>
+                <option value="admin">Admin</option>
+                <option value="engineer">Engineer</option>
+                <option value="foreman">Foreman</option>
+                <option value="project manager">Project Manager</option>`;
+        }
+    } catch (e) {
+        roleSelect.innerHTML = `
+            <option value="">Select a role...</option>
+            <option value="admin">Admin</option>
+            <option value="engineer">Engineer</option>
+            <option value="foreman">Foreman</option>
+            <option value="project manager">Project Manager</option>`;
+    }
+
+    // Select current role after options are ready
+    if (user.role) roleSelect.value = user.role;
+
+    async function submit() {
+        const nameEl = document.getElementById('editFullName');
+        const emailEl = document.getElementById('editEmailInput');
+        const roleEl = document.getElementById('editRoleInput');
+
+        validateInput(nameEl);
+        validateInput(emailEl);
+        validateInput(roleEl);
+
+        const fullName = nameEl?.value.trim();
+        const email = emailEl?.value.trim();
+        const role = roleEl?.value;
+
+        const pwEl = document.getElementById('editPassword');
+        const pwConfirmEl = document.getElementById('editPasswordConfirm');
+        const newPassword = (pwEl?.value || '').trim();
+        const confirmPassword = (pwConfirmEl?.value || '').trim();
+
+        if (!fullName || !email || !role) {
+            return alertPopup('warn', 'Please complete all required fields');
+        }
+
+        if (newPassword) {
+            if (newPassword.length < 6) {
+                return alertPopup('warn', 'Password must be at least 6 characters');
+            }
+            if (newPassword !== confirmPassword) {
+                return alertPopup('warn', 'Passwords do not match');
+            }
+        }
+
+        saveBtn.disabled = true;
+        const originalTxt = saveBtn.querySelector('.btn-texts')?.innerText || saveBtn.innerText;
+        if (saveBtn.querySelector('.btn-texts')) saveBtn.querySelector('.btn-texts').innerText = 'Saving...';
+        else saveBtn.innerText = 'Saving...';
+
+        try {
+            const resp = await fetch(`/api/users/${userId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ full_name: fullName, email, role, password: newPassword || '' })
+            });
+            const data = await resp.json();
+            if (!resp.ok || data?.success === false) throw new Error(data?.message || 'Failed to update personnel');
+
+            updatePersonnelCardInPlace(userId, { full_name: fullName, email, role });
+            alertPopup('success', 'Personnel updated successfully');
+            hideOverlayWithBg(overlayBackground);
+        } catch (err) {
+            saveBtn.disabled = false;
+            if (saveBtn.querySelector('.btn-texts')) saveBtn.querySelector('.btn-texts').innerText = originalTxt;
+            else saveBtn.innerText = originalTxt;
+            alertPopup('error', err.message);
+        }
+    }
+
+    saveBtn.addEventListener('click', submit);
+    form.addEventListener('submit', (e) => { e.preventDefault(); submit(); });
+}
+
+async function terminatePersonnel(userId) {
+    const user = await fetchData(`/api/users/${userId}`);
+    if (!user || user === 'error') {
+        return alertPopup('error', 'Unable to load personnel details');
+    }
+
+    const { overlayBackground, overlayContainer, overlayHeader, overlayBody } = createOverlayWithBg();
+    overlayContainer.classList.add('modal-lg', 'personnel-add-modal');
+
+    // Header (title + close)
+    overlayHeader.innerHTML = '';
+    const headerWrap = div('', 'overlay-header-containers overlay-header-flex');
+    const titleWrap = div('', 'overlay-title-wrap');
+    const title = span('', 'overlay-title');
+    const subtitle = span('', 'overlay-subtitle');
+    title.innerText = 'Termination';
+    subtitle.innerText = `Terminate access for ${user.full_name || 'this user'}.`;
+    titleWrap.append(title, subtitle);
+
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'overlay-close-btn';
+    closeBtn.setAttribute('aria-label', 'Close');
+    closeBtn.innerHTML = '&times;';
+    closeBtn.addEventListener('click', () => hideOverlayWithBg(overlayBackground));
+    headerWrap.append(titleWrap, closeBtn);
+    overlayHeader.append(headerWrap);
+
+    overlayBody.innerHTML = '';
+
+    const form = document.createElement('form');
+    form.id = 'terminatePersonnelForm';
+    form.className = 'form-edit-forms personnel-add-form';
+
+    const reasonBox = createInput('textarea', 'edit', 'Termination Reason', 'terminationReason', 'termination_reason', '', 'Provide a reason for termination...', null, 500);
+    const reasonEl = reasonBox.querySelector('textarea') || reasonBox.querySelector('input');
+
+    // Actions: Cancel + Terminate (disabled until reason filled)
+    const actions = div('terminateActions', 'overlay-action-row');
+    const cancelBtn = createButton('terminateCancelBtn', 'glass-buttons', 'Cancel', 'terminateCancelTxt');
+    // Primary action button should have white text on the blue background
+    const terminateBtn = createButton('terminateConfirmBtn', 'solid-buttons white', 'Terminate', 'terminateConfirmTxt');
+
+    cancelBtn.type = 'button';
+    terminateBtn.type = 'button';
+    terminateBtn.disabled = true;
+    terminateBtn.style.opacity = '0.6';
+    terminateBtn.style.cursor = 'not-allowed';
+
+    cancelBtn.addEventListener('click', () => hideOverlayWithBg(overlayBackground));
+
+    function syncTerminateState() {
+        const hasReason = !!(reasonEl?.value || '').trim();
+        terminateBtn.disabled = !hasReason;
+        terminateBtn.style.opacity = hasReason ? '1' : '0.6';
+        terminateBtn.style.cursor = hasReason ? 'pointer' : 'not-allowed';
+    }
+    if (reasonEl) {
+        reasonEl.addEventListener('input', syncTerminateState);
+        syncTerminateState();
+    }
+
+    actions.append(cancelBtn, terminateBtn);
+    form.append(reasonBox, actions);
+    overlayBody.append(form);
+    overlayShow(overlayBackground);
+
+    async function submit() {
+        const reason = (document.getElementById('terminationReason')?.value || '').trim();
+        if (!reason) return;
+
+        terminateBtn.disabled = true;
+        const originalTxt = terminateBtn.querySelector('.btn-texts')?.innerText || terminateBtn.innerText;
+        if (terminateBtn.querySelector('.btn-texts')) terminateBtn.querySelector('.btn-texts').innerText = 'Terminating...';
+        else terminateBtn.innerText = 'Terminating...';
+
+        try {
+            const resp = await fetch(`/api/users/${userId}/terminate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ reason })
+            });
+            const data = await resp.json();
+            if (!resp.ok || data?.success === false) throw new Error(data?.message || 'Failed to terminate personnel');
+
+            // Refresh list to ensure the terminated account is removed from the UI
+            const userListContainer = document.getElementById('userListContainer');
+            if (userListContainer) fetchAndRenderUsers(userListContainer);
+            alertPopup('success', 'Personnel terminated successfully');
+            hideOverlayWithBg(overlayBackground);
+        } catch (err) {
+            terminateBtn.disabled = false;
+            if (terminateBtn.querySelector('.btn-texts')) terminateBtn.querySelector('.btn-texts').innerText = originalTxt;
+            else terminateBtn.innerText = originalTxt;
+            syncTerminateState();
+            alertPopup('error', err.message);
+        }
+    }
+
+    terminateBtn.addEventListener('click', submit);
+    form.addEventListener('submit', (e) => { e.preventDefault(); submit(); });
+}
+
+// Ensure inline onclick handlers work (adminContent.js is loaded as a module)
+window.editCredentials = editCredentials;
+window.terminatePersonnel = terminatePersonnel;
