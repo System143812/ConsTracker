@@ -2625,6 +2625,7 @@ app.get('/api/inventory/project/:projectId', authMiddleware(['admin', 'engineer'
 });
 
 app.get('/api/material-requests', authMiddleware(['all']), async (req, res) => {
+    const { id: userId, role } = req.user;
     const { page = 1, limit = 10, project, request_type, current_stage, dateFrom, dateTo, requester, sort } = req.query;
     const pageInt = parseInt(page);
     const limitInt = parseInt(limit);
@@ -2640,6 +2641,11 @@ app.get('/api/material-requests', authMiddleware(['all']), async (req, res) => {
     `;
     let filterParams = [];
     let whereClauses = [];
+
+    if (role !== 'admin') {
+        whereClauses.push(`(mr.user_id = ? OR mr.approver = ?)`);
+        filterParams.push(userId, userId);
+    }
 
     if (project && project !== "all") {
         whereClauses.push(`mr.project_id = ?`);
@@ -2740,7 +2746,7 @@ app.get('/api/material-requests/:id', authMiddleware(['all']), async (req, res) 
             LEFT JOIN
                 suppliers s ON mr.supplier_id = s.supplier_id
             LEFT JOIN
-                users a ON mr.approved_by = a.user_id
+                users a ON mr.approver = a.user_id
             WHERE
                 mr.id = ?;
         `, [id]);
@@ -2778,7 +2784,7 @@ app.get('/api/material-requests/:id', authMiddleware(['all']), async (req, res) 
 
 app.post('/api/material-requests', authMiddleware(['all']), async (req, res) => {
     const { id: userId } = req.user;
-    const { project_id, request_type, supplier_id, items, status } = req.body;
+    const { project_id, request_type, supplier_id, items, status, approver } = req.body;
 
     if (!project_id || !request_type || !items || !Array.isArray(items) || items.length === 0) {
         return failed(res, 400, 'Missing required fields.');
@@ -2789,8 +2795,8 @@ app.post('/api/material-requests', authMiddleware(['all']), async (req, res) => 
         await connection.beginTransaction();
 
         const [result] = await connection.execute(
-            'INSERT INTO material_requests (user_id, project_id, request_type, supplier_id, current_stage) VALUES (?, ?, ?, ?, ?)',
-            [userId, project_id, request_type, supplier_id, status || 'DRAFT']
+            'INSERT INTO material_requests (user_id, project_id, request_type, supplier_id, current_stage, approver) VALUES (?, ?, ?, ?, ?, ?)',
+            [userId, project_id, request_type, supplier_id, status || 'DRAFT', approver]
         );
         const materialRequestId = result.insertId;
 
@@ -2820,7 +2826,7 @@ async function updateMaterialRequestStage(res, req, mrId, newStage, newStatus, a
         await connection.beginTransaction();
 
         const [updateResult] = await connection.execute(
-            'UPDATE material_requests SET current_stage = ?, status = ?, approved_by = ?, approved_at = NOW() WHERE id = ?',
+            'UPDATE material_requests SET current_stage = ?, status = ?, approver = ?, approved_at = NOW() WHERE id = ?',
             [newStage, newStatus, userId, mrId]
         );
 
@@ -2848,13 +2854,45 @@ async function updateMaterialRequestStage(res, req, mrId, newStage, newStatus, a
 app.put('/api/material-requests/:id/approve', authMiddleware(['admin', 'engineer', 'project manager']), async (req, res) => {
     const { id } = req.params;
     const { remarks } = req.body;
-    await updateMaterialRequestStage(res, req, id, 'approved', 'approved', 'approved', remarks);
+    const { id: userId, role } = req.user;
+
+    try {
+        const [requestResult] = await pool.execute('SELECT * FROM material_requests WHERE id = ?', [id]);
+        if (requestResult.length === 0) {
+            return failed(res, 404, 'Material request not found.');
+        }
+        const materialRequest = requestResult[0];
+
+        if (role !== 'admin' && materialRequest.approver !== userId) {
+            return failed(res, 403, 'You are not authorized to approve this request.');
+        }
+
+        await updateMaterialRequestStage(res, req, id, 'approved', 'approved', 'approved', remarks);
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
 });
 
 app.put('/api/material-requests/:id/decline', authMiddleware(['admin', 'engineer', 'project manager']), async (req, res) => {
     const { id } = req.params;
     const { remarks } = req.body;
-    await updateMaterialRequestStage(res, req, id, 'cancelled', 'rejected', 'declined', remarks);
+    const { id: userId, role } = req.user;
+
+    try {
+        const [requestResult] = await pool.execute('SELECT * FROM material_requests WHERE id = ?', [id]);
+        if (requestResult.length === 0) {
+            return failed(res, 404, 'Material request not found.');
+        }
+        const materialRequest = requestResult[0];
+
+        if (role !== 'admin' && materialRequest.approver !== userId) {
+            return failed(res, 403, 'You are not authorized to decline this request.');
+        }
+
+        await updateMaterialRequestStage(res, req, id, 'cancelled', 'rejected', 'declined', remarks);
+    } catch (error) {
+        failed(res, 500, `Database Error: ${error}`);
+    }
 });
 
 app.put('/api/material-requests/:id/order', authMiddleware(['admin', 'engineer', 'project manager']), async (req, res) => {

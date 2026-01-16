@@ -522,7 +522,8 @@ export async function createSupplierOverlay(supplier = null, refreshCallback, ro
     const addSupplierBtn = createButton('addSupplierBtn', 'solid-buttons btn-blue', 'Add Supplier', 'addSupplierBtnText', 'addIconWhite');
     
     overlayHeader.append(overlayHeaderContainer, addSupplierBtn);
-
+    addSupplierBtn.style.margin = '0 1rem';
+    overlayHeader.style.padding = '0.5rem';
     let suppliers = await fetchData('/api/materials/suppliers');
     if (suppliers === 'error') {
         hideOverlayWithBg(overlayBackground);
@@ -531,7 +532,6 @@ export async function createSupplierOverlay(supplier = null, refreshCallback, ro
 
     const renderListView = () => {
         overlayBody.innerHTML = '';
-        addSupplierBtn.style.display = 'block';
         overlayHeaderContainer.innerText = 'Manage Suppliers';
 
         if (suppliers.length === 0) {
@@ -739,8 +739,9 @@ export async function createCategoryOverlay(category = null, refreshCallback, ro
     // overlayContainer.style.maxHeight = '50%';
     
     const addCategoryBtn = createButton('addCategoryBtn', 'solid-buttons btn-blue', 'Add Category', 'addCategoryBtnText', 'addIconWhite');
-    
+    addCategoryBtn.style.margin = '0 1rem';
     overlayHeader.append(overlayHeaderContainer, addCategoryBtn);
+    overlayHeader.style.padding = '0.5rem';
 
     let categories = await fetchData('/api/materials/categories');
     if (categories === 'error') {
@@ -750,7 +751,6 @@ export async function createCategoryOverlay(category = null, refreshCallback, ro
 
     const renderListView = () => {
         overlayBody.innerHTML = '';
-        addCategoryBtn.style.display = 'block';
         overlayHeaderContainer.innerText = 'Manage Categories';
 
         if (categories.length === 0) {
@@ -937,6 +937,7 @@ export async function createUnitOverlay(unit = null, refreshCallback) {
             const itemInfo = div('', 'overlay-item-info');
             const itemName = div('', 'overlay-item-title');
             itemName.innerText = un.name;
+            listItem.style.padding = '0.5rem 1rem';
             
             itemInfo.append(itemName);
             listItem.append(itemInfo);

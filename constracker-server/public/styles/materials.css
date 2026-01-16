@@ -294,7 +294,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 1.2rem;
+    padding: 1rem;
     background-color: #fafafa;
     border: 1px solid var(--light-border);
     border-radius: 8px;
@@ -302,9 +302,8 @@
 }
 
 .overlay-item-card:hover {
+    transform: translateY(-4px);
     background-color: #ffffff;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-    border-color: var(--default-primary-color);
 }
 
 .overlay-item-info {

@@ -41,6 +41,53 @@ async function createMaterialRequestOverlay(refreshCallback) {
     const requestTypeSelect = createFilterInput('select', 'dropdown', 'requestType', 'request_type', 'all', 'Select request type', null, 'single', 1, requestTypes);
     const supplierSelect = createFilterInput('select', 'dropdown', 'requestSupplier', 'supplier_id', 'all', 'Select a supplier', null, 'single', 1, suppliers);
     supplierSelect.style.display = 'none'; // Initially hidden
+    const approverSelect = createFilterInput('select', 'dropdown', 'requestApprover', 'approver_id', 'all', 'Select an approver', null, 'single', 1, []);
+    approverSelect.style.display = 'none'; // Initially hidden
+
+    projectSelect.addEventListener("change", async () => {
+        const projectId = projectSelect.dataset.value;
+        const optionOverlay = approverSelect.querySelector('.selection-overlays');
+        optionOverlay.innerHTML = ''; // Clear existing options
+
+        if (projectId && projectId !== 'all') {
+            const personnel = await fetchData(`/api/projects/${projectId}/personnel`);
+            if (personnel !== 'error' && personnel.personnel) {
+                const approverOptions = personnel.personnel.map(p => ({ id: p.user_id, name: p.full_name }));
+                
+                approverOptions.forEach(option => {
+                    const optionCard = div('optionCard', 'option-cards');
+                    optionCard.dataset.value = option.id;
+                    const optionCardTitle = div('', 'option-card-titles');
+                    const optionCardName = span('', 'option-card-names');
+                    optionCardName.innerText = option.name;
+                    const optionCardIcon = span('', 'option-card-icons');
+                    optionCardIcon.classList.add('btn-icons');
+                    optionCardTitle.append(optionCardName);
+                    optionCard.append(optionCardTitle, optionCardIcon);
+                    optionOverlay.append(optionCard);
+                    
+                    optionCard.addEventListener("click", () => {
+                        if (optionCard.classList.contains('selected')) {
+                            optionCard.classList.remove('selected');
+                            approverSelect.dataset.value = 'all';
+                            approverSelect.querySelector('.select-option-text').innerText = 'Select an approver';
+                        } else {
+                            const allCards = optionOverlay.querySelectorAll('.option-cards');
+                            allCards.forEach(card => card.classList.remove('selected'));
+                            optionCard.classList.add('selected');
+                            approverSelect.dataset.value = option.id;
+                            approverSelect.querySelector('.btn-texts').innerText = option.name;
+                        }
+                    });
+                });
+                approverSelect.style.display = 'block';
+            } else {
+                approverSelect.style.display = 'none';
+            }
+        } else {
+            approverSelect.style.display = 'none';
+        }
+    });
 
     requestTypeSelect.addEventListener("click", () => {
         if (requestTypeSelect.dataset.value === 'supplier') {
@@ -133,15 +180,17 @@ async function createMaterialRequestOverlay(refreshCallback) {
     };
 
     addItemBtn.addEventListener('click', () => {
-        createItemSearch(async (selectedItem) => {
+        const itemSearchContainer = createItemSearch(async (selectedItem) => {
             const quantity = prompt(`Enter quantity for ${selectedItem.item_name}:`);
             if (quantity && !isNaN(quantity) && Number(quantity) > 0) {
                 requestedItems.push({ ...selectedItem, quantity: Number(quantity) });
                 renderRequestedItems();
+                itemSearchContainer.remove();
             } else if (quantity) {
                 alert('Please enter a valid positive number for the quantity.');
             }
         });
+        overlayBody.append(itemSearchContainer);
     });
 
     // --- Footer and Submit Buttons ---
@@ -171,6 +220,7 @@ async function createMaterialRequestOverlay(refreshCallback) {
             project_id: projectSelect.dataset.value,
             request_type: requestTypeSelect.dataset.value,
             supplier_id: requestTypeSelect.dataset.value === 'supplier' ? supplierSelect.dataset.value : null,
+            approver: approverSelect.dataset.value,
             items: requestedItems,
             status: status
         };
@@ -196,10 +246,11 @@ async function createMaterialRequestOverlay(refreshCallback) {
     submitBtn.addEventListener('click', () => handleSubmit('requested'));
 
     footer.append(saveDraftBtn, submitBtn);
-    form.append(projectSelect, requestTypeSelect, supplierSelect, categorySelectContainer, unitSelectContainer, itemsHeader, itemsContainer, addItemBtn, footer);
+    form.append(projectSelect, requestTypeSelect, supplierSelect, approverSelect, categorySelectContainer, unitSelectContainer, itemsHeader, itemsContainer, addItemBtn, footer);
     overlayBody.append(form);
 
     renderRequestedItems(); // Initial render
+    showOverlayWithBg(overlayBackground);
 }
 
 async function showMaterialRequestDetails(requestId, requestCode, refreshCallback) {
@@ -421,6 +472,7 @@ async function showMaterialRequestDetails(requestId, requestCode, refreshCallbac
     const closeButton = createButton('closeOverlayBtn', 'wide-buttons', 'Close');
     closeButton.addEventListener('click', () => hideOverlayWithBg(overlayBackground));
     overlayBody.append(closeButton);
+    showOverlayWithBg(overlayBackground);
 }
 
 function createVerificationOverlay(requestId, requestCode, items, refreshCallback) {
