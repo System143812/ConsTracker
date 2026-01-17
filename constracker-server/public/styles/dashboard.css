@@ -706,7 +706,7 @@ body {
     /* overflow-y: auto; */
 }
 
-#milestoneSectionContainer {
+#milestoneSectionContainer, #personnelSectionContainer {
     display: flex;
     flex-direction: column;
     flex: 1;
@@ -715,7 +715,7 @@ body {
     /* overflow: hidden; */
 }
 
-#milestoneSectionHeader {
+#milestoneSectionHeader, #personnelSectionHeader {
     display: flex;
     width: 100%;
     justify-content: space-between;
@@ -732,7 +732,7 @@ body {
     flex-direction: column;
 }
 
-#milestoneHeaderText {
+#milestoneHeaderText, #personnelHeaderTitle {
     color: var(--default-black-color);
     font-size: 14px;
     font-weight: 600;
@@ -743,7 +743,7 @@ body {
     font-size: 12px;
 }
 
-#milestoneAddBtn, #taskAddBtn {
+#milestoneAddBtn, #taskAddBtn, #assignPersonnelBtn {
     background-color: var(--blue-border);
     color: var(--white-ishy-text);
     font-size: 12px;

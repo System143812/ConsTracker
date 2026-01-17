@@ -399,11 +399,11 @@ export async function createProjectDetailCard(projectId) {
     projectsHeaderSubtitle.innerText = data.project_location;
     projectsHeaderSubtitle.style.color = `#cccccc`;
     
-    const projectsHeaderStatus = div('projectsHeaderStatus', 'status'); // It's missing the initial div creation
     if(data.status === 'in progress') warnType(projectsHeaderStatus, 'glass', 'yellow');
     if(data.status === 'planning') warnType(projectsHeaderStatus, 'glass', 'white');
     if(data.status === 'completed') warnType(projectsHeaderStatus, 'glass', 'green');
     projectsHeaderStatus.innerText = data.status;
+    console.log(data.status);
 }
 
 export function createSectionTabs(role, projectId) {
@@ -715,10 +715,8 @@ export async function renderWorker(role, projectId) {
             // Implement assign personnel overlay
             createAssignPersonnelOverlay(projectId, () => renderPersonnelForProject());
         });
-        personnelSectionHeader.append(assignPersonnelBtn);
+        personnelSectionHeader.append(personnelHeaderTitle, assignPersonnelBtn);
     }
-    
-    personnelSectionHeader.append(personnelHeaderTitle); // Append title after potential button
     
     const personnelContainer = div('personnel-main-container');
     personnelContainer.id = 'personnel-main-container';
@@ -863,10 +861,7 @@ export function createProjectPersonnelCard(person, currentUserRole, projectId, r
 
     // Conditional remove button for admin
     if (currentUserRole === 'admin') {
-        const removeBtn = createButton('removePersonnelBtn', 'warn-glass red', `Remove`, 'removePersonnelBtnText');
-        removeBtn.style.width = '100%';
-        removeBtn.style.marginTop = '15px';
-
+        const removeBtn = createButton('removePersonnelBtn', 'wide-buttons', `Remove`, 'removePersonnelBtnText');
         removeBtn.addEventListener('click', async (e) => {
             e.stopPropagation();
             showDeleteConfirmation(`Remove ${person.full_name} from this project?`, async () => {

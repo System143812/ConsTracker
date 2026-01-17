@@ -41,3 +41,17 @@
 .danger-buttons .btn-icons {
     filter: brightness(0) invert(1);
 }
+
+#removePersonnelBtn {
+   background-color: rgba(0, 0, 0, 0) !important;
+   border: solid var(--red-border) 1px;
+}
+
+#removePersonnelBtn.hover {
+    opacity: 0.8;
+    transform: scale(99%);
+}
+
+#removePersonnelBtnText {
+    color: var(--red-border) !important;
+}
